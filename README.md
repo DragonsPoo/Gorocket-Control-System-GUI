@@ -83,7 +83,7 @@ npm run typecheck    # TypeScript 타입 검사
 
 - 명령 전송 형식: `드라이버번호,채널번호,명령` 예) `1,0,O` (1번 드라이버 0번 채널 밸브 열기)
 - 수신 데이터는 `key:value` 쌍을 콤마로 구분한 문자열로 가정합니다.
-- 밸브와 모터의 매핑은 `page.tsx`의 `valveToMotorMapping` 객체에서 정의합니다.
+- 밸브와 모터의 매핑은 프로젝트 루트의 `config.json` 파일에서 정의합니다.
 
 ## 스타일 가이드
 

@@ -11,6 +11,12 @@ declare global {
       onSerialData: (callback: (data: string) => void) => void;
       onSerialError: (callback: (error: string) => void) => void;
       removeAllListeners: (channel: string) => void;
+      zoomIn: () => void;
+      zoomOut: () => void;
+      zoomReset: () => void;
+      startLogging: () => void;
+      stopLogging: () => void;
+      getConfig: () => Promise<import('./index').AppConfig>;
     };
   }
 }

@@ -8,6 +8,7 @@ import SequencePanel from '@/components/dashboard/sequence-panel';
 import DataChartPanel from '@/components/dashboard/data-chart-panel';
 import TerminalPanel from '@/components/dashboard/terminal-panel';
 import { useToast } from "@/hooks/use-toast";
+import { AppConfig } from '@/types';
 
 // Data types
 export interface SensorData {
@@ -41,15 +42,6 @@ const initialValves: Valve[] = [
   { id: 7, name: 'Igniter Fuel', state: 'CLOSED', lsOpen: false, lsClosed: false },
 ];
 
-const valveToMotorMapping: { [key: number]: { driver: number, channel: number } } = {
-  1: { driver: 1, channel: 0 }, // Ethanol Main
-  2: { driver: 1, channel: 1 }, // N2O Main
-  3: { driver: 1, channel: 2 }, // Ethanol Purge
-  4: { driver: 1, channel: 3 }, // N2O Purge
-  5: { driver: 2, channel: 0 }, // Pressurant Fill
-  6: { driver: 2, channel: 1 }, // System Vent
-  7: { driver: 2, channel: 2 }, // Igniter Fuel
-};
 
 const MAX_CHART_DATA_POINTS = 100;
 const PRESSURE_LIMIT = 850; // PSI
@@ -65,6 +57,8 @@ export default function Home() {
   
   const [serialPorts, setSerialPorts] = useState<string[]>([]);
   const [selectedPort, setSelectedPort] = useState<string>('');
+  const [isLogging, setIsLogging] = useState(false);
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
 
   const sequenceTimeoutRef = useRef<NodeJS.Timeout[]>([]);
   const emergencyShutdownTriggered = useRef(false);
@@ -116,6 +110,12 @@ export default function Home() {
       }
     };
     getPorts();
+
+    const loadConfig = async () => {
+      const cfg = await window.electronAPI.getConfig();
+      setAppConfig(cfg);
+    };
+    loadConfig();
 
     const handleSerialData = (data: string) => {
       addLog(`Received: ${data}`);
@@ -255,9 +255,9 @@ export default function Home() {
     const valve = valves.find(v => v.id === valveId);
     if (!valve) return;
 
-    const motor = valveToMotorMapping[valveId];
+    const motor = appConfig?.valveToMotorMapping?.[valve.name];
     if (!motor) {
-        toast({ title: "Command Error", description: `No motor mapping for valve ID ${valveId}.`, variant: "destructive" });
+        toast({ title: "Command Error", description: `No motor mapping for valve ${valve.name}.`, variant: "destructive" });
         return;
     }
 
@@ -270,11 +270,21 @@ export default function Home() {
         ? { ...v, state: targetState } // Directly set to targetState
         : v
     ));
-  }, [valves, connectionStatus, toast]);
+  }, [valves, connectionStatus, toast, appConfig]);
   
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setSequenceLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+  };
+
+  const handleLoggingToggle = () => {
+    if (isLogging) {
+      window.electronAPI.stopLogging();
+      setIsLogging(false);
+    } else {
+      window.electronAPI.startLogging();
+      setIsLogging(true);
+    }
   };
 
   const clearAndRunSequence = (name: string, steps: { message: string, delay: number, action?: () => void }[]) => {
@@ -337,12 +347,14 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header 
+      <Header
         connectionStatus={connectionStatus}
         ports={serialPorts}
         selectedPort={selectedPort}
         onPortChange={setSelectedPort}
         onConnect={handleConnect}
+        isLogging={isLogging}
+        onToggleLogging={handleLoggingToggle}
       />
       <main className="flex-grow p-4 md:p-6 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">

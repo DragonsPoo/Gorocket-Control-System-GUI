@@ -11,4 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   zoomIn: () => ipcRenderer.send('zoom-in'),
   zoomOut: () => ipcRenderer.send('zoom-out'),
   zoomReset: () => ipcRenderer.send('zoom-reset'),
+  startLogging: () => ipcRenderer.send('start-logging'),
+  stopLogging: () => ipcRenderer.send('stop-logging'),
+  getConfig: () => ipcRenderer.invoke('get-config'),
 });

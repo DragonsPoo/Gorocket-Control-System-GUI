@@ -9,14 +9,18 @@ interface HeaderProps {
   selectedPort: string;
   onPortChange: (port: string) => void;
   onConnect: () => void;
+  isLogging: boolean;
+  onToggleLogging: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ 
-  connectionStatus, 
-  ports, 
-  selectedPort, 
-  onPortChange, 
-  onConnect 
+const Header: React.FC<HeaderProps> = ({
+  connectionStatus,
+  ports,
+  selectedPort,
+  onPortChange,
+  onConnect,
+  isLogging,
+  onToggleLogging
 }) => {
   const isConnected = connectionStatus === 'connected';
   const isConnecting = connectionStatus === 'connecting';
@@ -48,6 +52,9 @@ const Header: React.FC<HeaderProps> = ({
 
         <Button onClick={onConnect} disabled={isConnecting || (!selectedPort && !isConnected)} variant={isConnected ? "destructive" : "default"}>
           {isConnecting ? "Connecting..." : (isConnected ? "Disconnect" : "Connect")}
+        </Button>
+        <Button onClick={onToggleLogging} variant={isLogging ? "destructive" : "secondary"}>
+          {isLogging ? "Stop Logging" : "Start Logging"}
         </Button>
 
         <div className="flex items-center gap-2">

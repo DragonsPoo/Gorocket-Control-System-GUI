@@ -1,0 +1,14 @@
+{
+  "serial": {
+    "baudRate": 115200
+  },
+  "valveToMotorMapping": {
+    "Ethanol Main": { "driver": 1, "channel": 0 },
+    "N2O Main": { "driver": 1, "channel": 1 },
+    "Ethanol Purge": { "driver": 1, "channel": 2 },
+    "N2O Purge": { "driver": 1, "channel": 3 },
+    "Pressurant Fill": { "driver": 2, "channel": 0 },
+    "System Vent": { "driver": 2, "channel": 1 },
+    "Igniter Fuel": { "driver": 2, "channel": 2 }
+  }
+}
