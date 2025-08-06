@@ -26,7 +26,7 @@ export function parseSensorData(raw: string): ParsedSensorData {
     }
     const num = parseFloat(value);
     if (!Number.isNaN(num)) {
-      (sensor as any)[key] = num;
+      (sensor as Record<string, number>)[key] = num;
     }
   });
 
