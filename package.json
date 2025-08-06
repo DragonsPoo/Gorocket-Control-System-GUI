@@ -11,7 +11,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "rebuild": "electron-rebuild -f -w serialport"
+    "rebuild": "electron-rebuild -f -w serialport",
+    "predev": "tsc -p tsconfig.electron.json && node -e \"require('fs').copyFileSync('config.json','dist/config.json')\"",
+    "prebuild": "tsc -p tsconfig.electron.json && node -e \"require('fs').copyFileSync('config.json','dist/config.json')\""
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.3",
