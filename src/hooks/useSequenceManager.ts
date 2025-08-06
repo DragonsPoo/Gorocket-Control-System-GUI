@@ -12,43 +12,50 @@ export interface SequenceManagerApi {
   activeSequence: string | null;
   handleSequence: (sequenceName: string) => void;
   addLog: (message: string) => void;
+  cancelSequence: () => void;
 }
 
-export function useSequenceManager(sendCommand: (cmd: string) => Promise<void>): SequenceManagerApi {
+const delay = (ms: number, signal: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const id = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => {
+      clearTimeout(id);
+      reject(new Error('aborted'));
+    });
+  });
+
+export function useSequenceManager(
+  sendCommand: (cmd: string) => Promise<void>
+): SequenceManagerApi {
   const { toast } = useToast();
-  const [sequenceLogs, setSequenceLogs] = useState<string[]>(['System standby. Select a sequence to begin.']);
+  const [sequenceLogs, setSequenceLogs] = useState<string[]>([
+    'System standby. Select a sequence to begin.',
+  ]);
   const [activeSequence, setActiveSequence] = useState<string | null>(null);
-  const sequenceTimeoutRef = useRef<NodeJS.Timeout[]>([]);
-  const ignitionPhase = useRef<'idle' | 'igniter' | 'main_stage'>('idle');
+  const controllerRef = useRef<AbortController | null>(null);
 
   const addLog = useCallback((message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setSequenceLogs((prev) => [...prev, `[${timestamp}] ${message}`]);
   }, []);
 
-  const clearAndRunSequence = useCallback(
-    (name: string, steps: SequenceStep[]) => {
+  const runSequence = useCallback(
+    async (name: string, steps: SequenceStep[], controller: AbortController) => {
       setActiveSequence(name);
       setSequenceLogs([]);
-      sequenceTimeoutRef.current.forEach(clearTimeout);
-      sequenceTimeoutRef.current = [];
-
-      let cumulativeDelay = 0;
       addLog(`Initiating sequence: ${name}`);
-
-      steps.forEach((step, index) => {
-        cumulativeDelay += step.delay;
-        const timeout = setTimeout(() => {
+      try {
+        for (const step of steps) {
+          await delay(step.delay, controller.signal);
+          await step.action?.();
           addLog(step.message);
-          step.action?.();
-          if (index === steps.length - 1) {
-            addLog(`Sequence ${name} complete.`);
-            setActiveSequence(null);
-            ignitionPhase.current = 'idle';
-          }
-        }, cumulativeDelay);
-        sequenceTimeoutRef.current.push(timeout);
-      });
+        }
+        addLog(`Sequence ${name} complete.`);
+      } catch {
+        addLog(`Sequence ${name} aborted.`);
+      } finally {
+        setActiveSequence(null);
+      }
     },
     [addLog]
   );
@@ -63,41 +70,62 @@ export function useSequenceManager(sendCommand: (cmd: string) => Promise<void>):
         });
         return;
       }
-
+      const controller = new AbortController();
+      controllerRef.current = controller;
       switch (sequenceName) {
         case 'Ignition Sequence':
-          ignitionPhase.current = 'idle';
-          clearAndRunSequence('Ignition Sequence', [
-            { message: 'Sending command: IGNITION_SEQUENCE_START', delay: 500, action: () => sendCommand('SEQ_IGNITION_START') },
-          ]);
+          void runSequence(
+            'Ignition Sequence',
+            [
+              {
+                message: 'Sending command: IGNITION_SEQUENCE_START',
+                delay: 500,
+                action: () => sendCommand('SEQ_IGNITION_START'),
+              },
+            ],
+            controller
+          );
           break;
         case 'Emergency Shutdown':
-          ignitionPhase.current = 'idle';
-          clearAndRunSequence('Emergency Shutdown', [
-            { message: 'Sending command: EMERGENCY_SHUTDOWN', delay: 100, action: () => sendCommand('SEQ_SHUTDOWN') },
-          ]);
+          void runSequence(
+            'Emergency Shutdown',
+            [
+              {
+                message: 'Sending command: EMERGENCY_SHUTDOWN',
+                delay: 100,
+                action: () => sendCommand('SEQ_SHUTDOWN'),
+              },
+            ],
+            controller
+          );
           break;
         default:
-          clearAndRunSequence(sequenceName, [
-            {
-              message: `Running diagnostics for ${sequenceName}...`,
-              delay: 1000,
-              action: () => sendCommand(`DIAG_${sequenceName.toUpperCase().replace(' ', '_')}`),
-            },
-            { message: 'Diagnostics complete.', delay: 2000 },
-          ]);
+          void runSequence(
+            sequenceName,
+            [
+              {
+                message: `Running diagnostics for ${sequenceName}...`,
+                delay: 1000,
+                action: () =>
+                  sendCommand(
+                    `DIAG_${sequenceName.toUpperCase().replace(/\s+/g, '_')}`
+                  ),
+              },
+              { message: 'Diagnostics complete.', delay: 2000 },
+            ],
+            controller
+          );
           break;
       }
     },
-    [activeSequence, clearAndRunSequence, sendCommand, toast]
+    [activeSequence, runSequence, sendCommand, toast]
   );
 
-  useEffect(() => {
-    return () => {
-      sequenceTimeoutRef.current.forEach(clearTimeout);
-    };
+  const cancelSequence = useCallback(() => {
+    controllerRef.current?.abort();
   }, []);
 
-  return { sequenceLogs, activeSequence, handleSequence, addLog };
-}
+  useEffect(() => cancelSequence, [cancelSequence]);
 
+  return { sequenceLogs, activeSequence, handleSequence, addLog, cancelSequence };
+}

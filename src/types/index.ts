@@ -7,6 +7,9 @@ export interface AppConfig {
     baudRate: number;
   };
   valveMappings: Record<string, ValveMappingEntry>;
+  maxChartDataPoints: number;
+  pressureLimit: number;
+  initialValves: Valve[];
 }
 
 // Sensor and valve related types

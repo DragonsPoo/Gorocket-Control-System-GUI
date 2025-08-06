@@ -29,7 +29,9 @@ export default function Home() {
     setSequenceHandler,
   } = useSerialManager();
 
-  const { sequenceLogs, activeSequence, handleSequence, addLog } = useSequenceManager(sendCommand);
+  const { sequenceLogs, activeSequence, handleSequence, addLog } = useSequenceManager((cmd) =>
+    sendCommand({ type: 'RAW', payload: cmd })
+  );
 
   const [isLogging, setIsLogging] = useState(false);
 

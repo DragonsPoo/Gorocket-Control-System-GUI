@@ -2,6 +2,17 @@
   "serial": {
     "baudRate": 115200
   },
+  "maxChartDataPoints": 100,
+  "pressureLimit": 850,
+  "initialValves": [
+    { "id": 1, "name": "Ethanol Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 2, "name": "N2O Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 3, "name": "Ethanol Purge", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 4, "name": "N2O Purge", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 5, "name": "Pressurant Fill", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 6, "name": "System Vent", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 7, "name": "Igniter Fuel", "state": "CLOSED", "lsOpen": false, "lsClosed": false }
+  ],
   "valveMappings": {
     "Ethanol Main": { "servoIndex": 0 },
     "N2O Main": { "servoIndex": 1 },
