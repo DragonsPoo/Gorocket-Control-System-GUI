@@ -31,8 +31,8 @@ const ValveIcon = ({ state }: { state: ValveState }) => {
 
 const LimitSwitchIndicator: React.FC<{ label: string; active: boolean; }> = ({ label, active }) => (
     <div className="flex items-center gap-1.5 text-xs">
-        <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-accent" : "bg-muted-foreground/50")}></span>
-        <span className={cn("font-medium", active ? "text-accent" : "text-muted-foreground")}>{label}</span>
+        <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-green-500" : "bg-muted-foreground/50")}></span>
+        <span className={cn("font-medium", active ? "text-green-500" : "text-muted-foreground")}>{label}</span>
     </div>
 );
 

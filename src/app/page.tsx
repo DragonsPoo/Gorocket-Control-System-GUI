@@ -170,7 +170,11 @@ export default function Home() {
       if (Object.keys(newData).length > 0) {
         const updatedSensorData = { ...sensorData, ...newData, timestamp: Date.now() } as SensorData;
         setSensorData(updatedSensorData);
-        setChartData(prev => [...prev.slice(-MAX_CHART_DATA_POINTS + 1), updatedSensorData]);
+
+        // Only add to chart if tc1 is a valid number
+        if (typeof updatedSensorData.tc1 === 'number') {
+            setChartData(prev => [...prev.slice(-MAX_CHART_DATA_POINTS + 1), updatedSensorData]);
+        }
         
         if ((updatedSensorData.pt1 > PRESSURE_LIMIT || updatedSensorData.pt2 > PRESSURE_LIMIT) && !emergencyShutdownTriggered.current) {
           addLog(`!!! CRITICAL PRESSURE DETECTED (PT1: ${updatedSensorData.pt1.toFixed(0)} PSI, PT2: ${updatedSensorData.pt2.toFixed(0)} PSI) !!!`);
@@ -185,20 +189,18 @@ export default function Home() {
         setValves(prevValves => prevValves.map(v => {
             const updates = newValveStates[v.id];
             if (!updates) return v;
-            
-            // Prioritize the state received directly from Arduino (updates.state)
-            // If not available, then consider limit switch states (updates.lsOpen/lsClosed)
-            // Otherwise, keep the current state (v.state)
-            let finalState: ValveState = v.state;
-            if (updates.state) { // If Arduino sent a direct state update
-                finalState = updates.state;
-            } else if (updates.lsOpen) { // If only limit switch open is active
-                finalState = 'OPEN';
-            } else if (updates.lsClosed) { // If only limit switch closed is active
-                finalState = 'CLOSED';
-            }
-            
-            return {...v, ...updates, state: finalState };
+
+            const newState = { ...v, ...updates };
+
+            // If a limit switch is active, update the main state accordingly
+            if (newState.lsOpen) {
+                newState.state = 'OPEN';
+            } else if (newState.lsClosed) {
+                newState.state = 'CLOSED';
+            } 
+            // Note: If no limit switch is active, we keep the optimistic state set by handleValveChange
+
+            return newState;
         }));
       }
     };
