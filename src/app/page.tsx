@@ -43,6 +43,21 @@ const initialValves: Valve[] = [
 ];
 
 
+const initialSensorData: SensorData = {
+  pt1: 0,
+  pt2: 0,
+  pt3: 0,
+  pt4: 0,
+  flow1: 0,
+  flow2: 0,
+  tc1: 0,
+  timestamp: 0,
+};
+
+function isSensorDataKey(key: string): key is keyof SensorData {
+  return key in initialSensorData;
+}
+
 const MAX_CHART_DATA_POINTS = 100;
 const PRESSURE_LIMIT = 850; // PSI
 
@@ -141,8 +156,8 @@ export default function Home() {
         const value = rawValue.trim(); // Add .trim() here
 
         // Update sensor data
-        if (Object.keys(sensorDataRef.current || {}).includes(key)) {
-            (newData as any)[key] = parseFloat(value);
+        if (isSensorDataKey(key)) {
+            newData[key] = parseFloat(value);
         }
 
         // Update valve states based on limit switches
