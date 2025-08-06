@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Header from '@/components/dashboard/header';
 import SensorPanel from '@/components/dashboard/sensor-panel';
-import ValveControlPanel from '@/components/dashboard/valve-control-panel';
+import ValveDisplay from '@/components/dashboard/valve-display';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import SequencePanel from '@/components/dashboard/sequence-panel';
 import DataChartPanel from '@/components/dashboard/data-chart-panel';
 import TerminalPanel from '@/components/dashboard/terminal-panel';
@@ -401,8 +402,19 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-8 grid grid-cols-1 gap-6">
-            <ValveControlPanel valves={valves} onValveChange={handleValveChange} />
-             <DataChartPanel data={chartData} />
+            <Card className="bg-card/50 border-border/60">
+              <CardHeader className="p-4">
+                <CardTitle className="text-xl">Valve Control &amp; Status</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {valves.map((valve) => (
+                    <ValveDisplay key={valve.id} valve={valve} onValveChange={handleValveChange} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            <DataChartPanel data={chartData} />
           </div>
 
           <div className="lg:col-span-4 grid grid-cols-1 gap-6 auto-rows-min">
