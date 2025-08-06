@@ -26,7 +26,7 @@ ServoState servoStates[NUM_SERVOS];
 int targetAngles[NUM_SERVOS];
 unsigned long lastMoveTime[NUM_SERVOS];
 
-#define SERVO_SETTLE_TIME 500 // 볼 밸브 회전 시간을 고려한 안정화 대기 시간 (1.5초)
+#define SERVO_SETTLE_TIME 500 // 볼 밸브 회전 시간을 고려한 안정화 대기 시간 (0.5초)
 #define INCHING_INTERVAL 50    // 1도씩 이동할 때의 시간 간격 (ms)
 // ==============================================================================
 
