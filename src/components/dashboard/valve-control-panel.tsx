@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Valve, ValveState } from '@/app/page';
+import type { Valve, ValveState } from '@/types';
 import { cn } from '@/lib/utils';
 import { RotateCw, CheckCircle, XCircle } from 'lucide-react';
 
