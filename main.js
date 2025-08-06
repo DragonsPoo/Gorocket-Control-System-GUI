@@ -175,18 +175,31 @@ ipcMain.handle('disconnect-serial', async () => {
   return false;
 });
 
-  ipcMain.on('send-to-serial', (event, data) => {
-    // Validate command format before sending to serial port
-    const isValid = /^V,(\d+),(O|C)$/.test(data);
-    if (!isValid) {
-      console.error('Invalid command format received:', data);
-      return;
-    }
-    if (port && port.isOpen) {
-      port.write(data + '\n', (err) => {
-        if (err) {
-          console.error('Error writing to serial port:', err);
-        }
+  ipcMain.handle('send-to-serial', async (_event, data) => {
+    try {
+      // Validate command format before sending to serial port
+      const isValid = /^V,(\d+),(O|C)$/.test(data);
+      if (!isValid) {
+        console.error('Invalid command format received:', data);
+        return false;
+      }
+      if (!port || !port.isOpen) {
+        return false;
+      }
+
+      await new Promise((resolve, reject) => {
+        port.write(data + '\n', (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
       });
+
+      return true;
+    } catch (err) {
+      console.error('Error writing to serial port:', err);
+      return false;
     }
   });

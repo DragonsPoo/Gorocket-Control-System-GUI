@@ -41,7 +41,7 @@ export interface SerialManagerApi {
   selectedPort: string;
   setSelectedPort: (port: string) => void;
   handleConnect: () => Promise<void>;
-  sendCommand: (cmd: string) => void;
+  sendCommand: (cmd: string) => Promise<void>;
   handleValveChange: (valveId: number, targetState: 'OPEN' | 'CLOSED') => void;
   setLogger: (logger: (msg: string) => void) => void;
   setSequenceHandler: (handler: (name: string) => void) => void;
@@ -212,7 +212,7 @@ export function useSerialManager(): SerialManagerApi {
   }, [connectionStatus, selectedPort, toast]);
 
   const sendCommand = useCallback(
-    (cmd: string) => {
+    async (cmd: string) => {
       if (connectionStatus !== 'connected') {
         toast({
           title: 'Not Connected',
@@ -221,7 +221,16 @@ export function useSerialManager(): SerialManagerApi {
         });
         return;
       }
-      window.electronAPI.sendToSerial(cmd);
+      const success = await window.electronAPI.sendToSerial(cmd);
+      if (!success) {
+        toast({
+          title: 'Command Error',
+          description: 'Failed to send command.',
+          variant: 'destructive',
+        });
+        loggerRef.current(`Failed to send: ${cmd}`);
+        return;
+      }
       loggerRef.current(`Sent: ${cmd}`);
     },
     [connectionStatus, toast]
@@ -243,7 +252,7 @@ export function useSerialManager(): SerialManagerApi {
       }
 
       const command = `V,${mapping.servoIndex},${targetState === 'OPEN' ? 'O' : 'C'}`;
-      sendCommand(command);
+      void sendCommand(command);
 
       setValves((prevValves) =>
         prevValves.map((v) =>
