@@ -4,7 +4,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSerialPorts: () => ipcRenderer.invoke('get-serial-ports'),
   connectSerial: (portName) => ipcRenderer.invoke('connect-serial', portName),
   disconnectSerial: () => ipcRenderer.invoke('disconnect-serial'),
-  sendToSerial: (data) => ipcRenderer.send('send-to-serial', data),
+  sendToSerial: (data) => ipcRenderer.invoke('send-to-serial', data),
   onSerialData: (callback) => {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on('serial-data', listener);

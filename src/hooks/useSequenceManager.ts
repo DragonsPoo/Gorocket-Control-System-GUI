@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 interface SequenceStep {
   message: string;
   delay: number;
-  action?: () => void;
+  action?: () => void | Promise<void>;
 }
 
 export interface SequenceManagerApi {
@@ -14,7 +14,7 @@ export interface SequenceManagerApi {
   addLog: (message: string) => void;
 }
 
-export function useSequenceManager(sendCommand: (cmd: string) => void): SequenceManagerApi {
+export function useSequenceManager(sendCommand: (cmd: string) => Promise<void>): SequenceManagerApi {
   const { toast } = useToast();
   const [sequenceLogs, setSequenceLogs] = useState<string[]>(['System standby. Select a sequence to begin.']);
   const [activeSequence, setActiveSequence] = useState<string | null>(null);
