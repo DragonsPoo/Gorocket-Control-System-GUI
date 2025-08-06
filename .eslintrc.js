@@ -9,12 +9,10 @@ module.exports = {
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
-    'airbnb-typescript/base',
   ],
-  settings: {
-    'import/resolver': {
-      typescript: {},
-    },
+  rules: {
+    '@typescript-eslint/dot-notation': 'off',
   },
+  settings: {},
   ignorePatterns: ['dist/', 'node_modules/'],
 };
