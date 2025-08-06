@@ -16,7 +16,7 @@ declare global {
       startLogging: () => void;
       stopLogging: () => void;
       getConfig: () => Promise<import('./index').AppConfig>;
-      onLogCreationFailed: (callback: (error: string) => void) => void;
+      onLogCreationFailed: (callback: (error: string) => void) => () => void;
     };
   }
 }

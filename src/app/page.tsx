@@ -75,9 +75,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    window.electronAPI.onLogCreationFailed(() => {
+    const cleanup = window.electronAPI.onLogCreationFailed(() => {
       toast({ title: 'Logging Error', description: 'Failed to create log file.', variant: 'destructive' });
     });
+
+    return () => {
+      cleanup();
+    };
   }, [toast]);
 
   const handleLoggingToggle = () => {
