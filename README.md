@@ -30,6 +30,8 @@
 .
 ├── main.js              # Electron 메인 프로세스, 시리얼 포트 및 줌 제어
 ├── preload.js           # 렌더러에서 사용할 IPC API 브리지
+├── arduino_mega_code/   # 구동 장치용 아두이노 펌웨어
+├── config.json          # 밸브 매핑 및 시리얼 통신 설정
 ├── src/
 │   ├── app/             # Next.js 엔트리 (layout.tsx, page.tsx, 전역 CSS)
 │   ├── components/
@@ -84,7 +86,7 @@ npm run dev          # Next.js(9002)와 Electron을 동시에 실행
 npm run build        # 프로덕션 빌드 (Next.js + electron-builder)
 
 # 품질 검사
-npm run lint         # ESLint
+npm run lint         # ESLint (최초 실행 시 구성 안내가 나타날 수 있음)
 npm run typecheck    # TypeScript 타입 검사
 ```
 
