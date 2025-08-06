@@ -1,7 +1,7 @@
 import { SerialPort } from 'serialport';
 import { EventEmitter } from 'events';
-import type { SerialCommand } from '@/types/ipc';
-import { ValveCommandType } from '@/types/ipc';
+import type { SerialCommand } from '../src/types/ipc';
+import { ValveCommandType } from '../src/types/ipc';
 
 export interface SerialManagerEvents {
   data: (data: string) => void;
