@@ -103,17 +103,27 @@ export default function Home() {
 
   useEffect(() => {
     const getPorts = async () => {
-      const ports = await window.electronAPI.getSerialPorts();
-      setSerialPorts(ports);
-      if (ports.length > 0) {
-        setSelectedPort(ports[0]);
+      try {
+        const ports = await window.electronAPI.getSerialPorts();
+        setSerialPorts(ports);
+        if (ports.length > 0) {
+          setSelectedPort(ports[0]);
+        }
+      } catch (error) {
+        console.error(error);
+        toast({ title: "Connection Error", description: "Failed to list serial ports.", variant: "destructive" });
       }
     };
     getPorts();
 
     const loadConfig = async () => {
-      const cfg = await window.electronAPI.getConfig();
-      setAppConfig(cfg);
+      try {
+        const cfg = await window.electronAPI.getConfig();
+        setAppConfig(cfg);
+      } catch (error) {
+        console.error(error);
+        toast({ title: "Configuration Error", description: "Failed to load configuration.", variant: "destructive" });
+      }
     };
     loadConfig();
 

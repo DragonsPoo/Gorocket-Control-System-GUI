@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
@@ -41,6 +41,7 @@ app.whenReady().then(() => {
       console.error('Failed to load config:', err);
       // 더 안정적인 기본값으로 설정
       appConfig = { serial: { baudRate: 9600 }, valveMappings: {} };
+      dialog.showErrorBox('Configuration Error', 'Failed to load configuration file. Using default settings.');
   }
   createWindow();
 });
@@ -108,6 +109,7 @@ ipcMain.handle('get-serial-ports', async () => {
     return ports.map(p => p.path);
   } catch (error) {
     console.error('Failed to list serial ports:', error);
+    mainWindow?.webContents.send('serial-error', 'Failed to list serial ports.');
     return [];
   }
 });
