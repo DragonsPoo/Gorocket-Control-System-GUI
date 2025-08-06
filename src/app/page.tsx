@@ -49,6 +49,7 @@ const PRESSURE_LIMIT = 850; // PSI
 export default function Home() {
   const { toast } = useToast();
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
+  const sensorDataRef = useRef<SensorData | null>(sensorData);
   const [chartData, setChartData] = useState<SensorData[]>([]);
   const [valves, setValves] = useState<Valve[]>(initialValves);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
@@ -140,7 +141,7 @@ export default function Home() {
         const value = rawValue.trim(); // Add .trim() here
 
         // Update sensor data
-        if (Object.keys(sensorData || {}).includes(key)) {
+        if (Object.keys(sensorDataRef.current || {}).includes(key)) {
             (newData as any)[key] = parseFloat(value);
         }
 
@@ -178,7 +179,7 @@ export default function Home() {
       });
       
       if (Object.keys(newData).length > 0) {
-        const updatedSensorData = { ...sensorData, ...newData, timestamp: Date.now() } as SensorData;
+        const updatedSensorData = { ...sensorDataRef.current, ...newData, timestamp: Date.now() } as SensorData;
         setSensorData(updatedSensorData);
 
         // Only add to chart if tc1 is a valid number
@@ -229,6 +230,10 @@ export default function Home() {
       cleanupSerialError();
       sequenceTimeoutRef.current.forEach(clearTimeout);
     };
+  }, []);
+
+  useEffect(() => {
+    sensorDataRef.current = sensorData;
   }, [sensorData]);
 
   useEffect(() => {
