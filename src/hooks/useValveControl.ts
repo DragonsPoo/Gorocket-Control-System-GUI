@@ -1,0 +1,39 @@
+import { useState, useCallback, Dispatch, SetStateAction } from 'react';
+import type { Valve, AppConfig } from '@/types';
+import type { SerialCommand } from '@/types/ipc';
+import { ValveCommandType } from '@/types/ipc';
+
+export interface ValveControlApi {
+  valves: Valve[];
+  handleValveChange: (id: number, targetState: 'OPEN' | 'CLOSED') => void;
+  setValves: Dispatch<SetStateAction<Valve[]>>;
+}
+
+export function useValveControl(
+  sendCommand: (cmd: SerialCommand) => Promise<void>,
+  config?: AppConfig
+): ValveControlApi {
+  const [valves, setValves] = useState<Valve[]>(config?.initialValves ?? []);
+
+  const handleValveChange = useCallback(
+    (valveId: number, targetState: 'OPEN' | 'CLOSED') => {
+      if (!config) return;
+      const valve = valves.find((v) => v.id === valveId);
+      if (!valve) return;
+      const mapping = config.valveMappings[valve.name];
+      if (!mapping) return;
+      const command: SerialCommand = {
+        type: 'V',
+        servoIndex: mapping.servoIndex,
+        action: targetState === 'OPEN' ? ValveCommandType.OPEN : ValveCommandType.CLOSE,
+      };
+      void sendCommand(command);
+      setValves((prev) =>
+        prev.map((v) => (v.id === valveId ? { ...v, state: targetState } : v))
+      );
+    },
+    [config, sendCommand, valves]
+  );
+
+  return { valves, handleValveChange, setValves };
+}
