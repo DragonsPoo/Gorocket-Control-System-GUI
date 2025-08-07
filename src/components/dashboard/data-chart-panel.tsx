@@ -16,6 +16,7 @@ const chartConfig = {
     flow1: { label: "Flow-1 (Fuel)", color: "hsl(var(--chart-1))" },
     flow2: { label: "Flow-2 (Oxi)", color: "hsl(var(--chart-2))" },
     tc1: { label: "TC-1 (Chamber)", color: "hsl(var(--chart-5))" },
+    tc2: { label: "TC-2 (Nozzle)", color: "hsl(var(--chart-3))" },
 };
 
 const DataChartPanel: React.FC<DataChartPanelProps> = ({ data }) => {
@@ -27,10 +28,11 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data }) => {
                 <CardTitle>Real-time Data Visualization</CardTitle>
                 <CardDescription>Sensor data over the last 100 seconds.</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div className="xl:col-span-1">
+            <CardContent className="grid grid-cols-1 gap-6">
+                {/* Pressure Chart */}
+                <div>
                     <h3 className="font-semibold mb-2 ml-2">Pressure (PSI)</h3>
-                    <ChartContainer config={chartConfig} className="h-[200px] lg:h-[220px] w-full">
+                    <ChartContainer config={chartConfig} className="h-[200px] w-full">
                         <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                             <CartesianGrid vertical={false} strokeDasharray="3 3" />
                             <XAxis dataKey="timestamp" tickFormatter={timeFormatter} fontSize={12} tickMargin={10} />
@@ -45,18 +47,34 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data }) => {
                         </LineChart>
                     </ChartContainer>
                 </div>
-                <div className="xl:col-span-1">
-                     <h3 className="font-semibold mb-2 ml-2">Flow (kg/s) & Temp (K)</h3>
-                     <ChartContainer config={chartConfig} className="h-[200px] lg:h-[220px] w-full">
+
+                {/* Flow Chart */}
+                <div>
+                    <h3 className="font-semibold mb-2 ml-2">Flow (kg/s)</h3>
+                    <ChartContainer config={chartConfig} className="h-[180px] w-full">
                         <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                             <CartesianGrid vertical={false} strokeDasharray="3 3" />
                             <XAxis dataKey="timestamp" tickFormatter={timeFormatter} fontSize={12} tickMargin={10} />
-                            <YAxis yAxisId="left" domain={[0, 'auto']} fontSize={12} tickMargin={5} stroke={chartConfig.flow1.color}/>
-                            <YAxis yAxisId="right" orientation="right" domain={[0, 'auto']} fontSize={12} tickMargin={5} stroke={chartConfig.tc1.color}/>
+                            <YAxis domain={[0, 'auto']} fontSize={12} tickMargin={5} />
                             <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" labelClassName="font-bold" />} />
-                            <Line yAxisId="left" type="monotone" dataKey="flow1" stroke={chartConfig.flow1.color} strokeWidth={2} dot={false} />
-                            <Line yAxisId="left" type="monotone" dataKey="flow2" stroke={chartConfig.flow2.color} strokeWidth={2} dot={false} />
-                            <Line yAxisId="right" type="monotone" dataKey="tc1" stroke={chartConfig.tc1.color} strokeDasharray="5 5" strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="flow1" stroke={chartConfig.flow1.color} strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="flow2" stroke={chartConfig.flow2.color} strokeWidth={2} dot={false} />
+                            <ChartLegend content={<ChartLegendContent />} />
+                        </LineChart>
+                    </ChartContainer>
+                </div>
+
+                {/* Temperature Chart */}
+                <div>
+                    <h3 className="font-semibold mb-2 ml-2">Temperature (K)</h3>
+                    <ChartContainer config={chartConfig} className="h-[180px] w-full">
+                        <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                            <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                            <XAxis dataKey="timestamp" tickFormatter={timeFormatter} fontSize={12} tickMargin={10} />
+                            <YAxis domain={[0, 'auto']} fontSize={12} tickMargin={5} />
+                            <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" labelClassName="font-bold" />} />
+                            <Line type="monotone" dataKey="tc1" stroke={chartConfig.tc1.color} strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="tc2" stroke={chartConfig.tc2.color} strokeWidth={2} dot={false} />
                             <ChartLegend content={<ChartLegendContent />} />
                         </LineChart>
                     </ChartContainer>

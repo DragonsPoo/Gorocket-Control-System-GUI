@@ -24,6 +24,12 @@ export function parseSensorData(raw: string): ParsedSensorData {
       if (lsType === 'LS_CLOSED') valves[valveId]!.lsClosed = lsValue;
       return;
     }
+    if (key === 'tc1' || key === 'tc2') {
+      const num = parseFloat(value);
+      (sensor as Record<string, number | string>)[key] = !Number.isNaN(num) ? num : value;
+      return;
+    }
+
     const num = parseFloat(value);
     if (!Number.isNaN(num)) {
       (sensor as Record<string, number>)[key] = num;
