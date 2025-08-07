@@ -1,3 +1,5 @@
+<img width="2879" height="1700" alt="스크린샷 2025-08-05 220935" src="https://github.com/user-attachments/assets/d7e541a0-47e1-43c0-ae45-d51dc0da0235" />
+
 # 로켓 엔진 테스트용 제어 및 모니터링 GUI
 
 ## 1. 개요 (Overview)
