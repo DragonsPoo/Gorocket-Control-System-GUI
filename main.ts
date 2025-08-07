@@ -98,7 +98,7 @@ class MainApp {
       const [k, v] = p.split(':');
       if (k && v) parsed[k.trim()] = v.trim();
     });
-    const fields = ['pt1', 'pt2', 'pt3', 'pt4', 'flow1', 'flow2', 'tc1'];
+    const fields = ['pt1', 'pt2', 'pt3', 'pt4', 'flow1', 'flow2', 'tc1', 'tc2'];
     const line = `${Date.now()},${fields.map((f) => parsed[f] || '').join(',')}\n`;
     return line;
   }

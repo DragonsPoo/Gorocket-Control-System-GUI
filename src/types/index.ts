@@ -20,7 +20,8 @@ export interface SensorData {
   pt4: number;
   flow1: number;
   flow2: number;
-  tc1: number;
+  tc1: number | string;
+  tc2: number | string;
   timestamp: number;
 }
 
