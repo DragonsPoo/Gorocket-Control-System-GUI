@@ -1,25 +1,32 @@
 <img width="2879" height="1700" alt="image" src="https://github.com/user-attachments/assets/ff2199ca-45b7-43f5-a146-2680b53c5f0f" />
 
-# GOROCKET Control Suite
+# GOROCKET Control Suite (초보자용 상세 가이드)
 
-`GOROCKET Control Suite`는 고로켓 팀이 액체 로켓 엔진 시험대를 보다 안전하고 효율적으로 운용하기 위해 만든 **데스크톱 제어 애플리케이션**입니다. USB 케이블을 이용한 **유선 시리얼 통신**만으로 센서 데이터를 수집하고 밸브를 조작하며, 점화·퍼지와 같은 자동 시퀀스를 실행할 수 있습니다. 네트워크 기능이나 사용자 인증 모듈이 포함되어 있지 않으므로, **개인 PC나 연구실 환경에서만 사용**해야 합니다.
+`GOROCKET Control Suite`는 고로켓 팀이 액체 로켓 엔진 시험대를 보다 안전하고 효율적으로 운용하기 위해 만든 **데스크톱 제어 애플리케이션**입니다. 이 문서는 프로젝트를 처음 접하는 분들도 시스템의 모든 기능을 이해하고 활용할 수 있도록 최대한 상세하게 작성되었습니다.
 
-## ⚠️ 안전 안내
+이 프로그램은 USB 케이블을 이용한 **유선 시리얼 통신**만으로 센서 데이터를 수집하고 밸브를 조작하며, 점화·퍼지와 같은 자동 시퀀스를 실행할 수 있습니다. 네트워크 기능이나 사용자 인증 모듈이 포함되어 있지 않으므로, **개인 PC나 연구실과 같이 물리적으로 보안이 확보된 환경에서만 사용**해야 합니다.
 
-- 실제 추진제를 사용하기 전에 반드시 모의 장비로 충분히 연습하세요.
-- 잘못된 설정이나 부주의한 조작은 하드웨어 파손 및 안전사고로 이어질 수 있습니다.
-- 본 프로젝트의 사용으로 발생하는 모든 책임은 사용자에게 있습니다.
+## **매우 중요**: 안전 안내
+
+- **실제 추진제를 사용하기 전, 반드시 물이나 모의 장비로 충분히 연습하세요.** 실제 로켓 연료는 매우 위험하며, 작은 실수가 큰 사고로 이어질 수 있습니다.
+- 잘못된 설정이나 부주의한 조작은 **하드웨어 파손, 화재, 폭발 등 심각한 안전사고**로 이어질 수 있습니다.
+- 본 프로젝트의 사용으로 발생하는 모든 기술적, 법적 책임은 전적으로 사용자에게 있습니다. **안전은 여러 번 강조해도 지나치지 않습니다.**
 
 ---
 
 ## 목차
 
 1. [프로젝트 소개](#프로젝트-소개)
+    - [기술 스택](#기술-스택)
+    - [동작 원리: Main과 Renderer 프로세스](#동작-원리-main과-renderer-프로세스)
 2. [빠른 시작](#빠른-시작)
 3. [시스템 요구 사항](#시스템-요구-사항)
 4. [설치와 실행](#설치와-실행)
 5. [디렉터리 구조](#디렉터리-구조)
 6. [GUI 코드 흐름 이해하기](#gui-코드-흐름-이해하기)
+    - [데이터 흐름 요약](#데이터-흐름-요약)
+    - [프로세스 간 통신 (IPC)](#프로세스-간-통신-ipc)
+    - [핵심 로직: 커스텀 훅](#핵심-로직-커스텀-훅)
 7. [설정 파일 상세 (`config.json`)](#설정-파일-상세-configjson)
 8. [시퀀스 사용자 정의와 동작 방식](#시퀀스-사용자-정의와-동작-방식)
 9. [시리얼 통신 프로토콜](#시리얼-통신-프로토콜)
@@ -34,14 +41,34 @@
 
 ## 프로젝트 소개
 
-이 프로그램은 **센서 모니터링·밸브 제어·자동 시퀀스 실행**을 한 화면에서 수행할 수 있도록 설계되었습니다. 주요 특징은 다음과 같습니다.
+이 프로그램은 **센서 모니터링·밸브 제어·자동 시퀀스 실행**을 하나의 직관적인 화면에서 수행할 수 있도록 설계되었습니다. 사용자는 이 프로그램을 통해 로켓 엔진 테스트의 전 과정을 효과적으로 통제할 수 있습니다.
 
-- Electron + Next.js 기반으로 Windows, macOS, Linux 모두에서 동일한 인터페이스 제공
-- 최대 4개의 압력 센서, 2개의 유량 센서, 1개의 열전대 등 다양한 계측값 표시
-- 점화, 퍼지, 비상 정지(E‑Stop) 등 자동 시퀀스를 시간 순서대로 실행
-- 수집된 데이터를 CSV 형식으로 저장하여 후처리 가능
+- **크로스 플랫폼 지원**: Electron 기반으로 Windows, macOS, Linux에서 모두 동일한 환경을 제공합니다.
+- **다양한 계측값 표시**: 최대 4개의 압력 센서(PT), 2개의 유량 센서(Flow), 1개의 열전대(TC) 등 다양한 계측값을 실시간으로 시각화합니다.
+- **자동화된 시퀀스**: 점화, 퍼지, 비상 정지(E‑Stop) 등 복잡한 과정을 버튼 하나로 정확하게 시간 순서에 따라 실행합니다.
+- **데이터 후처리**: 수집된 모든 센서 데이터를 CSV 형식으로 저장하여, 테스트 후 분석 및 보고서 작성에 활용할 수 있습니다.
 
-하드웨어 제어 로직은 `arduino_mega_code` 폴더의 펌웨어에 구현되어 있고, 이 프로젝트는 **사용자 인터페이스와 시리얼 통신**을 담당합니다.
+### 기술 스택
+
+이 프로젝트는 다음과 같은 최신 웹 기술을 기반으로 만들어졌습니다.
+
+- **Electron**: 웹 기술(HTML, CSS, JavaScript)로 데스크톱 애플리케이션을 만들 수 있게 해주는 프레임워크입니다. 운영체제의 하드웨어(시리얼 포트 등)에 접근하는 부분과 사용자 인터페이스를 분리하여 관리합니다.
+- **Next.js (React)**: 사용자 인터페이스(UI)를 만드는 데 사용된 리액트 프레임워크입니다. 컴포넌트 기반 아키텍처를 통해 UI를 모듈화하여 재사용성과 유지보수성을 높입니다.
+- **TypeScript**: JavaScript에 정적 타입을 추가한 언어입니다. 코드의 안정성과 가독성을 높여주며, 개발 단계에서 잠재적인 오류를 미리 발견할 수 있게 도와줍니다.
+
+### 동작 원리: Main과 Renderer 프로세스
+
+Electron 앱은 두 종류의 프로세스로 동작하며, 이를 이해하는 것이 중요합니다.
+
+1.  **Main 프로세스 (`main.ts`)**:
+    - 앱의 생명주기를 관리하고, 네이티브 OS 기능에 접근합니다.
+    - 창을 생성하고, 메뉴를 설정하며, **시리얼 포트 통신**이나 **파일 시스템(데이터 로깅)**과 같은 백그라운드 작업을 처리합니다.
+    - 전체 앱에서 단 하나만 실행되는 '두뇌'와 같은 역할을 합니다.
+
+2.  **Renderer 프로세스 (`src/app/page.tsx` 등)**:
+    - 사용자에게 보여지는 웹 페이지(UI)를 렌더링합니다.
+    - 일반적인 웹 환경과 유사하며, 사용자의 입력(버튼 클릭 등)을 받아 처리합니다.
+    - 보안상의 이유로 직접 시리얼 포트나 파일 시스템에 접근할 수 없으며, 반드시 **Main 프로세스에 요청**해야 합니다. (IPC 통신 사용)
 
 ---
 
@@ -49,38 +76,37 @@
 
 아래 순서를 따라 하면 바로 애플리케이션을 실행해 볼 수 있습니다.
 
-1. [시스템 요구 사항](#시스템-요구-사항)을 만족하는지 확인합니다. 터미널에서 `node -v`와 `npm -v`로 버전을 확인하세요.
-2. 저장소를 클론합니다.
-   ```bash
-   git clone <레포지토리 URL>
-   cd Gorocket-Control-System-GUI
-   ```
-3. 의존성을 설치합니다.
-   ```bash
-   npm install
-   ```
-4. 개발 모드로 실행합니다.
-   ```bash
-   npm run dev
-   ```
-   9002번 포트에서 Next.js 개발 서버가 실행되고 Electron 창이 자동으로 열립니다.
-5. 상단 메뉴에서 시리얼 포트를 선택한 뒤 `Connect` 버튼을 눌러 하드웨어와 연결합니다.
-6. 센서 값과 밸브 상태가 정상적으로 표시되는지 확인하고 실험을 진행합니다.
-
-각 단계에 대한 자세한 설명은 아래를 참고하세요.
+1.  [시스템 요구 사항](#시스템-요구-사항)을 만족하는지 확인합니다. 터미널에서 `node -v`와 `npm -v`로 버전을 확인하세요.
+2.  이 저장소를 클론(다운로드)합니다.
+    ```bash
+    git clone <레포지토리 URL>
+    cd Gorocket-Control-System-GUI
+    ```
+3.  프로젝트에 필요한 라이브러리(의존성)를 설치합니다.
+    ```bash
+    npm install
+    ```
+4.  개발 모드로 애플리케이션을 실행합니다.
+    ```bash
+    npm run dev
+    ```
+    - 9002번 포트에서 Next.js 개발 서버가 실행되고 Electron 창이 자동으로 열립니다.
+5.  상단 메뉴에서 아두이노가 연결된 시리얼 포트를 선택한 뒤 `Connect` 버튼을 눌러 하드웨어와 연결합니다.
+6.  센서 값과 밸브 상태가 정상적으로 표시되는지 확인하고 실험을 진행합니다.
 
 ---
 
 ## 시스템 요구 사항
 
-| 구분 | 권장 사양 |
-| --- | --- |
-| **운영 체제** | Windows 10 이상, macOS 13 이상, 최신 Linux 배포판 |
-| **Node.js** | 20.x 이상 |
-| **npm** | 10.x 이상 (Node 설치 시 자동 포함) |
-| **하드웨어** | 시리얼 통신이 가능한 USB 포트 및 케이블 |
+| 구분 | 권장 사양 | 설명 |
+| --- | --- | --- |
+| **운영 체제** | Windows 10 이상, macOS 13 이상, 최신 Linux 배포판 | Electron이 지원하는 OS |
+| **Node.js** | 20.x 이상 | JavaScript 런타임 환경 |
+| **npm** | 10.x 이상 | Node.js 설치 시 자동 포함되는 패키지 매니저 |
+| **하드웨어** | 시리얼 통신이 가능한 USB 포트 및 케이블 | 아두이노 메가 등 제어 보드 연결용 |
+| **Arduino IDE** | 최신 버전 | (선택) `arduino_mega_code`의 펌웨어를 수정하거나 업로드할 경우 필요 |
 
-> **Tip**: Node.js와 npm이 설치되어 있지 않다면 [Node.js 공식 사이트](https://nodejs.org/)에서 LTS 버전을 내려받아 설치하세요.
+> **Tip**: Node.js와 npm이 설치되어 있지 않다면 [Node.js 공식 사이트](https://nodejs.org/)에서 **LTS 버전**을 내려받아 설치하세요.
 
 ---
 
@@ -88,7 +114,7 @@
 
 ### 1. 저장소 클론
 
-Git이 설치되어 있지 않다면 [Git 공식 페이지](https://git-scm.com/)에서 설치한 뒤 아래 명령을 실행합니다.
+Git이 설치되어 있지 않다면 [Git 공식 페이지](https://git-scm.com/)에서 설치한 뒤 아래 명령을 터미널에서 실행합니다.
 
 ```bash
 git clone <레포지토리 URL>
@@ -97,285 +123,387 @@ cd Gorocket-Control-System-GUI
 
 ### 2. 의존성 설치
 
+프로젝트 폴더 안에서 다음 명령을 실행하여 필요한 모든 라이브러리를 다운로드합니다.
+
 ```bash
 npm install
 ```
-
 - 네트워크 환경에 따라 시간이 걸릴 수 있습니다.
-- 권한 문제로 실패한다면 Windows에서는 관리자 권한, macOS/Linux에서는 `sudo`를 사용해 다시 실행합니다.
+- 권한 문제로 실패한다면 Windows에서는 관리자 권한으로 터미널을 실행하고, macOS/Linux에서는 명령어 앞에 `sudo`를 붙여 다시 시도해 보세요. (`sudo npm install`)
 
 ### 3. 개발 모드 실행
 
 ```bash
 npm run dev
 ```
-
-- 9002번 포트에서 Next.js 개발 서버가 실행되고 Electron이 새 창을 띄웁니다.
-- 콘솔에 오류가 보이면 `node_modules`를 삭제하고 다시 설치해 보세요.
+- 이 명령은 Next.js 개발 서버를 시작하고 동시에 Electron 앱을 실행합니다.
+- 코드 수정 시 화면이 자동으로 새로고침되어 편리합니다.
+- 콘솔에 오류가 보이면 `node_modules` 폴더와 `package-lock.json` 파일을 삭제하고 `npm install`을 다시 실행해 보세요.
 
 ### 4. 프로덕션 빌드 생성
+
+테스트가 완료된 배포용 버전을 만들려면 다음 명령을 사용합니다.
 
 ```bash
 npm run build
 ```
-
-- `dist/` 폴더에 배포용 실행 파일과 리소스가 생성됩니다.
-- 다른 PC에서 실행하려면 `config.json`도 함께 복사해야 합니다.
-
-### 5. 빌드된 앱 실행
-
-```bash
-electron .   # 또는 dist 폴더의 실행 파일을 직접 실행
-```
-
-- 첫 실행 시 Windows SmartScreen이나 macOS 보안 경고가 나타날 수 있습니다. 개발 환경에서는 무시하고 진행하면 됩니다.
+- `dist/` 폴더에 최적화된 실행 파일과 리소스가 생성됩니다.
+- 다른 PC에서 실행하려면 이 `dist` 폴더와 함께 `config.json` 파일도 반드시 함께 복사해야 합니다.
 
 ---
 
 ## 디렉터리 구조
 
-소스 코드의 전체 구조와 각 폴더의 역할은 다음과 같습니다.
+소스 코드의 전체 구조와 각 파일/폴더의 역할은 다음과 같습니다.
 
 ```
 .
 ├── main.ts               # Electron 메인 프로세스: 앱 창 생성 및 시리얼 포트 제어
 ├── preload.ts            # 메인 <-> 렌더러 간 안전한 IPC 브리지
-├── config.json           # 실행 시 읽어 들이는 설정 파일
-├── src/
+├── config.json           # 실행 시 읽어 들이는 설정 파일 (가장 먼저 확인!)
+├── arduino_mega_code/    # 아두이노 메가에 업로드하는 펌웨어 소스 코드
+│   └── arduino_mega_code.ino
+├── main/                 # 메인 프로세스에서 사용하는 모듈
+│   ├── SerialManager.ts  # 시리얼 포트 목록 조회, 연결, 데이터 송수신 처리
+│   └── ...
+├── src/                  # Next.js (React) UI 관련 소스 코드
 │   ├── app/
-│   │   └── page.tsx      # 대시보드 화면을 구성하는 Next.js 페이지
-│   ├── components/       # 재사용 가능한 React UI 컴포넌트 모음
-│   ├── hooks/            # 상태 관리와 로직을 담당하는 커스텀 훅
-│   │   ├── useSerialManager.ts   # 포트 연결, 센서 데이터 수집, 밸브 제어 통합 관리
+│   │   └── page.tsx      # 대시보드 화면을 구성하는 메인 React 페이지
+│   ├── components/       # 재사용 가능한 React UI 컴포넌트 모음 (버튼, 패널 등)
+│   ├── hooks/            # 상태 관리와 핵심 로직을 담당하는 커스텀 훅
+│   │   ├── useSerialManager.ts # UI의 시리얼 관련 모든 로직 통합 관리
 │   │   ├── useSequenceManager.ts # 자동 시퀀스 실행 및 로그 관리
-│   │   ├── useSensorData.ts      # 시리얼 메시지 파싱 및 그래프 데이터 저장
-│   │   └── useValveControl.ts    # 밸브 상태 변경 및 리미트 스위치 반영
-│   ├── lib/            # 공용 라이브러리 코드
-│   ├── types/          # TypeScript 타입 정의
-│   └── utils/          # 유틸리티 함수
-├── docs/               # 설계 문서와 참고 자료
-├── package.json        # npm 스크립트 및 의존성 목록
+│   │   ├── useSensorData.ts    # 시리얼 메시지 파싱 및 센서/차트 데이터 저장
+│   │   └── useValveControl.ts  # 밸브 상태 변경 및 리미트 스위치 반영
+│   ├── lib/              # 공용 라이브러리 코드
+│   ├── types/            # TypeScript 타입 정의 (데이터 구조 정의)
+│   └── utils/            # 유틸리티 함수
+├── package.json          # npm 스크립트 및 의존성 목록
 └── ...
 ```
-
-이 구조를 이해하면 원하는 위치의 코드를 빠르게 찾을 수 있습니다.
 
 ---
 
 ## GUI 코드 흐름 이해하기
 
-초보자도 전체 프로그램의 흐름을 이해할 수 있도록 핵심 파일을 단계별로 설명합니다.
+이 프로그램은 **하드웨어(Arduino) ↔ Main 프로세스 ↔ Renderer 프로세스(UI)** 순서로 데이터를 주고받습니다.
 
-### 1. Electron 메인 프로세스 (`main.ts`)
+### 데이터 흐름 요약
 
-- 애플리케이션 창을 생성하고 Next.js에서 빌드된 페이지를 로드합니다.
-- Node.js의 `serialport` 라이브러리를 사용하여 실제 하드웨어와 통신합니다.
-- IPC 채널을 통해 렌더러(React)와 메시지를 주고받습니다.
+```
+[물리적 하드웨어]      <-- USB Serial -->      [Electron Main Process]      <-- IPC -->      [Electron Renderer Process (UI)]
+(Arduino, 센서, 밸브)                        (main.ts, SerialManager.ts)                 (page.tsx, useSerialManager.ts)
 
-### 2. Preload 스크립트 (`preload.ts`)
+1. Arduino: 센서 값을 읽고, 리미트 스위치 상태를 확인하여 시리얼 포트로 데이터 전송.
+   "pt1:12.3,tc1:298.1,V0_LS_OPEN:1,..."
 
-- 메인 프로세스의 기능을 제한된 형태로 `window.electronAPI`에 노출합니다.
-- 렌더러는 이 API를 사용해 시리얼 포트 목록 조회, 데이터 전송, 로그 시작/종료 등 안전한 작업만 수행할 수 있습니다.
+2. Main Process: 시리얼 포트로부터 데이터를 수신.
+   수신한 데이터를 그대로 Renderer 프로세스로 전달. (IPC 사용)
 
-### 3. React 페이지 (`src/app/page.tsx`)
+3. Renderer Process: Main 프로세스로부터 데이터를 수신.
+   useSensorData 훅이 데이터를 파싱하여 압력, 온도, 밸브 상태 등으로 변환.
+   React가 변경된 데이터를 감지하여 화면의 숫자와 그래프를 자동으로 업데이트.
+```
 
-- 대시보드 화면을 구성하는 최상위 컴포넌트입니다.
-- 내부에서 여러 패널과 위젯을 불러와 배치하며, 각 패널은 **컴포넌트** 단위로 분리되어 있습니다.
-- `useSerialManager`와 `useSequenceManager` 훅을 사용해 센서 값, 밸브 상태, 시퀀스 로그 등을 화면에 반영합니다.
+### 프로세스 간 통신 (IPC)
 
-### 4. 커스텀 훅
+Renderer 프로세스는 보안 정책상 직접 하드웨어에 접근할 수 없습니다. 따라서 `preload.ts`를 통해 Main 프로세스가 제공하는 기능만 안전하게 호출할 수 있습니다. `window.electronAPI`라는 객체를 통해 다음과 같은 작업이 이루어집니다.
 
-- `useSerialManager` : 포트 목록 조회, 연결 상태 관리, 수신 데이터 처리, 밸브 제어 등 대부분의 핵심 로직을 담당합니다.
-- `useSequenceManager` : 사용자 정의 시퀀스를 순차적으로 실행하고 로그를 기록합니다.
-- `useSensorData` : 시리얼로 들어오는 문자열을 파싱하여 센서 데이터와 그래프 데이터를 갱신합니다.
-- `useValveControl` : 밸브의 개폐 명령을 전송하고 리미트 스위치 상태를 반영합니다.
+| IPC 채널 (요청) | 설명 | 호출 예시 (Renderer) | 처리 주체 (Main) |
+| --- | --- | --- | --- |
+| `get-serial-ports` | 사용 가능한 시리얼 포트 목록을 요청합니다. | `window.electronAPI.getSerialPorts()` | `SerialManager` |
+| `connect-serial` | 특정 포트로 연결을 시도합니다. | `window.electronAPI.connectSerial('COM3')` | `SerialManager` |
+| `disconnect-serial`| 연결을 해제합니다. | `window.electronAPI.disconnectSerial()` | `SerialManager` |
+| `send-to-serial` | 밸브 제어 등 명령어를 하드웨어로 전송합니다. | `window.electronAPI.sendToSerial('V,0,O')` | `SerialManager` |
+| `get-config` | `config.json` 파일의 내용을 읽어옵니다. | `window.electronAPI.getConfig()` | `ConfigManager` |
+| `start-logging` | CSV 데이터 로깅을 시작합니다. | `window.electronAPI.startLogging()` | `LogManager` |
 
-### 5. 주요 UI 컴포넌트
+### 핵심 로직: 커스텀 훅
 
-- `Header` : 포트 선택, 연결/해제, 데이터 로깅 버튼, 연결 상태 표시
-- `SensorPanel` : 압력/유량/온도 등의 실시간 수치를 숫자와 그래프로 표시
-- `ValveDisplay` : 각 밸브의 현재 상태와 리미트 스위치 표시, 버튼 클릭으로 개폐 제어
-- `SequencePanel` : 점화·퍼지·비상 정지 등 시퀀스 시작 버튼
-- `DataChartPanel` : 선택된 센서의 시간에 따른 변화를 그래프로 표현
-- `TerminalPanel` : 송수신 문자열과 시퀀스 로그를 스크롤 형태로 출력
+UI의 복잡한 상태 관리와 로직은 React의 **커스텀 훅**으로 분리되어 있습니다.
 
-이 흐름을 이해하면 새로운 센서나 패널을 추가하거나 기존 로직을 수정하기가 쉬워집니다.
+-   **`useSerialManager.ts`**: 전체적인 조율자 역할. UI 컴포넌트와 다른 훅들을 연결합니다. 포트 연결/해제, 명령어 전송, 수신 데이터 분배 등 대부분의 상호작용을 총괄합니다.
+-   **`useSensorData.ts`**: 데이터 처리 전문가. `main.ts`에서 받은 순수 문자열(`pt1:12.3,...`)을 파싱하여 의미 있는 데이터(숫자, 상태 등)로 변환하고, 차트에 표시할 데이터를 저장합니다. 압력 한계 초과 시 비상 정지 시퀀스를 호출하는 로직도 담당합니다.
+-   **`useValveControl.ts`**: 밸브 전문가. 밸브의 개폐 상태와 리미트 스위치 상태를 관리합니다. 사용자가 UI에서 밸브 버튼을 클릭하면 이 훅이 적절한 시리얼 명령을 생성하여 `useSerialManager`에 전달합니다.
+-   **`useSequenceManager.ts`**: 시퀀스 실행 전문가. 점화, 퍼지 등 미리 정의된 작업 단계를 순서대로 실행하고, 각 단계의 로그를 터미널에 출력합니다.
 
 ---
 
 ## 설정 파일 상세 (`config.json`)
 
-애플리케이션은 실행 시 `config.json`을 읽어 센서와 밸브 구성, 안전 한계값 등을 설정합니다. 기본 구조는 다음과 같습니다.
+애플리케이션은 실행 시 `config.json`을 읽어 센서와 밸브 구성, 안전 한계값 등을 설정합니다. 이 파일을 수정하여 자신의 하드웨어에 맞게 프로그램을 커스터마이징할 수 있습니다.
 
 ```json
 {
-  "serial": { "baudRate": 115200 },
-  "maxChartDataPoints": 500,
-  "pressureLimit": 50,
+  "serial": {
+    "baudRate": 115200
+  },
+  "maxChartDataPoints": 100,
+  "pressureLimit": 850,
   "initialValves": [
-    { "id": 0, "name": "Fuel Main", "state": "CLOSED" },
-    { "id": 1, "name": "N2O Main", "state": "CLOSED" }
+    { "id": 1, "name": "Ethanol Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 2, "name": "N2O Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 3, "name": "Ethanol Purge", "state": "CLOSED", "lsOpen": false, "lsClosed": false }
   ],
   "valveMappings": {
-    "Fuel Main": { "servoIndex": 0 },
-    "N2O Main": { "servoIndex": 1 }
+    "Ethanol Main": { "servoIndex": 0 },
+    "N2O Main": { "servoIndex": 1 },
+    "Ethanol Purge": { "servoIndex": 2 }
   }
 }
 ```
 
-- `serial.baudRate` : 시리얼 포트 통신 속도. 펌웨어 설정과 반드시 일치해야 합니다.
-- `maxChartDataPoints` : 그래프에 보존할 데이터 샘플의 최대 수.
-- `pressureLimit` : 지정 값 이상이 되면 자동으로 비상 정지 시퀀스가 실행됩니다.
-- `initialValves` : 앱 실행 시 표시할 밸브 목록과 초기 상태.
-- `valveMappings` : UI에서 정의한 밸브 이름을 실제 서보 인덱스로 매핑합니다.
-
-설정을 변경한 후에는 애플리케이션을 다시 시작하거나 `Ctrl+R`로 새로고침해야 적용됩니다. 새로운 밸브를 추가하려면 `initialValves`와 `valveMappings`에 항목을 추가하고, 필요하다면 하드웨어 펌웨어도 수정해야 합니다.
+-   `serial.baudRate`: 시리얼 포트 통신 속도. **Arduino 펌웨어의 `Serial.begin()` 값과 반드시 일치해야 합니다.**
+-   `maxChartDataPoints`: 차트에 표시할 데이터 포인트의 최대 개수. 이 값을 넘으면 가장 오래된 데이터부터 사라집니다.
+-   `pressureLimit`: PSI 단위의 압력 상한값. 센서에서 이 값 이상의 압력이 감지되면 **자동으로 비상 정지 시퀀스가 실행됩니다.**
+-   `initialValves`: UI에 표시할 밸브 목록과 초기 상태 정의.
+    -   `id`: 밸브의 고유 식별자.
+    -   `name`: UI에 표시될 밸브 이름.
+    -   `state`: 초기 상태 (`"OPEN"` 또는 `"CLOSED"`).
+    -   `lsOpen`, `lsClosed`: 리미트 스위치의 초기 상태 (UI 표시용, 보통 `false`로 둠).
+-   `valveMappings`: UI의 밸브 이름(`name`)과 Arduino 펌웨어의 서보 모터 인덱스(`servoIndex`)를 연결합니다. 예를 들어, "Ethanol Main" 밸브를 제어하면 실제로는 `servoIndex` 0번 모터에 명령이 전달됩니다.
 
 ---
 
 ## 시퀀스 사용자 정의와 동작 방식
 
-자동 시퀀스는 `src/hooks/useSequenceManager.ts`에서 정의됩니다. 이 훅은 다음과 같은 **단계 배열**을 순서대로 실행합니다.
+자동 시퀀스는 `src/hooks/useSequenceManager.ts` 파일에 정의되어 있습니다. 각 시퀀스는 다음과 같은 **단계(Step) 객체의 배열**로 구성됩니다.
 
 ```ts
 interface SequenceStep {
-  message: string;    // 로그에 표시할 메세지
-  delay: number;      // 이전 단계 이후 대기 시간(ms)
-  action?: () => void | Promise<void>; // 실행할 명령(선택 사항)
+  message: string;    // 터미널 로그에 표시할 메시지
+  delay: number;      // 이전 단계 실행 후 대기할 시간 (밀리초 단위, 1000ms = 1초)
+  action?: () => void; // 실행할 함수 (주로 밸브 제어 명령 전송)
 }
 ```
 
-`handleSequence("Ignition Sequence")`와 같이 호출하면 내부의 `runSequence`가 각 단계를 `delay`만큼 기다린 뒤 `action`을 실행하고 `message`를 기록합니다. 시퀀스는 `AbortController`로 언제든 중단할 수 있습니다.
+`handleSequence("Ignition Sequence")`와 같이 호출하면, `runSequence` 함수가 배열의 각 단계를 순서대로 실행합니다. `delay`만큼 기다린 후, `action`을 실행하고 `message`를 터미널에 기록합니다.
 
 ### 새로운 시퀀스 추가 예시
 
-1. `useSequenceManager.ts`에서 `switch` 문에 새로운 `case`를 추가합니다.
-2. 실행할 단계들을 배열로 작성합니다.
+1.  `useSequenceManager.ts` 파일의 `sequences` 객체에 새로운 시퀀스를 추가합니다.
+2.  실행할 단계들을 배열로 작성합니다. `sendCommand`를 사용하여 밸브를 제어합니다.
 
 ```ts
-case 'Purge Sequence':
-  void runSequence(
-    'Purge Sequence',
-    [
-      { message: 'Opening purge valve...', delay: 0, action: () => sendCommand('V,1,O') },
-      { message: 'Waiting 2 seconds', delay: 2000 },
-      { message: 'Closing purge valve', delay: 0, action: () => sendCommand('V,1,C') }
-    ],
-    controller
-  );
-  break;
+// 예시: 2초간 연료 퍼지를 수행하는 시퀀스
+'Fuel Purge': [
+  { message: 'Opening Ethanol Purge valve...', delay: 0, action: () => handleValveChange(3, 'OPEN') },
+  { message: 'Purging for 2 seconds...', delay: 2000 },
+  { message: 'Closing Ethanol Purge valve.', delay: 0, action: () => handleValveChange(3, 'CLOSED') },
+  { message: 'Fuel Purge sequence complete.', delay: 500 }
+],
 ```
-
-3. `src/components/dashboard/sequence-panel.tsx`에서 해당 시퀀스를 버튼으로 노출합니다.
-4. 필요하다면 `config.json`에 관련 밸브 매핑을 추가합니다.
-
-이 방식으로 점화 시간 조정, 밸브 조작 순서 변경 등 원하는 시나리오를 자유롭게 구성할 수 있습니다.
+3. `src/components/dashboard/sequence-panel.tsx` 파일에 새 버튼을 추가하여 이 시퀀스를 호출할 수 있도록 합니다.
 
 ---
 
 ## 시리얼 통신 프로토콜
 
-하드웨어와의 통신은 텍스트 기반이며, 다음 규칙을 따릅니다.
+하드웨어(Arduino)와 GUI 프로그램은 텍스트 기반의 시리얼 통신을 사용합니다. 프로토콜은 매우 간단합니다.
 
-| 목적 | 형식 | 예시 |
+### GUI → Arduino (명령 전송)
+
+| 목적 | 형식 | 예시 | 설명 |
+| --- | --- | --- | --- |
+| 밸브 제어 | `V,서보인덱스,상태` | `V,0,O` | 0번 서보를 Open(열림) 상태로 만듭니다. |
+| | | `V,1,C` | 1번 서보를 Close(닫힘) 상태로 만듭니다. |
+
+- `서보인덱스`는 `config.json`의 `valveMappings`에 정의된 숫자입니다.
+- `상태`는 `O`(Open) 또는 `C`(Close) 중 하나입니다.
+
+### Arduino → GUI (데이터 수신)
+
+Arduino는 주기적으로 모든 센서와 리미트 스위치 상태를 한 줄의 문자열로 만들어 전송합니다. 각 데이터는 `키:값` 쌍으로 구성되며 콤마(`,`)로 구분됩니다.
+
+- **전송 형식**: `pt1:값,pt2:값,...,tc1:값,V0_LS_OPEN:상태,V0_LS_CLOSED:상태,...`
+- **실제 예시**: `pt1:14.52,pt2:15.10,pt3:0.00,pt4:0.00,tc1:298.15,V0_LS_OPEN:0,V0_LS_CLOSED:1,V1_LS_OPEN:0,V1_LS_CLOSED:1`
+
+| 키 | 설명 | 값 예시 |
 | --- | --- | --- |
-| **밸브 제어 명령** | `V,서보인덱스,상태` | `V,0,O` → 0번 서보를 Open |
-| **센서 데이터 수신** | `키:값` 쌍을 콤마로 구분 | `PT1:123.4,PT2:125.0` |
-
-- 밸브 상태는 `O`(Open) 또는 `C`(Close)로 표현합니다.
-- 받은 문자열은 파싱되어 각 센서 값과 밸브 상태를 갱신합니다.
-- 밸브와 서보 인덱스 매핑은 `config.json`에서 확인할 수 있습니다.
+| `pt1` ~ `pt4` | 압력 센서(Pressure Transducer) 1~4번의 값 (PSI 단위) | `14.52` |
+| `tc1` | 열전대(Thermocouple) 1번의 값 (절대온도 K 단위) | `298.15` |
+| | 열전대 연결 오류 | `OPEN_ERR` |
+| | 열전대 통신 오류 | `COM_ERR` |
+| `V0_LS_OPEN` | 0번 서보의 '열림' 리미트 스위치 상태 (0: 꺼짐, 1: 켜짐) | `1` |
+| `V0_LS_CLOSED`| 0번 서보의 '닫힘' 리미트 스위치 상태 (0: 꺼짐, 1: 켜짐) | `0` |
 
 ---
 
 ## 데이터 로깅
 
-- 상단 `Start Logging` 버튼을 누르면 `Documents/rocket-log-YYYYMMDD-HHMMSS.csv` 형식의 파일이 생성됩니다.
+- 상단 `Start Logging` 버튼을 누르면 내 문서 폴더에 `rocket-log-YYYYMMDD-HHMMSS.csv` 형식의 파일이 생성됩니다.
 - 로깅 중에는 수신한 센서 값이 실시간으로 CSV 파일에 추가됩니다.
-- `Stop Logging`을 누르거나 프로그램을 종료하면 파일이 저장됩니다.
+- `Stop Logging`을 누르거나 프로그램을 종료하면 파일 저장이 완료됩니다.
 - 파일 생성에 실패하면 화면에 오류 메시지가 표시됩니다.
 
-CSV 파일의 첫 줄(헤더)은 다음과 같습니다.
+CSV 파일의 헤더(첫 줄)는 다음과 같이 고정되어 있습니다.
 
 ```
-timestamp,PT1,PT2,PT3,PT4,Flow1,Flow2,Thermo
+timestamp,pt1,pt2,pt3,pt4,flow1,flow2,tc1
 ```
+> **참고**: 현재 펌웨어(`arduino_mega_code.ino`)는 유량 센서(flow1, flow2) 데이터를 전송하지 않으므로 해당 열은 비어있을 수 있습니다.
 
 ---
 
 ## UI 사용 방법
 
-1. **시리얼 포트 선택 및 연결**
-   - 앱 실행 후 상단 드롭다운에서 사용 가능한 포트를 선택합니다.
-   - `Connect`를 클릭하면 연결 상태가 `Connected`로 바뀌고 센서 데이터 수신이 시작됩니다.
+1.  **시리얼 포트 선택 및 연결**: 앱 실행 후 상단 드롭다운에서 Arduino가 연결된 포트를 선택하고 `Connect`를 클릭합니다.
+2.  **센서 데이터 확인**: `Dashboard` 패널에서 각 센서 값을 숫자와 그래프로 실시간 확인합니다.
+3.  **수동 밸브 제어**: `Valve Control & Status` 패널에서 각 밸브 버튼을 클릭해 수동으로 개폐합니다. 버튼 아래의 `O`/`C` 표시등은 리미트 스위치의 현재 상태를 나타냅니다.
+4.  **자동 시퀀스 실행**: `Sequence` 패널에서 점화, 퍼지 등 원하는 시퀀스 버튼을 클릭하여 실행합니다.
+5.  **로그 터미널 활용**: 모든 통신 내용과 시퀀스 진행 상황이 `Terminal` 패널에 출력됩니다. 문제 발생 시 원인 파악에 유용합니다.
 
-2. **센서 데이터 확인**
-   - `Dashboard` 패널에서 각 센서 값을 숫자와 그래프로 동시에 확인할 수 있습니다.
-   - 값이 비정상적으로 보이면 즉시 하드웨어를 점검하세요.
+---
 
-3. **밸브 제어**
-   - `Valve Control & Status` 패널에서 각 밸브 버튼을 클릭해 개폐를 조작합니다.
-   - 버튼 아래의 표시등은 리미트 스위치 상태를 나타냅니다.
+## 핵심 코드 상세 분석
 
-4. **자동 시퀀스 실행**
-   - `Sequence` 패널에서 점화(Ignition), 퍼지(Purge), 비상 정지(E‑Stop) 등을 선택해 실행합니다.
-   - 진행 상황은 `Terminal` 패널에 시간 순으로 기록됩니다.
+이 섹션에서는 GOROCKET Control Suite의 핵심 소스 코드를 더 깊이 있게 분석합니다. 각 파일과 함수가 어떤 역할을 하는지 이해하면 프로그램을 수정하거나 새로운 기능을 추가하는 데 큰 도움이 될 것입니다.
 
-5. **로그 터미널 활용**
-   - 모든 송수신 문자열과 시퀀스 로그가 `Terminal` 패널에 출력됩니다.
-   - 문제가 발생하면 해당 로그를 확인하여 원인을 추적할 수 있습니다.
+### 1. Main 프로세스: 백엔드의 심장
 
-6. **데이터 로깅**
-   - `Start Logging` 버튼으로 CSV 기록을 시작하고, 다시 눌러 종료합니다.
+Main 프로세스는 애플리케이션의 백그라운드에서 실행되며, Node.js 환경의 모든 권한을 가집니다. 사용자 인터페이스(UI)가 아니라, 보이지 않는 곳에서 핵심적인 역할을 수행합니다.
 
-7. **화면 확대/축소**
-   - `Ctrl` + 마우스 휠 또는 `Ctrl` + `=`/`-`/`0` 단축키로 화면 배율을 조정할 수 있습니다.
+#### `main.ts`
+
+이 파일은 Electron 애플리케이션의 진입점(Entry Point)입니다. `MainApp` 클래스를 중심으로 다음과 같은 일을 합니다.
+
+-   **`init()`**: 앱이 준비되면 `createWindow()`를 호출하여 UI 창을 띄우고, `setupIpc()`를 호출하여 Renderer 프로세스와의 통신 채널을 설정합니다.
+-   **`createWindow()`**: `BrowserWindow` 객체를 생성하여 사용자에게 보여질 창을 만듭니다. 개발 모드일 때는 `http://localhost:9002`를, 프로덕션 빌드에서는 `out/index.html` 파일을 로드합니다. `preload.js`를 웹 페이지에 삽입하여 IPC 통신을 준비시킵니다.
+-   **`setupIpc()`**: `ipcMain`을 사용하여 Renderer 프로세스로부터 오는 요청을 처리하는 리스너(Listener)를 등록합니다. 예를 들어, `ipcMain.handle('get-serial-ports', ...)`는 UI로부터 시리얼 포트 목록 요청이 오면 `serialManager.listPorts()`를 실행하여 결과를 반환합니다.
+
+#### `main/SerialManager.ts`
+
+이 클래스는 시리얼 통신과 관련된 모든 저수준(low-level) 작업을 캡슐화합니다.
+
+-   **`listPorts()`**: 현재 컴퓨터에 연결된 모든 시리얼 포트 목록을 가져옵니다.
+-   **`connect(portName, baudRate)`**: 지정된 포트와 통신 속도로 연결을 시도합니다. 성공하면 `this.parser`를 통해 데이터 수신을 시작합니다.
+-   **`disconnect()`**: 현재 연결된 포트를 안전하게 해제합니다.
+-   **`send(cmd)`**: UI로부터 받은 명령어(`V,0,O` 등)를 시리얼 포트를 통해 Arduino로 전송합니다.
+-   **이벤트 기반 동작**: `on('data', ...)`와 `on('error', ...)`를 통해 데이터가 수신되거나 에러가 발생했을 때 `main.ts`에 이를 알립니다. `main.ts`는 이 신호를 받아 다시 UI로 전달합니다.
+
+#### `main/ConfigManager.ts` & `main/LogManager.ts`
+
+이 클래스들은 각각 설정(`config.json`)과 데이터 로그(.csv) 파일을 관리하는 역할을 합니다. 파일 시스템에 직접 접근하는 로직이 여기에 모여 있습니다.
+
+-   `ConfigManager`: `config.json`을 읽어 그 내용을 메모리에 저장하고, UI의 요청이 있을 때 해당 설정값을 제공합니다.
+-   `LogManager`: `start()`가 호출되면 `Documents` 폴더에 `rocket-log-시간.csv` 파일을 생성하고, `write(line)`를 통해 수신되는 센서 데이터를 파일에 한 줄씩 기록합니다.
+
+### 2. Renderer 프로세스: 사용자와의 소통
+
+Renderer 프로세스는 사용자에게 보여지는 UI를 담당합니다. `src/` 디렉터리에 있는 코드들이 여기에 해당하며, 그중에서도 핵심 로직은 `src/hooks/`에 모여 있습니다.
+
+#### `useSerialManager.ts`
+
+UI의 모든 시리얼 관련 상태와 동작을 총괄하는 **최상위 훅**입니다.
+
+-   **상태 관리**: `useReducer`를 사용하여 연결 상태(`connectionStatus`), 포트 목록(`serialPorts`) 등 복잡한 상태를 관리합니다.
+-   **`useEffect` 초기화 로직**: 컴포넌트가 처음 렌더링될 때 `useEffect`를 사용해 Main 프로세스에 시리얼 포트 목록과 `config.json` 데이터를 비동기적으로 요청하고, 상태를 업데이트합니다. 또한, `window.electronAPI.onSerialData` 리스너를 등록하여 Main 프로세스로부터 오는 데이터 수신을 준비합니다.
+-   **`handleConnect()`**: `Connect`/`Disconnect` 버튼 클릭 시 호출됩니다. 현재 연결 상태에 따라 `window.electronAPI.connectSerial` 또는 `disconnectSerial`을 호출하여 Main 프로세스에 연결/해제 작업을 요청합니다.
+-   **`sendCommand(cmd)`**: 다른 훅(e.g., `useValveControl`)으로부터 받은 명령어를 Main 프로세스로 전달하는 역할을 합니다.
+-   **자식 훅 조율**: `useSensorData`, `useValveControl` 등 다른 훅들을 호출하고, 그 훅들이 필요로 하는 함수(e.g., `sendCommand`)나 데이터를 제공하며, 그 훅들로부터 받은 상태(e.g., `sensorData`, `valves`)를 UI 컴포넌트로 최종 전달하는 조율자의 역할을 합니다.
+
+#### `useSensorData.ts`
+
+수신된 시리얼 데이터를 파싱하고, 의미 있는 정보로 가공하는 **데이터 처리 전문가**입니다.
+
+-   **`handleSerialMessage(message)`**: `useSerialManager`로부터 받은 원본 문자열(`pt1:14.5,...`)을 파싱합니다. 각 `키:값`을 분리하여 `sensorData` 객체를 최신 상태로 업데이트하고, 차트용 데이터 배열(`chartData`)에도 추가합니다.
+-   **압력 한계 검사**: 데이터를 파싱할 때마다 `pressureLimit` 설정값을 초과하는 압력이 있는지 확인합니다. 만약 초과하면, `handleEmergency` 함수를 호출하여 비상 정지 시퀀스를 트리거합니다.
+-   **리미트 스위치 상태 업데이트**: 시리얼 데이터에 포함된 리미트 스위치 정보(`V0_LS_OPEN:1` 등)를 파싱하여 `updateValves` 함수를 통해 `useValveControl` 훅의 밸브 상태를 직접 업데이트합니다.
+
+#### `useValveControl.ts`
+
+밸브의 상태를 관리하고 제어 명령을 생성하는 **밸브 전문가**입니다.
+
+-   **상태 관리**: `useState`를 사용해 모든 밸브의 현재 상태(이름, 개폐 여부, 리미트 스위치 상태 등)를 배열(`valves`)로 관리합니다.
+-   **`handleValveChange(valveId, targetState)`**: UI에서 밸브 버튼을 클릭하면 호출됩니다. 제어하려는 밸브의 `id`와 목표 상태(`OPEN` 또는 `CLOSED`)를 받아, `config.json`의 `valveMappings`를 참조하여 올바른 서보 인덱스를 찾습니다. 그 후, `V,인덱스,상태` 형식의 시리얼 명령어를 만들어 `sendCommand` 함수를 통해 전송을 요청합니다.
+
+#### `useSequenceManager.ts`
+
+점화, 퍼지 등 복잡한 자동 시퀀스를 관리하고 실행하는 **시퀀스 실행 전문가**입니다.
+
+-   **시퀀스 정의**: 각 시퀀스의 이름과 실행할 단계(메시지, 지연 시간, 실행 동작)들이 배열 형태로 미리 정의되어 있습니다.
+-   **`runSequence(name, steps)`**: 시퀀스 실행 요청이 오면, `for...of` 루프를 돌며 각 단계를 순서대로 실행합니다. `delay` 만큼 `setTimeout`으로 기다린 후, `action` 함수를 실행하고 터미널에 `message`를 출력합니다.
+-   **중단 기능**: `AbortController`를 사용하여 현재 진행 중인 시퀀스를 언제든지 안전하게 중단할 수 있는 기능을 제공합니다. 비상 정지 시퀀스에서 이 기능을 사용합니다.
+
+### 3. Arduino 펌웨어: 하드웨어 제어의 최전선
+
+`arduino_mega_code/arduino_mega_code.ino` 파일은 실제 하드웨어(서보 모터, 센서)를 직접 제어하는 코드입니다. 이 코드는 GUI와 독립적으로 계속 실행되며, 시리얼 통신을 통해 GUI와 상호작용합니다.
+
+#### `setup()`
+
+-   Arduino 보드에 전원이 공급되거나 리셋될 때 단 한 번 실행됩니다.
+-   `Serial.begin(115200)`: GUI와 통신할 시리얼 포트를 설정된 통신 속도로 엽니다.
+-   `pinMode(...)`: 센서와 리미트 스위치가 연결된 핀들의 입/출력 모드를 설정합니다. (e.g., `INPUT_PULLUP`)
+-   `servos[i].detach()`: 초기에는 모든 서보 모터의 전원을 차단하여 불필요한 전력 소모와 소음을 방지합니다.
+
+#### `loop()`
+
+-   `setup()`이 끝난 후 무한히 반복 실행되는 메인 루프입니다.
+-   `Serial.available()`: GUI로부터 새로운 명령이 들어왔는지 확인합니다. 명령이 있으면 `handleValveCommand()`를 호출합니다.
+-   `updateLimitSwitchStates()`: **(중요 최적화)** 루프가 돌 때마다 모든 리미트 스위치의 상태를 한 번에 읽어 전역 변수 `currentLimitSwitchStates`에 저장합니다. 이를 통해 다른 함수들이 매번 `digitalRead()`를 호출하는 비효율을 막습니다.
+-   `manageAllServoMovements()`: 서보 모터 상태 머신을 실행하여, 현재 움직이는 중인 모터가 목표 위치에 도달했는지 등을 관리합니다.
+-   `readAndSendAllSensorData()`: `SENSOR_READ_INTERVAL`(100ms)마다 모든 센서(압력, 온도) 값을 읽고, 리미트 스위치 상태와 함께 한 줄의 문자열로 만들어 GUI로 전송합니다.
+
+#### `handleValveCommand()`
+
+-   GUI로부터 `V,인덱스,상태` 형식의 명령이 들어오면 이를 파싱합니다.
+-   제어할 서보 인덱스와 목표 상태(`O` 또는 `C`)를 확인합니다.
+-   `servos[i].attach()`: 제어할 서보에 전원을 공급하고, `servos[i].write()`를 통해 목표 각도로 즉시 이동시킵니다.
+-   서보의 상태를 `IDLE`에서 `MOVING`으로 변경하여, `manageAllServoMovements`가 후속 처리를 할 수 있도록 합니다.
+
+#### `manageAllServoMovements()`
+
+-   단순히 `servo.write()`만 사용하면 밸브가 완전히 개폐되기 전에 프로그램이 다른 작업을 수행할 수 있습니다. 이를 방지하기 위해, 이 함수는 각 서보의 상태를 추적하는 **상태 머신(State Machine)**으로 동작합니다.
+-   **`MOVING` 상태**: 밸브가 움직이기 시작한 상태. `SERVO_SETTLE_TIME`(0.5초)이 지나면 리미트 스위치가 눌렸는지 확인합니다.
+    -   스위치가 눌렸다면: 목표에 도달했으므로 상태를 `IDLE`로 바꾸고 서보 전원을 차단(`detach`)합니다.
+    -   스위치가 안 눌렸다면: 밸브가 완전히 회전하지 못한 것으로 간주하고, 1도씩 미세 조정을 시작하는 `INCHING` 상태로 변경합니다.
+-   **`INCHING_OPEN`/`INCHING_CLOSED` 상태**: 리미트 스위치가 눌릴 때까지 1도씩 계속 밸브를 움직입니다. 스위치가 감지되면 `IDLE` 상태로 돌아갑니다. 이 과정을 통해 밸브가 확실하게 잠기도록 보장합니다.
 
 ---
 
 ## 품질 검사와 빌드
 
-코드를 수정했다면 다음 명령으로 품질을 확인하세요.
+코드를 수정한 후에는 다음 명령으로 코드 품질을 검사하고 타입 오류가 없는지 확인하는 것이 좋습니다.
 
 ```bash
 npm run lint         # ESLint 규칙 검사
 npm run typecheck    # TypeScript 타입 검사
 ```
 
-검사가 통과하면 `npm run build`로 배포용 파일을 생성할 수 있습니다. 시리얼 포트 모듈이 제대로 빌드되지 않으면 `npm run rebuild`를 실행해 다시 컴파일합니다.
+검사가 통과하면 `npm run build`로 배포용 파일을 생성할 수 있습니다. 시리얼 포트 모듈이 제대로 빌드되지 않는 경우, `npm run rebuild`를 실행하여 네이티브 모듈을 다시 컴파일할 수 있습니다.
 
 ---
 
 ## 문제 해결
 
-- **시리얼 포트가 표시되지 않음**
-  - 드라이버 설치 여부를 확인하고 다른 프로그램이 포트를 사용 중인지 체크합니다.
-- **`npm run dev` 실행 시 오류**
-  - Node.js와 npm 버전이 요구 사항을 만족하는지 확인한 뒤 `node_modules`와 `package-lock.json`을 삭제하고 다시 설치합니다.
-- **로그 파일이 생성되지 않음**
-  - 쓰기 권한이 있는 경로인지 확인하고 경로에 한글이나 공백이 없는지 점검합니다.
-- **Electron 창이 열리지 않음**
-  - Linux에서는 `DISPLAY` 환경 변수를 설정했는지, 보안 소프트웨어가 실행을 차단하지 않는지 확인하세요.
+- **시리얼 포트가 목록에 표시되지 않음**:
+  - Arduino가 PC에 제대로 연결되었는지 확인하세요.
+  - 필요한 USB 드라이버(예: CH340)가 설치되었는지 확인하세요.
+  - Arduino IDE의 시리얼 모니터 등 다른 프로그램이 포트를 사용 중인지 확인하고, 사용 중이라면 종료하세요.
+- **`npm run dev` 실행 시 오류 발생**:
+  - Node.js와 npm 버전이 요구 사항을 만족하는지 확인하세요.
+  - `node_modules` 폴더와 `package-lock.json` 파일을 삭제한 후 `npm install`을 다시 실행해 보세요.
+- **로그 파일이 생성되지 않음**:
+  - 프로그램이 '내 문서' 폴더에 파일을 쓸 권한이 있는지 확인하세요. (특히 macOS 및 Linux)
 
 ---
 
 ## 자주 묻는 질문
 
 - **Q. 원격 제어나 네트워크 기능을 지원하나요?**
-  - A. 현재 버전은 로컬 시리얼 연결만 지원하며 네트워크 제어는 제공하지 않습니다.
-- **Q. 새로운 센서나 밸브를 추가하려면?**
-  - A. `config.json`에 항목을 추가하고 관련 훅 및 컴포넌트를 수정한 뒤 다시 빌드합니다.
-- **Q. 자동 시퀀스를 사용자 정의할 수 있나요?**
-  - A. [`useSequenceManager`](#시퀀스-사용자-정의와-동작-방식)를 참고하여 원하는 단계 배열을 구성하면 커스텀 시나리오를 구현할 수 있습니다.
+  - A. 아니요. 이 프로젝트는 안전을 최우선으로 고려하여 물리적으로 연결된 시리얼 통신만 지원합니다.
+- **Q. 새로운 센서나 밸브를 추가하려면 어떻게 해야 하나요?**
+  - A. 1) `arduino_mega_code.ino` 펌웨어를 수정하여 새 하드웨어를 제어하는 코드를 추가합니다. 2) `config.json`에 새 밸브나 센서 정보를 추가합니다. 3) `src/hooks`와 `src/components`의 관련 UI 코드를 수정하여 새 데이터를 표시하고 제어하는 로직을 추가합니다.
+- **Q. 자동 시퀀스를 완전히 새로 만들 수 있나요?**
+  - A. 네, [시퀀스 사용자 정의와 동작 방식](#시퀀스-사용자-정의와-동작-방식) 섹션을 참고하여 `useSequenceManager.ts` 파일에 원하는 동작을 정의하면 자신만의 시퀀스를 만들 수 있습니다.
 
 ---
 
 ## 참고 문서 및 라이선스
 
-- `docs/blueprint.md`에 초기 요구 사항과 디자인 가이드가 정리되어 있습니다.
-- 소스 코드는 [MIT 라이선스](LICENSE)에 따라 자유롭게 사용할 수 있습니다. 단, 실사용에 따른 책임은 전적으로 사용자에게 있습니다.
+- `docs/blueprint.md`에 프로젝트의 초기 요구 사항과 디자인 가이드가 정리되어 있습니다.
+- 소스 코드는 [MIT 라이선스](LICENSE)에 따라 자유롭게 사용할 수 있습니다. 단, 실사용에 따른 모든 책임은 전적으로 사용자에게 있습니다.
 
 ---
 
-이 README는 처음 프로젝트를 접하는 분도 **시리얼 통신 기반 GUI 제어 시스템**의 전체 흐름을 이해하고 수정·확장할 수 있도록 최대한 자세히 작성되었습니다. 문서를 참고하여 안전하고 효율적인 실험 환경을 구축하시기 바랍니다.
-
+이 README는 처음 프로젝트를 접하는 분도 **시리얼 통신 기반 GUI 제어 시스템**의 전체 흐름을 이해하고 자신의 목적에 맞게 수정·확장할 수 있도록 최대한 자세히 작성되었습니다. 문서를 참고하여 안전하고 효율적인 실험 환경을 구축하시기 바랍니다.
