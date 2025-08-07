@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { RotateCw, CheckCircle, XCircle } from 'lucide-react';
 import type { Valve, ValveState } from '@/types';
+import { DashboardItem } from './dashboard-item';
 
 interface ValveDisplayProps {
   valve: Valve;
@@ -49,7 +50,7 @@ const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChan
   }[valve.state];
 
   return (
-    <div className="p-3 bg-muted/30 rounded-lg flex flex-col gap-3">
+    <DashboardItem className="flex flex-col gap-3">
       <div className="flex justify-between items-start">
         <h3 className="font-semibold text-sm">{valve.name}</h3>
         <Badge
@@ -93,7 +94,7 @@ const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChan
           Close
         </Button>
       </div>
-    </div>
+    </DashboardItem>
   );
 };
 

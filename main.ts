@@ -73,12 +73,8 @@ class MainApp {
       this.mainWindow?.webContents.send('serial-error', err.message);
     });
 
-    ipcMain.handle('get-serial-ports', async () => {
-      try {
-        return await this.serialManager.listPorts();
-      } catch (e) {
-        return [];
-      }
+    ipcMain.handle('get-serial-ports', () => {
+      return this.serialManager.listPorts();
     });
 
     ipcMain.handle('connect-serial', async (_e, portName: string) => {

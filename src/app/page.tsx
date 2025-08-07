@@ -108,12 +108,12 @@ export default function Home() {
         onToggleLogging={handleLoggingToggle}
       />
       <main className="flex-grow p-4 md:p-6 lg:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
-          <div className="lg:col-span-12">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-full">
+          <div className="md:col-span-12">
             <SensorPanel data={sensorData} />
           </div>
 
-          <div className="lg:col-span-8 grid grid-cols-1 gap-6">
+          <div className="md:col-span-7 lg:col-span-8 grid grid-cols-1 gap-6">
             <Card className="bg-card/50 border-border/60">
               <CardHeader className="p-4">
                 <CardTitle className="text-xl">Valve Control &amp; Status</CardTitle>
@@ -129,7 +129,7 @@ export default function Home() {
             <DataChartPanel data={chartData} />
           </div>
 
-          <div className="lg:col-span-4 grid grid-cols-1 gap-6 auto-rows-min">
+          <div className="md:col-span-5 lg:col-span-4 grid grid-cols-1 gap-6 auto-rows-min">
             <SequencePanel onSequence={handleSequence} activeSequence={activeSequence} />
             <TerminalPanel logs={sequenceLogs} activeSequence={activeSequence} />
           </div>
