@@ -3,13 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Gauge, Thermometer, Waves, AlertTriangle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { SensorData } from '@/types';
+import { DashboardItem } from './dashboard-item';
 
 interface SensorPanelProps {
   data: SensorData | null;
 }
 
 const SensorDisplay: React.FC<{ icon: React.ReactNode; label: string; value: string | null; unit: string; isError?: boolean; }> = ({ icon, label, value, unit, isError = false }) => (
-  <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg">
+  <DashboardItem className="flex items-center gap-4 p-4">
     <div className={`p-3 rounded-md ${isError ? 'bg-destructive/20 text-destructive' : 'bg-primary/20 text-accent'}`}>{icon}</div>
     <div className="flex-1">
       <p className="text-sm text-muted-foreground">{label}</p>
@@ -21,7 +22,7 @@ const SensorDisplay: React.FC<{ icon: React.ReactNode; label: string; value: str
         <Skeleton className="h-8 w-32" />
       )}
     </div>
-  </div>
+  </DashboardItem>
 );
 
 const SensorPanel: React.FC<SensorPanelProps> = ({ data }) => {
