@@ -114,15 +114,17 @@ export function useSerialManager(): SerialManagerApi {
         const ports = await window.electronAPI.getSerialPorts();
         dispatch({ type: 'SET_SERIAL_PORTS', ports });
         if (ports[0]) dispatch({ type: 'SET_SELECTED_PORT', port: ports[0] });
-      } catch {
-        toast({ title: 'Connection Error', description: 'Failed to list serial ports.', variant: 'destructive' });
-      }
-      try {
+
         const cfg = await window.electronAPI.getConfig();
         dispatch({ type: 'SET_CONFIG', config: cfg });
         setValves(cfg.initialValves);
-      } catch {
-        toast({ title: 'Configuration Error', description: 'Failed to load configuration.', variant: 'destructive' });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+        toast({
+          title: 'Initialization Error',
+          description: `Failed to initialize application: ${message}`,
+          variant: 'destructive',
+        });
       }
     };
     init();
