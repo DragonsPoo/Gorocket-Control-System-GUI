@@ -28,9 +28,11 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data }) => {
                 <CardTitle>Real-time Data Visualization</CardTitle>
                 <CardDescription>Sensor data over the last 100 seconds.</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-6">
+
+            <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Pressure Chart */}
-                <div>
+                <div className="lg:col-span-1">
+
                     <h3 className="font-semibold mb-2 ml-2">Pressure (PSI)</h3>
                     <ChartContainer config={chartConfig} className="h-[200px] w-full">
                         <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
@@ -49,9 +51,11 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data }) => {
                 </div>
 
                 {/* Flow Chart */}
-                <div>
+
+                <div className="lg:col-span-1">
                     <h3 className="font-semibold mb-2 ml-2">Flow (kg/s)</h3>
-                    <ChartContainer config={chartConfig} className="h-[180px] w-full">
+                    <ChartContainer config={chartConfig} className="h-[200px] w-full">
+
                         <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                             <CartesianGrid vertical={false} strokeDasharray="3 3" />
                             <XAxis dataKey="timestamp" tickFormatter={timeFormatter} fontSize={12} tickMargin={10} />
@@ -65,9 +69,11 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data }) => {
                 </div>
 
                 {/* Temperature Chart */}
-                <div>
+
+                <div className="lg:col-span-2">
                     <h3 className="font-semibold mb-2 ml-2">Temperature (K)</h3>
-                    <ChartContainer config={chartConfig} className="h-[180px] w-full">
+                    <ChartContainer config={chartConfig} className="h-[200px] w-full">
+
                         <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                             <CartesianGrid vertical={false} strokeDasharray="3 3" />
                             <XAxis dataKey="timestamp" tickFormatter={timeFormatter} fontSize={12} tickMargin={10} />
