@@ -73,12 +73,8 @@ class MainApp {
       this.mainWindow?.webContents.send('serial-error', err.message);
     });
 
-    ipcMain.handle('get-serial-ports', async () => {
-      try {
-        return await this.serialManager.listPorts();
-      } catch (e) {
-        return [];
-      }
+    ipcMain.handle('get-serial-ports', () => {
+      return this.serialManager.listPorts();
     });
 
     ipcMain.handle('connect-serial', async (_e, portName: string) => {
@@ -102,7 +98,7 @@ class MainApp {
       const [k, v] = p.split(':');
       if (k && v) parsed[k.trim()] = v.trim();
     });
-    const fields = ['pt1', 'pt2', 'pt3', 'pt4', 'flow1', 'flow2', 'tc1'];
+    const fields = ['pt1', 'pt2', 'pt3', 'pt4', 'flow1', 'flow2', 'tc1', 'tc2'];
     const line = `${Date.now()},${fields.map((f) => parsed[f] || '').join(',')}\n`;
     return line;
   }
