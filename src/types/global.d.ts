@@ -7,7 +7,7 @@ declare global {
       getSerialPorts: () => Promise<string[]>;
       connectSerial: (portName: string) => Promise<boolean>;
       disconnectSerial: () => Promise<boolean>;
-      sendToSerial: (data: string) => Promise<boolean>;
+      sendToSerial: (data: import('./index').SerialCommand) => Promise<boolean>;
       onSerialData: (callback: (data: string) => void) => () => void;
       onSerialError: (callback: (error: string) => void) => () => void;
       zoomIn: () => void;

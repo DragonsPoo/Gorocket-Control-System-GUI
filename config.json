@@ -10,5 +10,18 @@
     "Pressurant Fill": { "servoIndex": 4 },
     "System Vent": { "servoIndex": 5 },
     "Igniter Fuel": { "servoIndex": 6 }
-  }
+  },
+  "constants": {
+    "MAX_CHART_DATA_POINTS": 100,
+    "PRESSURE_LIMIT": 850
+  },
+  "initialValves": [
+    { "id": 1, "name": "Ethanol Main" },
+    { "id": 2, "name": "N2O Main" },
+    { "id": 3, "name": "Ethanol Purge" },
+    { "id": 4, "name": "N2O Purge" },
+    { "id": 5, "name": "Pressurant Fill" },
+    { "id": 6, "name": "System Vent" },
+    { "id": 7, "name": "Igniter Fuel" }
+  ]
 }

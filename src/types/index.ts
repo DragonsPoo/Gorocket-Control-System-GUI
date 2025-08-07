@@ -7,6 +7,11 @@ export interface AppConfig {
     baudRate: number;
   };
   valveMappings: Record<string, ValveMappingEntry>;
+  constants: {
+    MAX_CHART_DATA_POINTS: number;
+    PRESSURE_LIMIT: number;
+  };
+  initialValves: { id: number; name: string }[];
 }
 
 // Sensor and valve related types
@@ -35,3 +40,20 @@ export interface Valve {
   lsOpen: boolean;
   lsClosed: boolean;
 }
+
+export enum CommandType {
+  VALVE = 'VALVE',
+}
+
+export enum ValveAction {
+  OPEN = 'O',
+  CLOSE = 'C',
+}
+
+export interface ValveCommand {
+  type: CommandType.VALVE;
+  servoIndex: number;
+  action: ValveAction;
+}
+
+export type SerialCommand = ValveCommand;
