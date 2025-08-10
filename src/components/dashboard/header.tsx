@@ -8,6 +8,7 @@ interface HeaderProps {
   ports: string[];
   selectedPort: string;
   onPortChange: (port: string) => void;
+  onRefreshPorts: () => void;
   onConnect: () => void;
   isLogging: boolean;
   onToggleLogging: () => void;
@@ -18,6 +19,7 @@ const Header: React.FC<HeaderProps> = ({
   ports,
   selectedPort,
   onPortChange,
+  onRefreshPorts,
   onConnect,
   isLogging,
   onToggleLogging
@@ -48,6 +50,7 @@ const Header: React.FC<HeaderProps> = ({
                     )}
                 </SelectContent>
             </Select>
+            <Button onClick={onRefreshPorts} variant="outline" disabled={isConnecting}>Refresh</Button>
         </div>
 
         <Button onClick={onConnect} disabled={isConnecting || (!selectedPort && !isConnected)} variant={isConnected ? "destructive" : "default"}>

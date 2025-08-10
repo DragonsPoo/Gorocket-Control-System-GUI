@@ -11,6 +11,7 @@ class MainApp {
   private configManager = new ConfigManager();
   private serialManager = new SerialManager();
   private logManager = new LogManager();
+  private ipcInitialized = false;
 
   async init() {
     try {
@@ -47,6 +48,8 @@ class MainApp {
   }
 
   private setupIpc() {
+    if (this.ipcInitialized) return;
+    this.ipcInitialized = true;
     ipcMain.on('zoom-in', () => {
       const current = this.mainWindow?.webContents.getZoomFactor() ?? 1;
       this.mainWindow?.webContents.setZoomFactor(current + 0.1);

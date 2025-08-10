@@ -42,7 +42,7 @@ export class LogManager {
     ).padStart(2, '0')}${String(timestamp.getMinutes()).padStart(2, '0')}${String(
       timestamp.getSeconds()
     ).padStart(2, '0')}.csv`;
-    return path.join(app.getPath('documents'), fileName);
+    return path.join(app.getPath('documents'), 'rocket-logs', fileName);
   }
 
   isLogging(): boolean {

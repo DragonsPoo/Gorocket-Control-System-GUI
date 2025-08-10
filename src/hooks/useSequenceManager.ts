@@ -5,7 +5,7 @@ import sequencesData from '@/sequences.json';
 interface SequenceStep {
   message: string;
   delay: number;
-  action?: () => void | Promise<void>;
+  action?: () => Promise<boolean>;
 }
 
 interface SequenceConfigStep {
@@ -34,7 +34,7 @@ const delay = (ms: number, signal: AbortSignal): Promise<void> =>
   });
 
 export function useSequenceManager(
-  sendCommand: (cmd: string) => Promise<void>
+  sendCommand: (cmd: string) => Promise<boolean>
 ): SequenceManagerApi {
   const { toast } = useToast();
   const [sequenceLogs, setSequenceLogs] = useState<string[]>([
@@ -56,7 +56,8 @@ export function useSequenceManager(
       try {
         for (const step of steps) {
           await delay(step.delay, controller.signal);
-          await step.action?.();
+          const result = await step.action?.();
+          if (result === false) throw new Error('Command failed');
           addLog(step.message);
         }
         addLog(`Sequence ${name} complete.`);

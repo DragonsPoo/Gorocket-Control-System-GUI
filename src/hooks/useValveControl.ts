@@ -2,6 +2,7 @@ import { useState, useCallback, Dispatch, SetStateAction } from 'react';
 import type { Valve, AppConfig } from '@shared/types';
 import type { SerialCommand } from '@shared/types/ipc';
 import { ValveCommandType } from '@shared/types/ipc';
+import { useToast } from '@/hooks/use-toast';
 
 export interface ValveControlApi {
   valves: Valve[];
@@ -14,6 +15,7 @@ export function useValveControl(
   config?: AppConfig
 ): ValveControlApi {
   const [valves, setValves] = useState<Valve[]>(config?.initialValves ?? []);
+  const { toast } = useToast();
 
   const handleValveChange = useCallback(
     async (valveId: number, targetState: 'OPEN' | 'CLOSED') => {
@@ -21,7 +23,13 @@ export function useValveControl(
       const valve = valves.find((v) => v.id === valveId);
       if (!valve) return;
       const mapping = config.valveMappings[valve.name];
-      if (!mapping) return;
+      if (!mapping) {
+        toast({
+          title: 'Warning',
+          description: `Valve mapping for '${valve.name}' not found in configuration.`,
+        });
+        return;
+      }
       const command: SerialCommand = {
         type: 'V',
         servoIndex: mapping.servoIndex,

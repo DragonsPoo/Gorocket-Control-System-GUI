@@ -22,6 +22,7 @@ export default function Home() {
     serialPorts,
     selectedPort,
     setSelectedPort,
+    refreshPorts,
     handleConnect,
     handleValveChange,
     sendCommand,
@@ -30,7 +31,7 @@ export default function Home() {
   } = useSerialManager();
 
   const { sequenceLogs, activeSequence, handleSequence, addLog } = useSequenceManager((cmd) =>
-    sendCommand({ type: 'RAW', payload: cmd }).then(() => {})
+    sendCommand({ type: 'RAW', payload: cmd })
   );
 
   const [isLogging, setIsLogging] = useState(false);
@@ -103,6 +104,7 @@ export default function Home() {
         ports={serialPorts}
         selectedPort={selectedPort}
         onPortChange={setSelectedPort}
+        onRefreshPorts={refreshPorts}
         onConnect={handleConnect}
         isLogging={isLogging}
         onToggleLogging={handleLoggingToggle}

@@ -50,6 +50,7 @@ export interface SerialManagerApi {
   serialPorts: string[];
   selectedPort: string;
   setSelectedPort: (port: string) => void;
+  refreshPorts: () => Promise<void>;
   handleConnect: () => Promise<void>;
   sendCommand: (cmd: SerialCommand) => Promise<boolean>;
   handleValveChange: (valveId: number, targetState: 'OPEN' | 'CLOSED') => Promise<void>;
@@ -187,6 +188,12 @@ export function useSerialManager(): SerialManagerApi {
     sequenceHandlerRef.current = handler;
   }, []);
 
+  const refreshPorts = useCallback(async () => {
+    const ports = await window.electronAPI.getSerialPorts();
+    dispatch({ type: 'SET_SERIAL_PORTS', ports });
+    if (ports[0]) dispatch({ type: 'SET_SELECTED_PORT', port: ports[0] });
+  }, []);
+
   return {
     sensorData,
     chartData,
@@ -195,6 +202,7 @@ export function useSerialManager(): SerialManagerApi {
     serialPorts: state.serialPorts,
     selectedPort: state.selectedPort,
     setSelectedPort,
+    refreshPorts,
     handleConnect,
     sendCommand,
     handleValveChange,
