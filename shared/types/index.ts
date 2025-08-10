@@ -9,6 +9,7 @@ export interface AppConfig {
   valveMappings: Record<string, ValveMappingEntry>;
   maxChartDataPoints: number;
   pressureLimit: number;
+  valveFeedbackTimeout: number;
   initialValves: Valve[];
 }
 
