@@ -17,7 +17,7 @@ export class LogManager {
       this.stream.on('error', () => {
         window?.webContents.send('log-creation-failed');
       });
-      this.stream.write('timestamp,pt1,pt2,pt3,pt4,flow1,flow2,tc1,tc2\n');
+      this.stream.write('timestamp,pt1,pt2,pt3,pt4,flow1,flow2,tc1,tc2,valves\n');
     } catch {
       window?.webContents.send('log-creation-failed');
       this.stream = null;
@@ -50,7 +50,7 @@ export class LogManager {
   }
 
   formatLogLine(raw: string): string {
-    const { sensor } = parseSensorData(raw);
+    const { sensor, valves } = parseSensorData(raw);
     const fields = [
       'pt1',
       'pt2',
@@ -61,8 +61,14 @@ export class LogManager {
       'tc1',
       'tc2',
     ];
-    return `${Date.now()},${fields
+    const valveStates = Object.entries(valves)
+      .map(([id, v]) => {
+        const state = v?.lsOpen ? 'OPEN' : v?.lsClosed ? 'CLOSED' : 'UNKNOWN';
+        return `V${id}:${state}`;
+      })
+      .join(' ');
+    return `${new Date().toISOString()},${fields
       .map((f) => (sensor as Record<string, unknown>)[f] ?? '')
-      .join(',')}\n`;
+      .join(',')},${valveStates}\n`;
   }
 }

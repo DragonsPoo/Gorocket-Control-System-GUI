@@ -34,13 +34,15 @@ const delay = (ms: number, signal: AbortSignal): Promise<void> =>
   });
 
 export function useSequenceManager(
-  sendCommand: (cmd: string) => Promise<boolean>
+  sendCommand: (cmd: string) => Promise<boolean>,
+  onSequenceComplete?: (name: string) => void
 ): SequenceManagerApi {
   const { toast } = useToast();
   const [sequenceLogs, setSequenceLogs] = useState<string[]>([
     'System standby. Select a sequence to begin.',
   ]);
   const [activeSequence, setActiveSequence] = useState<string | null>(null);
+  const [sequencesValid, setSequencesValid] = useState(true);
   const controllerRef = useRef<AbortController | null>(null);
 
   const addLog = useCallback((message: string) => {
@@ -65,14 +67,25 @@ export function useSequenceManager(
         addLog(`Sequence ${name} aborted.`);
       } finally {
         setActiveSequence(null);
+        onSequenceComplete?.(name);
       }
     },
-    [addLog]
+    [addLog, onSequenceComplete]
   );
 
   const handleSequence = useCallback(
     (sequenceName: string) => {
-      if (activeSequence) {
+      if (!sequencesValid) {
+        toast({
+          title: 'Sequence Error',
+          description: 'Required sequences missing.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (sequenceName === 'Emergency Shutdown') {
+        controllerRef.current?.abort();
+      } else if (activeSequence) {
         toast({
           title: 'Sequence in Progress',
           description: `Cannot start "${sequenceName}" while "${activeSequence}" is running.`,
@@ -108,7 +121,7 @@ export function useSequenceManager(
         );
       }
     },
-    [activeSequence, runSequence, sendCommand, toast]
+    [activeSequence, runSequence, sendCommand, toast, sequencesValid]
   );
 
   const cancelSequence = useCallback(() => {
@@ -116,6 +129,17 @@ export function useSequenceManager(
   }, []);
 
   useEffect(() => cancelSequence, [cancelSequence]);
+
+  useEffect(() => {
+    const required = ['Emergency Shutdown'];
+    const missing = required.filter((s) => !sequenceConfigs[s]);
+    if (missing.length) {
+      setSequencesValid(false);
+      const msg = `Missing required sequence(s): ${missing.join(', ')}`;
+      setSequenceLogs([msg]);
+      toast({ title: 'Sequence Error', description: msg, variant: 'destructive' });
+    }
+  }, [toast]);
 
   return { sequenceLogs, activeSequence, handleSequence, addLog, cancelSequence };
 }

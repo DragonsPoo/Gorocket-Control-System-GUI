@@ -29,36 +29,80 @@ export class SerialManager extends EventEmitter {
     if (this.port?.isOpen) {
       await this.disconnect();
     }
-    return new Promise<boolean>((resolve, reject) => {
-      this.port = new SerialPort({ path, baudRate }, (err) => {
-        if (err) {
-          reject(err);
-        }
-      });
-
+    let success = false;
+    try {
+      this.port = new SerialPort({ path, baudRate });
       this.parser = this.port.pipe(new ReadlineParser({ delimiter: '\n' }));
 
-      const timeout = setTimeout(() => {
-        this.port?.close();
-        reject(new Error('Connection timeout'));
-      }, 5000);
-
-      this.port.on('open', () => {
-        clearTimeout(timeout);
-        resolve(true);
+      await new Promise<void>((resolve, reject) => {
+        const onError = (err: Error) => {
+          cleanup();
+          reject(err);
+        };
+        const onOpen = () => {
+          cleanup();
+          resolve();
+        };
+        const cleanup = () => {
+          this.port?.off('error', onError);
+          this.port?.off('open', onOpen);
+        };
+        this.port?.once('error', onError);
+        this.port?.once('open', onOpen);
+        setTimeout(() => {
+          onError(new Error('Connection timeout'));
+        }, 5000);
       });
+
+      // handshake
+      await new Promise<void>((resolve, reject) => {
+        const onData = (d: string) => {
+          if (d.trim() === 'READY') {
+            cleanup();
+            resolve();
+          }
+        };
+        const onError = (err: Error) => {
+          cleanup();
+          reject(err);
+        };
+        const cleanup = () => {
+          this.parser?.off('data', onData);
+          this.port?.off('error', onError);
+        };
+        this.parser?.on('data', onData);
+        this.port?.once('error', onError);
+        this.port?.write('HELLO\n');
+        setTimeout(() => {
+          onError(new Error('Handshake timeout'));
+        }, 3000);
+      });
+
       this.port.on('close', () =>
         this.emit('error', new Error('Port closed unexpectedly'))
       );
       this.parser.on('data', (d: string) => this.emit('data', d));
-      this.port.on('error', (e) => {
-        clearTimeout(timeout);
-        reject(e);
-      });
-    }).catch((err) => {
+      this.port.on('error', (e) => this.emit('error', e));
+      success = true;
+      return true;
+    } catch (err) {
       this.emit('error', err as Error);
-      return false as boolean;
-    });
+      return false;
+    } finally {
+      if (!success) {
+        if (this.port) {
+          try {
+            if (this.port.isOpen) {
+              await new Promise((res) => this.port!.close(() => res(undefined)));
+            }
+          } catch {}
+          this.port.removeAllListeners();
+        }
+        this.parser?.removeAllListeners();
+        this.port = null;
+        this.parser = null;
+      }
+    }
   }
 
   async disconnect(): Promise<boolean> {

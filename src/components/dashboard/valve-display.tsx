@@ -27,7 +27,7 @@ const ValveIcon: React.FC<{ state: ValveState }> = ({ state }) => {
           state === 'OPEN' && 'border-accent',
           state === 'CLOSED' && 'border-muted-foreground',
           (state === 'OPENING' || state === 'CLOSING') && 'border-accent animate-pulse',
-          state === 'ERROR' && 'border-destructive'
+          (state === 'ERROR' || state === 'STUCK') && 'border-destructive'
         )}
       />
     </div>
@@ -50,6 +50,7 @@ const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChan
     OPENING: { text: 'Opening...', icon: <RotateCw className="w-3 h-3 animate-spin" /> },
     CLOSING: { text: 'Closing...', icon: <RotateCw className="w-3 h-3 animate-spin" /> },
     ERROR: { text: 'Error', icon: <XCircle className="w-3 h-3" /> },
+    STUCK: { text: 'Stuck', icon: <XCircle className="w-3 h-3" /> },
   }[valve.state];
 
   return (
@@ -57,12 +58,19 @@ const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChan
       <div className="flex justify-between items-start">
         <h3 className="font-semibold text-sm">{valve.name}</h3>
         <Badge
-          variant={isTransitioning ? 'outline' : valve.state === 'OPEN' ? 'default' : 'secondary'}
+          variant={
+            isTransitioning
+              ? 'outline'
+              : valve.state === 'OPEN'
+              ? 'default'
+              : 'secondary'
+          }
           className={cn(
             'text-xs py-0.5 px-1.5',
             valve.state === 'OPEN' && 'bg-accent text-accent-foreground',
             isTransitioning && 'border-accent text-accent',
-            valve.state === 'ERROR' && 'bg-destructive text-destructive-foreground'
+            (valve.state === 'ERROR' || valve.state === 'STUCK') &&
+              'bg-destructive text-destructive-foreground'
           )}
         >
           {stateInfo.icon}

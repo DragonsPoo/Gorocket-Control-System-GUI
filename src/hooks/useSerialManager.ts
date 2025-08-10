@@ -56,6 +56,7 @@ export interface SerialManagerApi {
   handleValveChange: (valveId: number, targetState: 'OPEN' | 'CLOSED') => Promise<void>;
   setLogger: (logger: (msg: string) => void) => void;
   setSequenceHandler: (handler: (name: string) => void) => void;
+  resetEmergency: () => void;
 }
 
 export function useSerialManager(): SerialManagerApi {
@@ -191,7 +192,11 @@ export function useSerialManager(): SerialManagerApi {
   const refreshPorts = useCallback(async () => {
     const ports = await window.electronAPI.getSerialPorts();
     dispatch({ type: 'SET_SERIAL_PORTS', ports });
-    if (ports[0]) dispatch({ type: 'SET_SELECTED_PORT', port: ports[0] });
+    dispatch({ type: 'SET_SELECTED_PORT', port: ports[0] ?? '' });
+  }, []);
+
+  const resetEmergency = useCallback(() => {
+    emergencyTriggered.current = false;
   }, []);
 
   return {
@@ -208,6 +213,7 @@ export function useSerialManager(): SerialManagerApi {
     handleValveChange,
     setLogger,
     setSequenceHandler,
+    resetEmergency,
   };
 }
 

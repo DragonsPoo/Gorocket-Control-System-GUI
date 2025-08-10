@@ -7,10 +7,11 @@ module.exports = {
     project: './tsconfig.json',
     tsconfigRootDir: __dirname,
   },
-  plugins: ['@typescript-eslint'],
+  plugins: ['@typescript-eslint', '@next/next'],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
+    'next/core-web-vitals',
   ],
   rules: {
     '@typescript-eslint/dot-notation': 'off',

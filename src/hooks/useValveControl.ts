@@ -1,4 +1,4 @@
-import { useState, useCallback, Dispatch, SetStateAction } from 'react';
+import { useState, useCallback, Dispatch, SetStateAction, useRef, useEffect } from 'react';
 import type { Valve, AppConfig } from '@shared/types';
 import type { SerialCommand } from '@shared/types/ipc';
 import { ValveCommandType } from '@shared/types/ipc';
@@ -16,6 +16,7 @@ export function useValveControl(
 ): ValveControlApi {
   const [valves, setValves] = useState<Valve[]>(config?.initialValves ?? []);
   const { toast } = useToast();
+  const timeoutRefs = useRef<Record<number, NodeJS.Timeout>>({});
 
   const handleValveChange = useCallback(
     async (valveId: number, targetState: 'OPEN' | 'CLOSED') => {
@@ -49,9 +50,35 @@ export function useValveControl(
             : v
         )
       );
+      timeoutRefs.current[valveId] = setTimeout(() => {
+        setValves((prev) =>
+          prev.map((v) =>
+            v.id === valveId && (v.state === 'OPENING' || v.state === 'CLOSING')
+              ? { ...v, state: 'STUCK' }
+              : v
+          )
+        );
+        toast({
+          title: 'Valve Timeout',
+          description: `${valve.name} did not reach ${targetState} position.`,
+          variant: 'destructive',
+        });
+      }, 5000);
     },
-    [config, sendCommand, valves]
+    [config, sendCommand, valves, toast]
   );
+
+  useEffect(() => {
+    valves.forEach((v) => {
+      if (
+        (v.state === 'OPEN' || v.state === 'CLOSED') &&
+        timeoutRefs.current[v.id]
+      ) {
+        clearTimeout(timeoutRefs.current[v.id]);
+        delete timeoutRefs.current[v.id];
+      }
+    });
+  }, [valves]);
 
   return { valves, handleValveChange, setValves };
 }

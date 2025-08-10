@@ -10,9 +10,18 @@ export function parseSensorData(raw: string): ParsedSensorData {
   const sensor: Partial<SensorData> = {};
   const valves: Partial<Record<number, Partial<Valve>>> = {};
 
+  if (parts.length === 0) {
+    // malformed data
+    console.error(`Invalid sensor data: ${raw}`);
+    return { sensor, valves };
+  }
+
   parts.forEach((part) => {
     const [key, rawValue] = part.split(':');
-    if (!key || !rawValue) return;
+    if (!key || rawValue === undefined) {
+      console.error(`Malformed sensor data segment: ${part}`);
+      return;
+    }
     const value = rawValue.trim();
     const match = key.match(/^V(\d+)_LS_(OPEN|CLOSED)$/);
     if (match) {
@@ -33,9 +42,11 @@ export function parseSensorData(raw: string): ParsedSensorData {
     }
 
     const num = parseFloat(value);
-    if (!Number.isNaN(num)) {
-      (sensor as Record<string, number>)[key] = num;
+    if (Number.isNaN(num)) {
+      console.error(`Invalid numeric value for ${key}: ${value}`);
+      return;
     }
+    (sensor as Record<string, number>)[key] = num;
   });
 
   return { sensor, valves };
