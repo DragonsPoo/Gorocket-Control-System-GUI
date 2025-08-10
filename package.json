@@ -7,7 +7,7 @@
     "dev": "concurrently \"npm:next:dev\" \"npm:electron:dev\"",
     "next:dev": "next dev --turbopack -p 9002",
     "electron:dev": "electron .",
-    "build": "next build && electron-builder",
+    "build": "next build && next export",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
