@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Rocket Test Sequences",
+  "description": "A schema for defining rocket engine test sequences.",
+  "type": "object",
+  "patternProperties": {
+    "^[a-zA-Z0-9_\\s-]+$": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "A human-readable message to display in the UI for this step."
+          },
+          "delay": {
+            "type": "number",
+            "minimum": 0,
+            "description": "The delay in milliseconds to wait after executing the commands in this step."
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "An array of string commands to be sent to the Arduino."
+          }
+        },
+        "required": ["message", "delay", "commands"]
+      }
+    }
+  },
+  "additionalProperties": false
+}

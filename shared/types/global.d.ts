@@ -17,6 +17,11 @@ declare global {
       stopLogging: () => void;
       getConfig: () => Promise<import('./index').AppConfig>;
       onLogCreationFailed: (callback: (error: string) => void) => () => void;
+
+      getSequences: () => Promise<import('./ipc').SequencesPayload>;
+      onSequencesUpdated: (
+        callback: (payload: import('./ipc').SequencesPayload) => void
+      ) => () => void;
     };
   }
 }
