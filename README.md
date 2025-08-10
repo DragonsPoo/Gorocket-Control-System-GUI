@@ -26,6 +26,7 @@
 - **직관적인 데이터 확인**: 4개의 압력 센서(PT), 2개의 유량 센서(Flow), 2개의 열전대(TC)에서 들어오는 데이터를 실시간으로 보여줍니다.
 - **시각적 그래프**: 모든 센서 데이터는 시간에 따른 변화를 쉽게 파악할 수 있도록 시계열 그래프로 표시됩니다.
 - **한눈에 보는 대시보드**: 현재 값을 큰 숫자로 표시하여 중요한 정보를 놓치지 않도록 돕습니다.
+- **압력 한계 감지**: 설정된 압력 한계값을 넘으면 자동으로 'Emergency Shutdown' 시퀀스를 실행하여 안전을 확보합니다.
 
 ### 2. 간편한 밸브 제어
 - **원격 밸브 조작**: 총 7개의 서보 밸브를 버튼 클릭만으로 개별적으로 열고 닫을 수 있습니다.
@@ -35,6 +36,7 @@
 - **원클릭 테스트**: 퍼지(Purge), 점화(Ignition), 메인 연소(Main Combustion) 등 미리 설정된 복잡한 테스트 단계를 버튼 하나로 순차적으로 실행합니다.
 - **진행 상황 확인**: 각 단계의 실행 과정과 결과는 터미널 형태의 패널에 순서대로 기록되어 모든 과정을 쉽게 추적할 수 있습니다.
 - **사용자 맞춤 시퀀스**: 테스트 시퀀스의 각 단계(밸브 개폐, 대기 시간 등)는 코드 내에서 쉽게 수정할 수 있습니다. 자세한 내용은 [자동 테스트 시퀀스 조정](#-자동-테스트-시퀀스-조정) 섹션을 참고하세요.
+- **피드백 검증**: 각 밸브 명령 후 리미트 스위치 응답을 확인하며, 지정된 시간 내 응답이 없으면 자동으로 'Emergency Shutdown'이 실행됩니다.
 
 ### 4. 데이터 로깅 및 저장
 - **모든 데이터 기록**: 테스트 중 측정되는 모든 센서 데이터는 타임스탬프와 함께 PC에 CSV 파일로 자동 저장됩니다.
@@ -180,7 +182,7 @@ npm run build
 
 자동 테스트 시퀀스는 미리 정해진 순서에 따라 밸브를 제어하고 대기하는 작업들의 모음입니다. 이 시퀀스는 사용자의 필요에 맞게 직접 수정할 수 있습니다.
 
-시퀀스 로직은 `src/hooks/useSequenceManager.ts`와 `src/sequences.json`에 정의되어 있습니다. JSON 파일에 시퀀스 단계를 추가하거나 수정하면 UI에도 자동으로 반영됩니다.
+시퀀스 로직은 `src/hooks/useSequenceManager.ts`와 `src/sequences.json`에 정의되어 있습니다. 앱은 `src/sequences.schema.json`을 기준으로 시퀀스 파일을 검증하며, `sequences.json`이 변경되면 자동으로 다시 로드되어 유효한 경우 UI에 즉시 반영됩니다.
 
 `src/sequences.json` 예시는 다음과 같습니다.
 
@@ -208,6 +210,7 @@ npm run build
 - **새 시퀀스 추가**: `src/sequences.json`에 새 키와 단계를 추가합니다. 각 단계는 `message`(로그 메시지), `delay`(밀리초), `commands`(시리얼로 보낼 명령 문자열 배열)로 구성됩니다.
 - **명령 수정**: `commands` 배열에 `"V,서보번호,O"` 또는 `"V,서보번호,C"`처럼 아두이노에 보낼 제어 명령을 원하는 대로 작성합니다.
 - **UI 커스터마이즈(선택 사항)**: 시퀀스 버튼의 아이콘이나 색을 바꾸고 싶다면 `src/components/dashboard/sequence-panel.tsx`의 `sequenceMeta` 객체를 수정하세요.
+- **저장 즉시 반영**: `sequences.json`을 저장하면 앱이 파일 변경을 감지해 자동으로 시퀀스를 다시 로드합니다.
 
 ---
 
@@ -222,8 +225,9 @@ npm run build
   },
   "maxChartDataPoints": 100,
   "pressureLimit": 850,
+  "valveFeedbackTimeout": 2000,
   "initialValves": [
-    { "id": 1, "name": "Ethanol Main", "state": "CLOSED" }
+    { "id": 1, "name": "Ethanol Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false }
   ],
   "valveMappings": {
     "Ethanol Main": { "servoIndex": 0 }
@@ -233,8 +237,9 @@ npm run build
 
 - `serial.baudRate`: 아두이노와 통신할 때의 속도입니다. 펌웨어 코드의 `Serial.begin()`에 설정된 값과 반드시 일치해야 합니다.
 - `maxChartDataPoints`: 실시간 차트에 표시될 데이터 포인트의 최대 개수입니다. 이 값을 넘어가면 가장 오래된 데이터부터 사라집니다.
-- `pressureLimit`: 특정 압력 센서 값이 이 기준(PSI 단위)을 초과하면 UI에 경고를 표시합니다.
-- `initialValves`: 앱이 시작될 때 화면에 표시될 밸브의 이름과 초기 상태 목록입니다.
+- `pressureLimit`: 특정 압력 센서 값이 이 기준(PSI 단위)을 초과하면 UI에 경고를 표시하고 'Emergency Shutdown' 시퀀스를 자동으로 실행합니다.
+- `valveFeedbackTimeout`: 밸브 명령 후 리미트 스위치 응답을 기다리는 최대 시간(ms)으로, 이를 초과하면 시퀀스가 실패합니다.
+- `initialValves`: 앱이 시작될 때 화면에 표시될 밸브의 이름과 초기 상태, 그리고 리미트 스위치 상태(`lsOpen`, `lsClosed`) 목록입니다.
 - `valveMappings`: UI의 밸브 이름(e.g., "Ethanol Main")과 아두이노 펌웨어에서 실제로 제어하는 서보 모터의 번호(인덱스)를 연결해주는 중요한 설정입니다.
 
 ---
