@@ -93,60 +93,60 @@
 ### Phase 1: 사전 준비 및 애플리케이션 실행
 
 1. **하드웨어(아두이노) 전원 인가**
-   - `setup()`은 시리얼 포트를 115200bps로 초기화하고 타임아웃을 20ms로 설정합니다【F:arduino_mega_code/arduino_mega_code.ino†L79-L82】
-   - 모든 서보를 분리하고 리미트 스위치, 유량 센서 인터럽트를 풀업 입력으로 설정합니다【F:arduino_mega_code/arduino_mega_code.ino†L88-L100】
-   - 초기화 완료 메시지를 출력하고 이후 `loop()`에서 이벤트를 기다립니다【F:arduino_mega_code/arduino_mega_code.ino†L101-L107】
+   - `setup()` 실행 시 시리얼 포트를 115200bps로 초기화하고 20ms 타임아웃을 지정해 통신 안정성을 확보합니다【F:arduino_mega_code/arduino_mega_code.ino†L79-L82】
+   - 모든 서보를 분리한 뒤 리미트 스위치와 유량 센서 핀을 입력 모드(PULLUP)로 구성하여 시작 시 불필요한 동작을 방지합니다【F:arduino_mega_code/arduino_mega_code.ino†L88-L100】
+   - SPI 및 열전대 모듈을 초기화한 후 "Initialization complete" 메시지를 출력하고 `loop()`에서 명령 또는 센서 이벤트를 기다립니다【F:arduino_mega_code/arduino_mega_code.ino†L101-L107】
 
 2. **소프트웨어(GUI) 실행**
-   - `npm run dev`는 Next.js 개발 서버와 Electron 메인 프로세스를 동시에 실행합니다【F:package.json†L8-L11】
-   - `main.ts`는 `config.json`을 읽고 시퀀스 파일을 로드한 뒤 창을 생성합니다. 이 과정에서 시퀀스 변경 감시도 설정됩니다【F:main.ts†L20-L37】
-   - 생성된 `BrowserWindow`는 개발 모드에서 `http://localhost:9002`를 띄우며, `preload.js`를 통해 렌더러와 IPC 통신을 제공합니다【F:main.ts†L40-L59】
+   - `npm run dev` 명령은 Next.js 개발 서버와 Electron 메인 프로세스를 동시에 구동하여 프론트엔드와 백엔드가 함께 동작하도록 합니다【F:package.json†L8-L11】
+   - `main.ts`는 실행 즉시 `config.json`을 읽고 `SequenceDataManager`를 초기화하여 시퀀스 파일을 검증 및 감시합니다. 이후 `BrowserWindow`를 생성하고 IPC 채널을 세팅합니다【F:main.ts†L20-L37】
+   - 개발 모드에서는 `http://localhost:9002` 주소를 로드하며, `preload.js`를 통해 렌더러 프로세스가 Node 기능에 직접 접근하지 않고도 안전하게 IPC 통신을 수행합니다【F:main.ts†L40-L59】
 
 ### Phase 2: 아두이노와 연결 수립
 
-1. **포트 목록 조회 및 선택**
-   - 프론트엔드 초기화 시 사용 가능한 시리얼 포트를 가져오고 기본 포트를 선택합니다【F:src/hooks/useSerialManager.ts†L122-L129】
+1. **포트 목록 조회 및 기본 설정**
+   - 프론트엔드 초기화 시 사용 가능한 포트 목록과 설정을 불러오고 첫 번째 포트를 기본 선택합니다. 로딩 실패 시 UI에 경고를 띄우고 긴급 시퀀스를 비활성화합니다【F:src/hooks/useSerialManager.ts†L122-L139】
 
 2. **연결 요청 및 핸드셰이크**
-   - 사용자가 UI에서 연결을 누르면 `handleConnect`가 `connectSerial` IPC를 호출합니다【F:src/hooks/useSerialManager.ts†L156-L176】
-   - `SerialManager`는 포트를 열고 5초 동안 대기한 후, `HELLO\n`을 전송해 3초 내 `READY` 응답을 기다립니다【F:main/SerialManager.ts†L29-L81】
-   - 연결 후 포트가 예기치 않게 닫히면 오류 이벤트를 발생시킵니다【F:main/SerialManager.ts†L83-L86】
+   - 사용자가 UI에서 "연결"을 누르면 `handleConnect`가 포트 선택 여부를 확인한 뒤 `connectSerial` IPC를 호출합니다【F:src/hooks/useSerialManager.ts†L156-L169】
+   - `SerialManager.connect`는 포트를 열고 5초간 연결을 확인한 뒤 `HELLO\n`을 전송하여 3초 내 `READY` 응답을 기대합니다. 타임아웃이나 오류 발생 시 자동으로 포트를 닫고 실패를 반환합니다【F:main/SerialManager.ts†L29-L81】
+   - 연결 후 포트가 예기치 않게 닫히면 오류 이벤트를 발생시키고 UI에 전달합니다【F:main/SerialManager.ts†L83-L89】
 
 3. **연결 상태 반영**
-   - 핸드셰이크 성공 시 프론트엔드 상태가 `connected`로 바뀌고, 실패 시 `disconnected`로 되돌립니다【F:src/hooks/useSerialManager.ts†L168-L178】
+   - 핸드셰이크 성공 시 UI 상태가 `connected`로 전환되며, 실패 또는 오류 시 `disconnected`로 복귀하고 로그에 메시지를 기록합니다【F:src/hooks/useSerialManager.ts†L168-L178】【F:src/hooks/useSerialManager.ts†L142-L149】
 
 ### Phase 3: 정상 작동 (데이터 흐름 및 제어)
 
 1. **데이터 흐름 (아두이노 → UI)**
-   - `loop()`는 100ms마다 센서 데이터를 읽어 `pt1`, `tc1`, 유량, 리미트 스위치 상태까지 한 줄로 전송합니다【F:arduino_mega_code/arduino_mega_code.ino†L127-L281】
-   - 백엔드는 수신한 문자열을 프론트엔드로 전달하고, 로깅이 활성화된 경우 CSV 형식으로 저장합니다【F:main.ts†L90-L96】【F:main/LogManager.ts†L9-L21】
-   - 프론트엔드는 데이터를 파싱해 상태와 차트를 갱신하며 압력 한계를 초과하면 긴급 시퀀스를 호출합니다【F:shared/utils/sensorParser.ts†L8-L40】【F:src/hooks/useSensorData.ts†L25-L43】
+   - `loop()` 함수는 100ms 주기로 센서 값을 읽어 `pt1`, `flow1/2`, `tc1/2`, 리미트 스위치 상태를 CSV 형태 문자열로 전송합니다【F:arduino_mega_code/arduino_mega_code.ino†L127-L281】
+   - Electron 메인 프로세스는 수신한 데이터를 렌더러에 중계하고, 로깅이 활성화된 경우 `LogManager`가 CSV 파일로 기록합니다【F:main.ts†L90-L96】【F:main/LogManager.ts†L9-L21】
+   - 프론트엔드는 `parseSensorData`로 문자열을 구조화하고 차트·상태를 갱신합니다. 압력이 설정 임계값을 넘으면 긴급 시퀀스를 요청합니다【F:shared/utils/sensorParser.ts†L9-L40】【F:src/hooks/useSensorData.ts†L25-L43】
 
 2. **명령 흐름 (UI → 아두이노)**
-   - 밸브 버튼을 누르면 `useValveControl`이 밸브 매핑을 참고해 `V,<index>,<O|C>` 명령을 생성합니다【F:src/hooks/useValveControl.ts†L21-L38】
-   - `SerialManager.send`는 문자열을 전송하고, 아두이노 `handleValveCommand`가 서보를 구동합니다【F:main/SerialManager.ts†L133-L145】【F:arduino_mega_code/arduino_mega_code.ino†L133-L157】
-   - 서보 상태 머신은 리미트 스위치 피드백을 확인하며 목표 각도에 도달하면 서보를 분리합니다【F:arduino_mega_code/arduino_mega_code.ino†L160-L200】
+   - 밸브 제어 버튼은 `V,<index>,<O|C>` 형태의 명령을 생성하며 UI와 설정된 서보 매핑을 사용합니다【F:src/hooks/useValveControl.ts†L21-L38】
+   - `SerialManager.send`가 문자열을 전송하면 아두이노 `handleValveCommand`가 서보를 구동합니다【F:main/SerialManager.ts†L133-L145】【F:arduino_mega_code/arduino_mega_code.ino†L133-L157】
+   - 펌웨어의 서보 상태 머신은 리미트 스위치 피드백을 감시하고 목표 각도에 도달하면 서보를 분리해 전력 소모를 최소화합니다【F:arduino_mega_code/arduino_mega_code.ino†L160-L200】
 
 3. **자동 시퀀스 및 피드백 검증**
-   - `SequenceDataManager`는 `src/sequences.json`을 감시하며 변경 시 UI에 알립니다【F:main/SequenceDataManager.ts†L20-L75】
-   - `useSequenceManager`는 각 단계마다 명령을 실행하고, 설정된 타임아웃 내 리미트 스위치 피드백을 확인합니다. 미응답 시 긴급 정지 시퀀스를 호출합니다【F:src/hooks/useSequenceManager.ts†L56-L139】【F:src/hooks/useSequenceManager.ts†L166-L175】
+   - `SequenceDataManager`는 `src/sequences.json`을 실시간 감시하여 변경 내용을 UI로 전파합니다【F:main/SequenceDataManager.ts†L20-L75】
+   - `useSequenceManager`는 단계별로 명령을 실행하고 각 명령 후 리미트 스위치가 지정된 시간 내 응답하는지 검사합니다. 응답 누락 시 자동으로 'Emergency Shutdown' 시퀀스를 호출합니다【F:src/hooks/useSequenceManager.ts†L56-L139】【F:src/hooks/useSequenceManager.ts†L166-L175】
 
 4. **압력 기준 초과 시 긴급 정지**
-   - `useSensorData`가 압력 한계 초과를 감지하면 `handleEmergency`를 통해 'Emergency Shutdown' 시퀀스를 실행합니다【F:src/hooks/useSerialManager.ts†L70-L74】【F:src/hooks/useSensorData.ts†L37-L42】
+   - `useSensorData`가 압력 한계를 넘는 데이터를 감지하면 `handleEmergency`를 호출하여 즉시 'Emergency Shutdown' 시퀀스를 시작합니다【F:src/hooks/useSerialManager.ts†L70-L74】【F:src/hooks/useSensorData.ts†L37-L42】
 
 ### Phase 4: 연결 종료
 
 1. **정상적인 연결 해제**
-   - 사용자가 연결 해제를 누르면 `disconnectSerial` IPC가 호출되고 포트를 안전하게 닫습니다【F:src/hooks/useSerialManager.ts†L156-L162】【F:main/SerialManager.ts†L112-L131】
+   - 사용자가 "연결 해제"를 누르면 `disconnectSerial` IPC가 호출되어 포트를 안전하게 닫고 내부 상태를 초기화합니다【F:src/hooks/useSerialManager.ts†L156-L162】【F:main/SerialManager.ts†L112-L131】
 
 2. **비정상적인 연결 끊김**
-   - USB 분리 등으로 포트가 닫히면 `SerialManager`가 오류 이벤트를 발생시키며 UI는 연결이 해제되었음을 표시합니다【F:main/SerialManager.ts†L83-L89】【F:src/hooks/useSerialManager.ts†L142-L149】
+   - USB 분리 등으로 포트가 갑자기 닫히면 `SerialManager`가 오류 이벤트를 발생시키고 UI는 즉시 연결 해제를 표시합니다【F:main/SerialManager.ts†L83-L89】【F:src/hooks/useSerialManager.ts†L142-L149】
 
 ### Phase 5: 데이터 로깅
 
-1. **로그 시작/중지**
-   - UI의 로그 토글은 `start-logging`/`stop-logging` IPC를 통해 `LogManager`를 제어합니다【F:src/app/page.tsx†L105-L112】【F:main.ts†L87-L88】
-   - 로그 파일은 사용자 문서 폴더 아래 `rocket-logs`에 CSV로 저장되며, 파싱 오류는 주석으로 기록됩니다【F:main/LogManager.ts†L36-L75】
+1. **로그 시작/중지 및 파일 기록**
+   - UI의 로그 토글은 `start-logging`/`stop-logging` IPC를 통해 `LogManager`를 제어하며, 생성 실패 시 UI에 알립니다【F:src/app/page.tsx†L105-L112】【F:main.ts†L87-L88】【F:main/LogManager.ts†L9-L21】
+   - 로그는 사용자 문서 폴더 아래 `rocket-logs`에 CSV로 저장되고, 파싱 오류는 `#` 주석으로 기록하여 문제 데이터를 추적할 수 있게 합니다【F:main/LogManager.ts†L36-L75】
 ## 📂 파일 구조
 
 프로젝트 폴더는 다음과 같이 구성되어 있습니다.
