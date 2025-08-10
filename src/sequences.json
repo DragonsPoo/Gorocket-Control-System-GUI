@@ -1,31 +1,30 @@
 {
   "Pre-launch Check": [
     {
-      "message": "Sending command: PRELAUNCH_CHECK_START",
+      "message": "Opening valve 0",
       "delay": 500,
-      "command": "SEQ_PRELAUNCH_START"
+      "commands": ["V,0,O"]
     }
   ],
   "Ignition Sequence": [
     {
-      "message": "Sending command: IGNITION_SEQUENCE_START",
+      "message": "Opening valves 1 and 2",
       "delay": 500,
-      "command": "SEQ_IGNITION_START"
+      "commands": ["V,1,O", "V,2,O"]
     }
   ],
   "System Purge": [
     {
-      "message": "Sending command: SYSTEM_PURGE",
+      "message": "Closing all valves",
       "delay": 500,
-      "command": "SEQ_PURGE"
+      "commands": ["V,0,C", "V,1,C", "V,2,C", "V,3,C", "V,4,C", "V,5,C", "V,6,C"]
     }
   ],
   "Emergency Shutdown": [
     {
-      "message": "Sending command: EMERGENCY_SHUTDOWN",
+      "message": "Emergency shutdown: close all valves",
       "delay": 100,
-      "command": "SEQ_SHUTDOWN"
+      "commands": ["V,0,C", "V,1,C", "V,2,C", "V,3,C", "V,4,C", "V,5,C", "V,6,C"]
     }
   ]
 }
-

@@ -75,7 +75,18 @@ void loop() {
   const unsigned long now = millis(); // [최적화] loop 내 공용 시간값
 
   if (Serial.available() > 0) {
-    handleValveCommand();
+    char c = Serial.peek();
+    if (c == 'H') {
+      String line = Serial.readStringUntil('\n');
+      line.trim();
+      if (line == "HELLO") {
+        Serial.println(F("READY"));
+      }
+    } else if (c == 'V') {
+      handleValveCommand();
+    } else {
+      Serial.readStringUntil('\n'); // Unknown command flush
+    }
   }
 
   // 루프당 1회 스위치 스냅샷
