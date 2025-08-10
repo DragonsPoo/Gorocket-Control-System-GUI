@@ -46,6 +46,7 @@ export interface SerialManagerApi {
   appConfig: AppConfig | null;
   sensorData: SensorData | null;
   chartData: SensorData[];
+  getLatestSensorData: () => SensorData | null;
   valves: Valve[];
   connectionStatus: ConnectionStatus;
   serialPorts: string[];
@@ -112,7 +113,13 @@ export function useSerialManager(): SerialManagerApi {
     [setValves]
   );
 
-  const { sensorData, chartData, handleSerialMessage, reset } = useSensorData(
+  const {
+    sensorData,
+    chartData,
+    handleSerialMessage,
+    reset,
+    getLatestSensorData,
+  } = useSensorData(
     state.appConfig?.maxChartDataPoints ?? 100,
     state.appConfig?.pressureLimit ?? null,
     handleEmergency,
@@ -207,6 +214,7 @@ export function useSerialManager(): SerialManagerApi {
     appConfig: state.appConfig,
     sensorData,
     chartData,
+    getLatestSensorData,
     valves,
     connectionStatus: state.connectionStatus,
     serialPorts: state.serialPorts,
