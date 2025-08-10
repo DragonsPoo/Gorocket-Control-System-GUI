@@ -1,6 +1,5 @@
 <img width="2879" height="1707" alt="image" src="https://github.com/user-attachments/assets/9ed51db3-f4d9-49a1-b5fd-7456a9212430" />
 
-
 # 로켓 엔진 테스트용 제어 및 모니터링 GUI
 
 ## 🚀 소개
@@ -24,27 +23,32 @@
 ## 🎯 주요 기능
 
 ### 1. 실시간 센서 모니터링
+
 - **직관적인 데이터 확인**: 4개의 압력 센서(PT), 2개의 유량 센서(Flow), 2개의 열전대(TC)에서 들어오는 데이터를 실시간으로 보여줍니다.
 - **시각적 그래프**: 모든 센서 데이터는 시간에 따른 변화를 쉽게 파악할 수 있도록 시계열 그래프로 표시됩니다.
 - **한눈에 보는 대시보드**: 현재 값을 큰 숫자로 표시하여 중요한 정보를 놓치지 않도록 돕습니다.
 - **압력 한계 감지**: 설정된 압력 한계값을 넘으면 자동으로 'Emergency Shutdown' 시퀀스를 실행하여 안전을 확보합니다.
 
 ### 2. 간편한 밸브 제어
+
 - **원격 밸브 조작**: 총 7개의 서보 밸브를 버튼 클릭만으로 개별적으로 열고 닫을 수 있습니다.
 - **정확한 상태 피드백**: 각 밸브에 달린 2개의 리미트 스위치가 현재 밸브가 완전히 열렸는지, 아니면 닫혔는지를 감지하여 화면에 명확하게 표시해 줍니다.
 
 ### 3. 자동 테스트 시퀀스 실행
+
 - **원클릭 테스트**: 퍼지(Purge), 점화(Ignition), 메인 연소(Main Combustion) 등 미리 설정된 복잡한 테스트 단계를 버튼 하나로 순차적으로 실행합니다.
 - **진행 상황 확인**: 각 단계의 실행 과정과 결과는 터미널 형태의 패널에 순서대로 기록되어 모든 과정을 쉽게 추적할 수 있습니다.
 - **사용자 맞춤 시퀀스**: 테스트 시퀀스의 각 단계(밸브 개폐, 대기 시간 등)는 코드 내에서 쉽게 수정할 수 있습니다. 자세한 내용은 [자동 테스트 시퀀스 조정](#-자동-테스트-시퀀스-조정) 섹션을 참고하세요.
 - **피드백 검증**: 각 밸브 명령 후 리미트 스위치 응답을 확인하며, 지정된 시간 내 응답이 없으면 자동으로 'Emergency Shutdown'이 실행됩니다.
 
 ### 4. 데이터 로깅 및 저장
+
 - **모든 데이터 기록**: 테스트 중 측정되는 모든 센서 데이터는 타임스탬프와 함께 PC에 CSV 파일로 자동 저장됩니다.
 - **손쉬운 제어**: GUI에서 '로깅 시작'과 '로깅 중지' 버튼으로 데이터 기록 시점을 자유롭게 제어할 수 있습니다.
 - **분석용 데이터 확보**: 저장된 파일은 Excel이나 Python 등으로 열어 테스트 결과를 정밀하게 분석하고 보고서를 작성하는 데 활용할 수 있습니다.
 
 ### 5. 안정적인 하드웨어 연결
+
 - **자동 포트 검색**: PC에 연결된 장치 중 통신 가능한 시리얼 포트를 자동으로 찾아 목록으로 보여줍니다.
 - **명확한 연결 상태**: 사용자가 목록에서 아두이노 보드를 선택하면, 연결 성공 여부가 UI에 명확히 표시되어 통신 상태를 쉽게 알 수 있습니다.
 
@@ -94,60 +98,61 @@
 ### Phase 1: 사전 준비 및 애플리케이션 실행
 
 1. **하드웨어(아두이노) 전원 인가**
-   - `setup()` 실행 시 시리얼 포트를 115200bps로 초기화하고 20ms 타임아웃을 지정해 통신 안정성을 확보합니다【F:arduino_mega_code/arduino_mega_code.ino†L79-L82】
-   - 모든 서보를 분리한 뒤 리미트 스위치와 유량 센서 핀을 입력 모드(PULLUP)로 구성하여 시작 시 불필요한 동작을 방지합니다【F:arduino_mega_code/arduino_mega_code.ino†L88-L100】
-   - SPI 및 열전대 모듈을 초기화한 후 "Initialization complete" 메시지를 출력하고 `loop()`에서 명령 또는 센서 이벤트를 기다립니다【F:arduino_mega_code/arduino_mega_code.ino†L101-L107】
+   - `setup()` 실행 시 시리얼 포트를 115200bps로 초기화하고 20ms 타임아웃을 지정해 통신 안정성을 확보합니다
+   - 모든 서보를 분리한 뒤 리미트 스위치와 유량 센서 핀을 입력 모드(PULLUP)로 구성하여 시작 시 불필요한 동작을 방지합니다
+   - SPI 및 열전대 모듈을 초기화한 후 "Initialization complete" 메시지를 출력하고 `loop()`에서 명령 또는 센서 이벤트를 기다립니다
 
 2. **소프트웨어(GUI) 실행**
-   - `npm run dev` 명령은 Next.js 개발 서버와 Electron 메인 프로세스를 동시에 구동하여 프론트엔드와 백엔드가 함께 동작하도록 합니다【F:package.json†L8-L11】
-   - `main.ts`는 실행 즉시 `config.json`을 읽고 `SequenceDataManager`를 초기화하여 시퀀스 파일을 검증 및 감시합니다. 이후 `BrowserWindow`를 생성하고 IPC 채널을 세팅합니다【F:main.ts†L20-L37】
-   - 개발 모드에서는 `http://localhost:9002` 주소를 로드하며, `preload.js`를 통해 렌더러 프로세스가 Node 기능에 직접 접근하지 않고도 안전하게 IPC 통신을 수행합니다【F:main.ts†L40-L59】
+   - `npm run dev` 명령은 Next.js 개발 서버와 Electron 메인 프로세스를 동시에 구동하여 프론트엔드와 백엔드가 함께 동작하도록 합니다
+   - `main.ts`는 실행 즉시 `config.json`을 읽고 `SequenceDataManager`를 초기화하여 시퀀스 파일을 검증 및 감시합니다. 이후 `BrowserWindow`를 생성하고 IPC 채널을 세팅합니다
+   - 개발 모드에서는 `http://localhost:9002` 주소를 로드하며, `preload.js`를 통해 렌더러 프로세스가 Node 기능에 직접 접근하지 않고도 안전하게 IPC 통신을 수행합니다
 
 ### Phase 2: 아두이노와 연결 수립
 
 1. **포트 목록 조회 및 기본 설정**
-   - 프론트엔드 초기화 시 사용 가능한 포트 목록과 설정을 불러오고 첫 번째 포트를 기본 선택합니다. 로딩 실패 시 UI에 경고를 띄우고 긴급 시퀀스를 비활성화합니다【F:src/hooks/useSerialManager.ts†L122-L139】
+   - 프론트엔드 초기화 시 사용 가능한 포트 목록과 설정을 불러오고 첫 번째 포트를 기본 선택합니다. 로딩 실패 시 UI에 경고를 띄우고 긴급 시퀀스를 비활성화합니다
 
 2. **연결 요청 및 핸드셰이크**
-   - 사용자가 UI에서 "연결"을 누르면 `handleConnect`가 포트 선택 여부를 확인한 뒤 `connectSerial` IPC를 호출합니다【F:src/hooks/useSerialManager.ts†L156-L169】
-   - `SerialManager.connect`는 포트를 열고 5초간 연결을 확인한 뒤 `HELLO\n`을 전송하여 3초 내 `READY` 응답을 기대합니다. 타임아웃이나 오류 발생 시 자동으로 포트를 닫고 실패를 반환합니다【F:main/SerialManager.ts†L29-L81】
-   - 연결 후 포트가 예기치 않게 닫히면 오류 이벤트를 발생시키고 UI에 전달합니다【F:main/SerialManager.ts†L83-L89】
+   - 사용자가 UI에서 "연결"을 누르면 `handleConnect`가 포트 선택 여부를 확인한 뒤 `connectSerial` IPC를 호출합니다
+   - `SerialManager.connect`는 포트를 열고 5초간 연결을 확인한 뒤 `HELLO\n`을 전송하여 3초 내 `READY` 응답을 기대합니다. 타임아웃이나 오류 발생 시 자동으로 포트를 닫고 실패를 반환합니다
+   - 연결 후 포트가 예기치 않게 닫히면 오류 이벤트를 발생시키고 UI에 전달합니다
 
 3. **연결 상태 반영**
-   - 핸드셰이크 성공 시 UI 상태가 `connected`로 전환되며, 실패 또는 오류 시 `disconnected`로 복귀하고 로그에 메시지를 기록합니다【F:src/hooks/useSerialManager.ts†L168-L178】【F:src/hooks/useSerialManager.ts†L142-L149】
+   - 핸드셰이크 성공 시 UI 상태가 `connected`로 전환되며, 실패 또는 오류 시 `disconnected`로 복귀하고 로그에 메시지를 기록합니다
 
 ### Phase 3: 정상 작동 (데이터 흐름 및 제어)
 
 1. **데이터 흐름 (아두이노 → UI)**
-   - `loop()` 함수는 100ms 주기로 센서 값을 읽어 `pt1`, `flow1/2`, `tc1/2`, 리미트 스위치 상태를 CSV 형태 문자열로 전송합니다【F:arduino_mega_code/arduino_mega_code.ino†L127-L281】
-   - Electron 메인 프로세스는 수신한 데이터를 렌더러에 중계하고, 로깅이 활성화된 경우 `LogManager`가 CSV 파일로 기록합니다【F:main.ts†L90-L96】【F:main/LogManager.ts†L9-L21】
-   - 프론트엔드는 `parseSensorData`로 문자열을 구조화하고 차트·상태를 갱신합니다. 압력이 설정 임계값을 넘으면 긴급 시퀀스를 요청합니다【F:shared/utils/sensorParser.ts†L9-L40】【F:src/hooks/useSensorData.ts†L25-L43】
+   - `loop()` 함수는 100ms 주기로 센서 값을 읽어 `pt1`, `flow1/2`, `tc1/2`, 리미트 스위치 상태를 CSV 형태 문자열로 전송합니다
+   - Electron 메인 프로세스는 수신한 데이터를 렌더러에 중계하고, 로깅이 활성화된 경우 `LogManager`가 CSV 파일로 기록합니다
+   - 프론트엔드는 `parseSensorData`로 문자열을 구조화하고 차트·상태를 갱신합니다. 압력이 설정 임계값을 넘으면 긴급 시퀀스를 요청합니다
 
 2. **명령 흐름 (UI → 아두이노)**
-   - 밸브 제어 버튼은 `V,<index>,<O|C>` 형태의 명령을 생성하며 UI와 설정된 서보 매핑을 사용합니다【F:src/hooks/useValveControl.ts†L21-L38】
-   - `SerialManager.send`가 문자열을 전송하면 아두이노 `handleValveCommand`가 서보를 구동합니다【F:main/SerialManager.ts†L133-L145】【F:arduino_mega_code/arduino_mega_code.ino†L133-L157】
-   - 펌웨어의 서보 상태 머신은 리미트 스위치 피드백을 감시하고 목표 각도에 도달하면 서보를 분리해 전력 소모를 최소화합니다【F:arduino_mega_code/arduino_mega_code.ino†L160-L200】
+   - 밸브 제어 버튼은 `V,<index>,<O|C>` 형태의 명령을 생성하며 UI와 설정된 서보 매핑을 사용합니다
+   - `SerialManager.send`가 문자열을 전송하면 아두이노 `handleValveCommand`가 서보를 구동합니다
+   - 펌웨어의 서보 상태 머신은 리미트 스위치 피드백을 감시하고 목표 각도에 도달하면 서보를 분리해 전력 소모를 최소화합니다
 
 3. **자동 시퀀스 및 피드백 검증**
-   - `SequenceDataManager`는 `src/sequences.json`을 실시간 감시하여 변경 내용을 UI로 전파합니다【F:main/SequenceDataManager.ts†L20-L75】
-   - `useSequenceManager`는 단계별로 명령을 실행하고 각 명령 후 리미트 스위치가 지정된 시간 내 응답하는지 검사합니다. 응답 누락 시 자동으로 'Emergency Shutdown' 시퀀스를 호출합니다【F:src/hooks/useSequenceManager.ts†L56-L139】【F:src/hooks/useSequenceManager.ts†L166-L175】
+   - `SequenceDataManager`는 `src/sequences.json`을 실시간 감시하여 변경 내용을 UI로 전파합니다
+   - `useSequenceManager`는 단계별로 명령을 실행하고 각 명령 후 리미트 스위치가 지정된 시간 내 응답하는지 검사합니다. 응답 누락 시 자동으로 'Emergency Shutdown' 시퀀스를 호출합니다
 
 4. **압력 기준 초과 시 긴급 정지**
-   - `useSensorData`가 압력 한계를 넘는 데이터를 감지하면 `handleEmergency`를 호출하여 즉시 'Emergency Shutdown' 시퀀스를 시작합니다【F:src/hooks/useSerialManager.ts†L70-L74】【F:src/hooks/useSensorData.ts†L37-L42】
+   - `useSensorData`가 압력 한계를 넘는 데이터를 감지하면 `handleEmergency`를 호출하여 즉시 'Emergency Shutdown' 시퀀스를 시작합니다
 
 ### Phase 4: 연결 종료
 
 1. **정상적인 연결 해제**
-   - 사용자가 "연결 해제"를 누르면 `disconnectSerial` IPC가 호출되어 포트를 안전하게 닫고 내부 상태를 초기화합니다【F:src/hooks/useSerialManager.ts†L156-L162】【F:main/SerialManager.ts†L112-L131】
+   - 사용자가 "연결 해제"를 누르면 `disconnectSerial` IPC가 호출되어 포트를 안전하게 닫고 내부 상태를 초기화합니다
 
 2. **비정상적인 연결 끊김**
-   - USB 분리 등으로 포트가 갑자기 닫히면 `SerialManager`가 오류 이벤트를 발생시키고 UI는 즉시 연결 해제를 표시합니다【F:main/SerialManager.ts†L83-L89】【F:src/hooks/useSerialManager.ts†L142-L149】
+   - USB 분리 등으로 포트가 갑자기 닫히면 `SerialManager`가 오류 이벤트를 발생시키고 UI는 즉시 연결 해제를 표시합니다
 
 ### Phase 5: 데이터 로깅
 
 1. **로그 시작/중지 및 파일 기록**
-   - UI의 로그 토글은 `start-logging`/`stop-logging` IPC를 통해 `LogManager`를 제어하며, 생성 실패 시 UI에 알립니다【F:src/app/page.tsx†L105-L112】【F:main.ts†L87-L88】【F:main/LogManager.ts†L9-L21】
-   - 로그는 사용자 문서 폴더 아래 `rocket-logs`에 CSV로 저장되고, 파싱 오류는 `#` 주석으로 기록하여 문제 데이터를 추적할 수 있게 합니다【F:main/LogManager.ts†L36-L75】
+   - UI의 로그 토글은 `start-logging`/`stop-logging` IPC를 통해 `LogManager`를 제어하며, 생성 실패 시 UI에 알립니다
+   - 로그는 사용자 문서 폴더 아래 `rocket-logs`에 CSV로 저장되고, 파싱 오류는 `#` 주석으로 기록하여 문제 데이터를 추적할 수 있게 합니다
+
 ## 📂 파일 구조
 
 프로젝트 폴더는 다음과 같이 구성되어 있습니다.
@@ -179,18 +184,22 @@
 이 프로젝트를 직접 수정하고 실행해 보려면 다음 단계를 따라주세요.
 
 ### 1. 필수 소프트웨어 설치
+
 - **[Node.js](https://nodejs.org/) (버전 18 이상)**: JavaScript 실행 환경입니다. `npm`이 함께 설치됩니다.
 - **[Arduino IDE](https://www.arduino.cc/en/software)**: 아두이노 보드에 펌웨어를 업로드할 때 필요합니다.
 - **Git** (선택 사항): 코드 버전을 관리하고 GitHub에서 프로젝트를 내려받을 때 편리합니다.
 
 설치가 완료되면 터미널(명령 프롬프트 또는 PowerShell)에서 아래 명령어로 설치를 확인합니다.
+
 ```bash
 node -v
 npm -v
 ```
 
 ### 2. 프로젝트 내려받기 및 의존성 설치
+
 터미널을 열고 아래 명령어를 순서대로 입력합니다.
+
 ```bash
 # 1. GitHub에서 프로젝트를 복제합니다.
 git clone https://github.com/your-username/Gorocket-Control-System-GUI.git
@@ -203,14 +212,17 @@ npm install
 ```
 
 ### 3. 네이티브 모듈 재빌드
+
 이 프로젝트는 하드웨어 통신을 위해 `serialport`라는 라이브러리를 사용합니다. 이 라이브러리는 C++로 만들어진 부분이 있어, 현재 설치된 Electron 버전에 맞게 다시 컴파일(재빌드)해야 합니다.
+
 ```bash
 npm run rebuild
 ```
-> **⚠️ Windows 사용자 주의**: 이 과정에서 오류가 발생한다면, C++ 코드를 컴파일하는 데 필요한 도구가 설치되지 않았을 가능성이 높습니다. 터미널을 **관리자 권한으로** 실행한 뒤, 아래 명령어를 실행하여 빌드 도구를 먼저 설치하고 다시 시도해 보세요.
-> `npm install --global windows-build-tools`
+
+> **⚠️ Windows 사용자 주의**: 이 과정에서 오류가 발생한다면, C++ 코드를 컴파일하는 데 필요한 도구가 설치되지 않았을 가능성이 높습니다. 터미널을 **관리자 권한으로** 실행한 뒤, 아래 명령어를 실행하여 빌드 도구를 먼저 설치하고 다시 시도해 보세요. `npm install --global windows-build-tools`
 
 ### 4. Arduino 펌웨어 업로드
+
 1.  PC에 Arduino Mega 보드를 USB 케이블로 연결합니다.
 2.  Arduino IDE를 실행합니다.
 3.  **파일 > 열기**를 선택하여 이 프로젝트의 `arduino_mega_code/arduino_mega_code.ino` 파일을 엽니다.
@@ -223,17 +235,23 @@ npm run rebuild
 ## ▶️ 실행 방법
 
 ### 개발 모드 (Development)
+
 코드를 수정하면서 바로바로 변경 사항을 확인하고 싶을 때 사용합니다.
+
 ```bash
 npm run dev
 ```
+
 이 명령어를 실행하면 UI 개발 서버와 Electron 앱이 동시에 실행되며, 코드를 저장할 때마다 앱이 자동으로 새로고침됩니다.
 
 ### 프로덕션 빌드 (Production)
+
 다른 사람에게 배포할 수 있는 설치 파일(.exe 등)을 만들 때 사용합니다.
+
 ```bash
 npm run build
 ```
+
 > **⚠️ 경고**: 현재 프로덕션 빌드(`npm run build`)는 불안정하며 정상적으로 동작하지 않을 수 있습니다. 배포용으로 사용하기보다는 개발 모드(`npm run dev`)로 실행하는 것을 권장합니다.
 
 ---
@@ -293,7 +311,13 @@ npm run build
   "pressureLimit": 850,
   "valveFeedbackTimeout": 2000,
   "initialValves": [
-    { "id": 1, "name": "Ethanol Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false }
+    {
+      "id": 1,
+      "name": "Ethanol Main",
+      "state": "CLOSED",
+      "lsOpen": false,
+      "lsClosed": false
+    }
   ],
   "valveMappings": {
     "Ethanol Main": { "servoIndex": 0 }
