@@ -1,6 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import type { SequenceConfig, Valve, AppConfig } from '@shared/types';
+import type {
+  SequenceConfig,
+  Valve,
+  AppConfig,
+  SequenceCondition,
+  SensorData,
+} from '@shared/types';
 
 interface SequenceStep {
   message: string;
@@ -22,6 +28,7 @@ interface UseSequenceManagerOptions {
   valves: Valve[];
   appConfig: AppConfig | null;
   sendCommand: (cmd: string) => Promise<boolean>;
+  getSensorData: () => SensorData | null;
   onSequenceComplete?: (name: string) => void;
 }
 
@@ -38,6 +45,7 @@ export function useSequenceManager({
   valves,
   appConfig,
   sendCommand,
+  getSensorData,
   onSequenceComplete,
 }: UseSequenceManagerOptions): SequenceManagerApi {
   const { toast } = useToast();
@@ -125,6 +133,37 @@ export function useSequenceManager({
     [valves, appConfig, addLog]
   );
 
+  const waitForSensorCondition = useCallback(
+    (condition: SequenceCondition, controller: AbortController) => {
+      return new Promise<void>((resolve, reject) => {
+        const check = () => {
+          const data = getSensorData();
+          if (!data) return false;
+          const value = data[condition.sensor];
+          return typeof value === 'number' && value >= condition.min;
+        };
+
+        if (check()) {
+          resolve();
+          return;
+        }
+
+        const intervalId = setInterval(() => {
+          if (check()) {
+            clearInterval(intervalId);
+            resolve();
+          }
+        }, 100);
+
+        controller.signal.addEventListener('abort', () => {
+          clearInterval(intervalId);
+          reject(new Error('aborted'));
+        });
+      });
+    },
+    [getSensorData]
+  );
+
   const runSequence = useCallback(
     async (name: string, steps: SequenceStep[], controller: AbortController) => {
       setActiveSequence(name);
@@ -195,6 +234,25 @@ export function useSequenceManager({
         message: s.message,
         delay: s.delay,
         action: async () => {
+          if (s.condition) {
+            try {
+              addLog(
+                `Waiting for ${s.condition.sensor} to reach ${s.condition.min}...`
+              );
+              await waitForSensorCondition(s.condition, controller);
+              addLog(
+                `${s.condition.sensor} reached ${s.condition.min}.`
+              );
+            } catch (error) {
+              if ((error as Error).message !== 'aborted') {
+                addLog(
+                  `Sensor condition error: ${(error as Error).message}`
+                );
+                handleSequence('Emergency Shutdown');
+              }
+              return false;
+            }
+          }
           for (const cmd of s.commands) {
             if (controller.signal.aborted) throw new Error('aborted');
 
@@ -236,6 +294,7 @@ export function useSequenceManager({
       sendCommand,
       addLog,
       waitForValveFeedback,
+      waitForSensorCondition,
     ]
   );
 

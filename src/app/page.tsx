@@ -18,6 +18,7 @@ export default function Home() {
     appConfig,
     sensorData,
     chartData,
+    getLatestSensorData,
     valves,
     connectionStatus,
     serialPorts,
@@ -44,6 +45,7 @@ export default function Home() {
     valves,
     appConfig,
     sendCommand: (cmd) => sendCommand({ type: 'RAW', payload: cmd }),
+     getSensorData: getLatestSensorData,
     onSequenceComplete: (name) => {
       if (name === 'Emergency Shutdown') resetEmergency();
     },

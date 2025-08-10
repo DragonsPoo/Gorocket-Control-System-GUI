@@ -7,7 +7,8 @@
     },
     {
       "message": "Waiting for tanks to reach pressure.",
-      "delay": 5000,
+      "delay": 0,
+      "condition": { "sensor": "pt1", "min": 100 },
       "commands": []
     },
     {

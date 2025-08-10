@@ -10,6 +10,7 @@ export interface SensorDataApi {
   chartData: SensorData[];
   handleSerialMessage: (data: string) => void;
   reset: () => void;
+  getLatestSensorData: () => SensorData | null;
 }
 
 export function useSensorData(
@@ -54,5 +55,7 @@ export function useSensorData(
     setChartData([]);
   }, []);
 
-  return { sensorData, chartData, handleSerialMessage, reset };
+  const getLatestSensorData = useCallback(() => sensorRef.current, []);
+
+  return { sensorData, chartData, handleSerialMessage, reset, getLatestSensorData };
 }

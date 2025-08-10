@@ -253,6 +253,12 @@ npm run build
       "message": "Opening valves 1 and 2",
       "delay": 500,
       "commands": ["V,1,O", "V,2,O"]
+    },
+    {
+      "message": "Wait for PT1 pressure",
+      "delay": 0,
+      "condition": { "sensor": "pt1", "min": 100 },
+      "commands": []
     }
   ],
   "Emergency Shutdown": [
@@ -267,7 +273,7 @@ npm run build
 
 ### 조정 방법
 
-- **새 시퀀스 추가**: `src/sequences.json`에 새 키와 단계를 추가합니다. 각 단계는 `message`(로그 메시지), `delay`(밀리초), `commands`(시리얼로 보낼 명령 문자열 배열)로 구성됩니다.
+- **새 시퀀스 추가**: `src/sequences.json`에 새 키와 단계를 추가합니다. 각 단계는 `message`(로그 메시지), `delay`(밀리초), `commands`(시리얼로 보낼 명령 문자열 배열)로 구성됩니다. 필요하다면 `condition`을 추가해 특정 센서 값이 기준 이상이 될 때까지 대기할 수 있습니다.
 - **명령 수정**: `commands` 배열에 `"V,서보번호,O"` 또는 `"V,서보번호,C"`처럼 아두이노에 보낼 제어 명령을 원하는 대로 작성합니다.
 - **UI 커스터마이즈(선택 사항)**: 시퀀스 버튼의 아이콘이나 색을 바꾸고 싶다면 `src/components/dashboard/sequence-panel.tsx`의 `sequenceMeta` 객체를 수정하세요.
 - **저장 즉시 반영**: `sequences.json`을 저장하면 앱이 파일 변경을 감지해 자동으로 시퀀스를 다시 로드합니다.

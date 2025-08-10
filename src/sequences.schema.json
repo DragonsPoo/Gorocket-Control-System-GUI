@@ -24,6 +24,14 @@
               "type": "string"
             },
             "description": "An array of string commands to be sent to the Arduino."
+          },
+          "condition": {
+            "type": "object",
+            "properties": {
+              "sensor": { "type": "string" },
+              "min": { "type": "number" }
+            },
+            "required": ["sensor", "min"]
           }
         },
         "required": ["message", "delay", "commands"]

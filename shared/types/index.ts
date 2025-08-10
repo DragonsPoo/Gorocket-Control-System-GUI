@@ -42,10 +42,16 @@ export interface Valve {
   lsClosed: boolean;
 }
 
+export interface SequenceCondition {
+  sensor: keyof SensorData;
+  min: number;
+}
+
 export interface SequenceConfigStep {
   message: string;
   delay: number;
   commands: string[];
+  condition?: SequenceCondition;
 }
 
 export type SequenceConfig = Record<string, SequenceConfigStep[]>;
