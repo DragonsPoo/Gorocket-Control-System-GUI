@@ -10,7 +10,7 @@ export function parseSensorData(raw: string): ParsedSensorData {
   const sensor: Partial<SensorData> = {};
   const valves: Partial<Record<number, Partial<Valve>>> = {};
 
-  parts.forEach(part => {
+  parts.forEach((part) => {
     const [key, rawValue] = part.split(':');
     if (!key || !rawValue) return;
     const value = rawValue.trim();
@@ -26,7 +26,9 @@ export function parseSensorData(raw: string): ParsedSensorData {
     }
     if (key === 'tc1' || key === 'tc2') {
       const num = parseFloat(value);
-      (sensor as Record<string, number | string>)[key] = !Number.isNaN(num) ? num : value;
+      (sensor as Record<string, number | string>)[key] = !Number.isNaN(num)
+        ? num
+        : value;
       return;
     }
 
@@ -40,5 +42,11 @@ export function parseSensorData(raw: string): ParsedSensorData {
 }
 
 export function exceedsPressureLimit(data: SensorData, limit: number): boolean {
-  return data.pt1 > limit || data.pt2 > limit || data.pt3 > limit || data.pt4 > limit;
+  return (
+    data.pt1 > limit ||
+    data.pt2 > limit ||
+    data.pt3 > limit ||
+    data.pt4 > limit
+  );
 }
+

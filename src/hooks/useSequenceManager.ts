@@ -1,11 +1,20 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import sequencesData from '@/sequences.json';
 
 interface SequenceStep {
   message: string;
   delay: number;
   action?: () => void | Promise<void>;
 }
+
+interface SequenceConfigStep {
+  message: string;
+  delay: number;
+  command: string;
+}
+
+const sequenceConfigs = sequencesData as Record<string, SequenceConfigStep[]>;
 
 export interface SequenceManagerApi {
   sequenceLogs: string[];
@@ -72,50 +81,30 @@ export function useSequenceManager(
       }
       const controller = new AbortController();
       controllerRef.current = controller;
-      switch (sequenceName) {
-        case 'Ignition Sequence':
-          void runSequence(
-            'Ignition Sequence',
-            [
-              {
-                message: 'Sending command: IGNITION_SEQUENCE_START',
-                delay: 500,
-                action: () => sendCommand('SEQ_IGNITION_START'),
-              },
-            ],
-            controller
-          );
-          break;
-        case 'Emergency Shutdown':
-          void runSequence(
-            'Emergency Shutdown',
-            [
-              {
-                message: 'Sending command: EMERGENCY_SHUTDOWN',
-                delay: 100,
-                action: () => sendCommand('SEQ_SHUTDOWN'),
-              },
-            ],
-            controller
-          );
-          break;
-        default:
-          void runSequence(
-            sequenceName,
-            [
-              {
-                message: `Running diagnostics for ${sequenceName}...`,
-                delay: 1000,
-                action: () =>
-                  sendCommand(
-                    `DIAG_${sequenceName.toUpperCase().replace(/\s+/g, '_')}`
-                  ),
-              },
-              { message: 'Diagnostics complete.', delay: 2000 },
-            ],
-            controller
-          );
-          break;
+      const config = sequenceConfigs[sequenceName];
+      if (config) {
+        const steps = config.map((s) => ({
+          message: s.message,
+          delay: s.delay,
+          action: () => sendCommand(s.command),
+        }));
+        void runSequence(sequenceName, steps, controller);
+      } else {
+        void runSequence(
+          sequenceName,
+          [
+            {
+              message: `Running diagnostics for ${sequenceName}...`,
+              delay: 1000,
+              action: () =>
+                sendCommand(
+                  `DIAG_${sequenceName.toUpperCase().replace(/\s+/g, '_')}`
+                ),
+            },
+            { message: 'Diagnostics complete.', delay: 2000 },
+          ],
+          controller
+        );
       }
     },
     [activeSequence, runSequence, sendCommand, toast]

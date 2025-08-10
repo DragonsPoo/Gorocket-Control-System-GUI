@@ -67,7 +67,7 @@ class MainApp {
     this.serialManager.on('data', (data) => {
       this.mainWindow?.webContents.send('serial-data', data);
       if (this.logManager.isLogging()) {
-        const line = this.formatLogLine(data);
+        const line = this.logManager.formatLogLine(data);
         this.logManager.write(line);
       }
     });
@@ -93,17 +93,6 @@ class MainApp {
     });
   }
 
-  private formatLogLine(raw: string): string {
-    const parts = raw.split(',');
-    const parsed: Record<string, string> = {};
-    parts.forEach((p) => {
-      const [k, v] = p.split(':');
-      if (k && v) parsed[k.trim()] = v.trim();
-    });
-    const fields = ['pt1', 'pt2', 'pt3', 'pt4', 'flow1', 'flow2', 'tc1', 'tc2'];
-    const line = `${Date.now()},${fields.map((f) => parsed[f] || '').join(',')}\n`;
-    return line;
-  }
 }
 
 const appInstance = new MainApp();

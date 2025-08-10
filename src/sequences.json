@@ -1,0 +1,17 @@
+{
+  "Ignition Sequence": [
+    {
+      "message": "Sending command: IGNITION_SEQUENCE_START",
+      "delay": 500,
+      "command": "SEQ_IGNITION_START"
+    }
+  ],
+  "Emergency Shutdown": [
+    {
+      "message": "Sending command: EMERGENCY_SHUTDOWN",
+      "delay": 100,
+      "command": "SEQ_SHUTDOWN"
+    }
+  ]
+}
+

@@ -6,7 +6,7 @@ import type { AppConfig } from '@shared/types';
 const valveSchema = z.object({
   id: z.number(),
   name: z.string(),
-  state: z.string(),
+  state: z.enum(['OPEN', 'CLOSED', 'OPENING', 'CLOSING', 'ERROR']),
   lsOpen: z.boolean(),
   lsClosed: z.boolean(),
 });

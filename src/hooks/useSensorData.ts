@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
 import type { SensorData, Valve } from '@shared/types';
-import { parseSensorData, exceedsPressureLimit } from '@/utils/sensorParser';
+import {
+  parseSensorData,
+  exceedsPressureLimit,
+} from '@shared/utils/sensorParser';
 
 export interface SensorDataApi {
   sensorData: SensorData | null;

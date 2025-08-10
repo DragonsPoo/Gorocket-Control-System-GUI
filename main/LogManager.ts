@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { app, BrowserWindow } from 'electron';
+import { parseSensorData } from '@shared/utils/sensorParser';
 
 export class LogManager {
   private stream: fs.WriteStream | null = null;
@@ -8,6 +9,10 @@ export class LogManager {
   start(window?: BrowserWindow | null) {
     const filePath = this.getLogPath();
     try {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
       this.stream = fs.createWriteStream(filePath, { flags: 'w' });
       this.stream.on('error', () => {
         window?.webContents.send('log-creation-failed');
@@ -42,5 +47,22 @@ export class LogManager {
 
   isLogging(): boolean {
     return !!this.stream;
+  }
+
+  formatLogLine(raw: string): string {
+    const { sensor } = parseSensorData(raw);
+    const fields = [
+      'pt1',
+      'pt2',
+      'pt3',
+      'pt4',
+      'flow1',
+      'flow2',
+      'tc1',
+      'tc2',
+    ];
+    return `${Date.now()},${fields
+      .map((f) => (sensor as Record<string, unknown>)[f] ?? '')
+      .join(',')}\n`;
   }
 }
