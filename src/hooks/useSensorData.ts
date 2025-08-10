@@ -11,7 +11,7 @@ export interface SensorDataApi {
 
 export function useSensorData(
   maxPoints: number,
-  pressureLimit: number,
+  pressureLimit: number | null,
   onEmergency: () => void,
   updateValves: (updates: Partial<Record<number, Partial<Valve>>>) => void
 ): SensorDataApi {
@@ -31,7 +31,10 @@ export function useSensorData(
         setSensorData(updated);
         sensorRef.current = updated;
         setChartData((prev) => [...prev, updated].slice(-maxPoints));
-        if (exceedsPressureLimit(updated, pressureLimit)) {
+        if (
+          pressureLimit !== null &&
+          exceedsPressureLimit(updated, pressureLimit)
+        ) {
           onEmergency();
         }
       }
