@@ -31,13 +31,19 @@ export default function Home() {
     resetEmergency,
   } = useSerialManager();
 
-  const { sequenceLogs, activeSequence, handleSequence, addLog, cancelSequence } =
-    useSequenceManager(
-      (cmd) => sendCommand({ type: 'RAW', payload: cmd }),
-      (name) => {
-        if (name === 'Emergency Shutdown') resetEmergency();
-      }
-    );
+  const {
+    sequenceLogs,
+    activeSequence,
+    handleSequence,
+    addLog,
+    cancelSequence,
+    sequences,
+  } = useSequenceManager(
+    (cmd) => sendCommand({ type: 'RAW', payload: cmd }),
+    (name) => {
+      if (name === 'Emergency Shutdown') resetEmergency();
+    }
+  );
 
   const [isLogging, setIsLogging] = useState(false);
 
@@ -141,6 +147,7 @@ export default function Home() {
               onSequence={handleSequence}
               onCancel={cancelSequence}
               activeSequence={activeSequence}
+              sequences={sequences}
             />
             <TerminalPanel logs={sequenceLogs} activeSequence={activeSequence} />
           </div>
