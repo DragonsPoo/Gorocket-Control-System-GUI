@@ -4,7 +4,8 @@
 //  - loop()에서 millis() 1회 캐시
 //  - Serial.setTimeout(20)으로 parseInt 블로킹 최소화
 //  - 압력센서 4샘플 평균
-//  - MAX6675 2채널(tc1, tc2) 지원 추가
+//  - MAX6675 2채널(tc1, tc2) 지원
+//  - 유량 센서 2채널(D2/D3) 지원 + 실제 dt기반 계산 + EWMA 필터
 // =================================================================
 
 #include <SPI.h>
@@ -18,7 +19,7 @@ const int initialClosedAngles[NUM_SERVOS] = {96, 96, 96, 96, 96, 96, 96};
 const int servoPins[NUM_SERVOS]           = {13, 12, 11, 10, 9, 8, 7};
 Servo servos[NUM_SERVOS];
 
-// =========================== 상태 머신(State Machine) ===========================
+// =========================== 상태 머신 ===========================
 enum ServoState { IDLE, MOVING, INCHING_OPEN, INCHING_CLOSED };
 ServoState servoStates[NUM_SERVOS];
 int targetAngles[NUM_SERVOS];
@@ -27,13 +28,13 @@ unsigned long lastMoveTime[NUM_SERVOS];
 #define SERVO_SETTLE_TIME 500 // ms
 #define INCHING_INTERVAL  50  // ms
 
-// =========================== 센서/스위치 설정 ===========================
+// =========================== 압력 센서 ===========================
 #define NUM_PRESSURE_SENSORS 4
 #define MAX_PRESSURE_BAR 100.0
 #define BAR_TO_PSI 14.50377f
 const int pressurePins[NUM_PRESSURE_SENSORS] = {A0, A1, A2, A3};
 
-// --- MAX6675: SO/SCK 공유, CS 2개 (49, 48) ---
+// =========================== MAX6675 ===========================
 #define TC_SO_PIN   50
 #define TC_SCK_PIN  52
 #define TC1_CS_PIN  49
@@ -41,21 +42,44 @@ const int pressurePins[NUM_PRESSURE_SENSORS] = {A0, A1, A2, A3};
 MAX6675 thermocouple1(TC1_CS_PIN, TC_SO_PIN, TC_SCK_PIN);
 MAX6675 thermocouple2(TC2_CS_PIN, TC_SO_PIN, TC_SCK_PIN);
 
+// =========================== 리미트 스위치 ===========================
 const int limitSwitchPins[NUM_SERVOS][2] = {
   { 22, 23 }, { 24, 25 }, { 26, 27 }, { 28, 29 },
   { 30, 31 }, { 32, 33 }, { 34, 35 }
 };
 int currentLimitSwitchStates[NUM_SERVOS][2] = {0};
 
-#define SENSOR_READ_INTERVAL 100
+// =========================== 유량 센서 ===========================
+#define NUM_FLOW_SENSORS 2
+const int flowSensorPins[NUM_FLOW_SENSORS] = {2, 3}; // D2(INT0), D3(INT1)
+
+// ★ 센서 K-factor(펄스/㎥) — 센서 스펙에 맞춰 조정
+const float kFactors[NUM_FLOW_SENSORS] = {450000.0f, 450000.0f};
+
+// ISR 카운터
+volatile unsigned long pulseCounts[NUM_FLOW_SENSORS] = {0, 0};
+
+// 계산 유량(㎥/h) 저장 + 필터
+float flowRates_m3_h[NUM_FLOW_SENSORS] = {0.0f, 0.0f};
+
+// 유량 샘플링 주기 관리(실제 경과시간 사용)
+#define SENSOR_READ_INTERVAL 100  // 호출 주기 목표(ms)
 unsigned long lastSensorReadTime = 0;
+unsigned long lastFlowCalcMs     = 0;
+
+// EWMA 필터 상수 (밀리초). 작을수록 빠르게, 클수록 부드럽게.
+#define FLOW_EWMA_TAU_MS 300
+
+// =========================== ISR ===========================
+void countPulse1() { pulseCounts[0]++; }
+void countPulse2() { pulseCounts[1]++; }
 
 // =================================================================
 
 void setup() {
   Serial.begin(115200);
-  Serial.setTimeout(20); // [최적화] parseInt 블로킹 최소화
-  Serial.println(F("Arduino Mega: Controller (Optimized + Dual MAX6675) Initializing..."));
+  Serial.setTimeout(20);
+  Serial.println(F("Arduino Mega: Controller (Dual MAX6675 + Dual Flow) Initializing..."));
 
   SPI.begin();
   thermocouple1.begin();
@@ -68,11 +92,19 @@ void setup() {
     servoStates[i] = IDLE;
   }
 
+  // 유량 센서 인터럽트
+  pinMode(flowSensorPins[0], INPUT_PULLUP);
+  pinMode(flowSensorPins[1], INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(flowSensorPins[0]), countPulse1, RISING);
+  attachInterrupt(digitalPinToInterrupt(flowSensorPins[1]), countPulse2, RISING);
+
+  lastFlowCalcMs = millis();
+
   Serial.println(F("Initialization complete. System ready."));
 }
 
 void loop() {
-  const unsigned long now = millis(); // [최적화] loop 내 공용 시간값
+  const unsigned long now = millis();
 
   if (Serial.available() > 0) {
     char c = Serial.peek();
@@ -85,26 +117,20 @@ void loop() {
     } else if (c == 'V') {
       handleValveCommand();
     } else {
-      Serial.readStringUntil('\n'); // Unknown command flush
+      Serial.readStringUntil('\n'); // 알 수 없는 라인 플러시
     }
   }
 
-  // 루프당 1회 스위치 스냅샷
   updateLimitSwitchStates();
-
-  // 서보 상태 머신 처리
   manageAllServoMovements(now);
 
   if (now - lastSensorReadTime >= SENSOR_READ_INTERVAL) {
     lastSensorReadTime = now;
-    readAndSendAllSensorData();
+    readAndSendAllSensorData(now);
   }
 }
 
-/**
- * @brief 시리얼 명령을 받아 서보의 목표 상태와 각도를 설정
- *        형식: V,<index>,O|C\n
- */
+// ========================= 시리얼 제어 =========================
 void handleValveCommand() {
   if (Serial.read() != 'V') { while (Serial.available() > 0) Serial.read(); return; }
   if (Serial.read() != ',') { while (Serial.available() > 0) Serial.read(); return; }
@@ -115,7 +141,7 @@ void handleValveCommand() {
     char stateCmd = Serial.read();
     if (servoIndex >= 0 && servoIndex < NUM_SERVOS && servoStates[servoIndex] == IDLE) {
       servos[servoIndex].attach(servoPins[servoIndex], 500, 2500);
-      delay(10); // 짧은 구동 안정화
+      delay(10); // 짧은 안정화
 
       if (stateCmd == 'O') {
         targetAngles[servoIndex] = initialOpenAngles[servoIndex];
@@ -131,19 +157,16 @@ void handleValveCommand() {
   while (Serial.available() > 0 && Serial.read() != '\n');
 }
 
-/**
- * @brief 모든 서보 상태 머신
- */
+// ========================= 서보 상태 머신 =========================
 void manageAllServoMovements(const unsigned long now) {
   for (int i = 0; i < NUM_SERVOS; i++) {
     switch (servoStates[i]) {
       case MOVING: {
         if (now - lastMoveTime[i] > SERVO_SETTLE_TIME) {
-          bool isOpenSwitchPressed   = (currentLimitSwitchStates[i][0] == 1);
-          bool isClosedSwitchPressed = (currentLimitSwitchStates[i][1] == 1);
+          bool isOpen  = (currentLimitSwitchStates[i][0] == 1);
+          bool isClose = (currentLimitSwitchStates[i][1] == 1);
 
-          if ((targetAngles[i] < 50 && isOpenSwitchPressed) ||
-              (targetAngles[i] > 50 && isClosedSwitchPressed)) {
+          if ((targetAngles[i] < 50 && isOpen) || (targetAngles[i] > 50 && isClose)) {
             servoStates[i] = IDLE;
             servos[i].detach();
           } else {
@@ -152,11 +175,9 @@ void manageAllServoMovements(const unsigned long now) {
         }
         break;
       }
-
       case INCHING_OPEN: {
         if (currentLimitSwitchStates[i][0] == 1) {
-          servoStates[i] = IDLE;
-          servos[i].detach();
+          servoStates[i] = IDLE; servos[i].detach();
         } else if (now - lastMoveTime[i] > INCHING_INTERVAL) {
           targetAngles[i] = max(0, targetAngles[i] - 1);
           servos[i].write(targetAngles[i]);
@@ -164,11 +185,9 @@ void manageAllServoMovements(const unsigned long now) {
         }
         break;
       }
-
       case INCHING_CLOSED: {
         if (currentLimitSwitchStates[i][1] == 1) {
-          servoStates[i] = IDLE;
-          servos[i].detach();
+          servoStates[i] = IDLE; servos[i].detach();
         } else if (now - lastMoveTime[i] > INCHING_INTERVAL) {
           targetAngles[i] = min(180, targetAngles[i] + 1);
           servos[i].write(targetAngles[i]);
@@ -176,17 +195,13 @@ void manageAllServoMovements(const unsigned long now) {
         }
         break;
       }
-
       case IDLE:
-      default:
-        break;
+      default: break;
     }
   }
 }
 
-/**
- * @brief 리미트 스위치 상태 스냅샷 (루프당 1회)
- */
+// ========================= 스위치 스냅샷 =========================
 void updateLimitSwitchStates() {
   for (int i = 0; i < NUM_SERVOS; i++) {
     currentLimitSwitchStates[i][0] = !digitalRead(limitSwitchPins[i][0]);
@@ -194,49 +209,73 @@ void updateLimitSwitchStates() {
   }
 }
 
-/**
- * @brief 센서 값 전송 (압력 4채널 + TC 2채널 + 스위치 상태)
- *        출력 예: pt1:123.45,pt2:...,pt3:...,pt4:...,tc1:300.12,tc2:299.98,V0_LS_OPEN:0,...\n
- */
-void readAndSendAllSensorData() {
-  // 압력: 4샘플 평균으로 노이즈 완화
-  for (int i = 0; i < NUM_PRESSURE_SENSORS; i++) {
-    long sum = 0;
-    for (int k = 0; k < 4; k++) sum += analogRead(pressurePins[i]);
-    int adcValue = (int)(sum >> 2); // 평균
-    float pressurePsi = (float)adcValue / 1023.0 * MAX_PRESSURE_BAR * BAR_TO_PSI;
-    Serial.print("pt"); Serial.print(i + 1); Serial.print(":"); Serial.print(pressurePsi, 2); Serial.print(",");
+// ========================= 센서 전송 =========================
+void readAndSendAllSensorData(const unsigned long now) {
+  // ---- 유량: 실제 dt 기반 계산 + EWMA 필터 ----
+  const unsigned long dtMs = now - lastFlowCalcMs;
+  lastFlowCalcMs = now;
+  const float dtSec = (dtMs > 0) ? (dtMs / 1000.0f) : (SENSOR_READ_INTERVAL / 1000.0f);
+  const float alpha = dtMs / float(FLOW_EWMA_TAU_MS + dtMs); // 0~1
+
+  unsigned long counts[NUM_FLOW_SENSORS];
+  noInterrupts();
+  for (int i = 0; i < NUM_FLOW_SENSORS; i++) {
+    counts[i] = pulseCounts[i];
+    pulseCounts[i] = 0;
+  }
+  interrupts();
+
+  for (int i = 0; i < NUM_FLOW_SENSORS; i++) {
+    float freq = (dtSec > 0) ? (counts[i] / dtSec) : 0.0f; // Hz
+    float inst_m3_h = (kFactors[i] > 0.0f) ? (3600.0f * (freq / kFactors[i])) : 0.0f;
+    // EWMA 필터로 부드럽게
+    flowRates_m3_h[i] = flowRates_m3_h[i] + alpha * (inst_m3_h - flowRates_m3_h[i]);
   }
 
-  // MAX6675 #1
+  // ---- 압력: 4샘플 평균 ----
+  for (int i = 0; i < NUM_PRESSURE_SENSORS; i++) {
+    long sum = 0; for (int k = 0; k < 4; k++) sum += analogRead(pressurePins[i]);
+    int adcValue = (int)(sum >> 2);
+    float pressurePsi = (float)adcValue / 1023.0f * MAX_PRESSURE_BAR * BAR_TO_PSI;
+    Serial.print(F("pt")); Serial.print(i + 1); Serial.print(':'); Serial.print(pressurePsi, 2); Serial.print(',');
+  }
+
+  // ---- TC1 ----
   int status1 = thermocouple1.read();
-  Serial.print("tc1:");
+  Serial.print(F("tc1:"));
   if (status1 == STATUS_OK) {
-    float tempK1 = thermocouple1.getCelsius() + 273.15;
+    float tempK1 = thermocouple1.getCelsius() + 273.15f;
     Serial.print(tempK1, 2);
   } else if (status1 == STATUS_OPEN) {
-    Serial.print("OPEN_ERR");
+    Serial.print(F("OPEN_ERR"));
   } else {
-    Serial.print("COM_ERR");
+    Serial.print(F("COM_ERR"));
   }
-  Serial.print(",");
+  Serial.print(',');
 
-  // MAX6675 #2
+  // ---- TC2 ----
   int status2 = thermocouple2.read();
-  Serial.print("tc2:");
+  Serial.print(F("tc2:"));
   if (status2 == STATUS_OK) {
-    float tempK2 = thermocouple2.getCelsius() + 273.15;
+    float tempK2 = thermocouple2.getCelsius() + 273.15f;
     Serial.print(tempK2, 2);
   } else if (status2 == STATUS_OPEN) {
-    Serial.print("OPEN_ERR");
+    Serial.print(F("OPEN_ERR"));
   } else {
-    Serial.print("COM_ERR");
+    Serial.print(F("COM_ERR"));
   }
 
-  // 각 밸브 리미트 스위치 상태
+  // ---- 유량 출력 (m3/h, L/h) ----
+  for (int i = 0; i < NUM_FLOW_SENSORS; i++) {
+    float Lh = flowRates_m3_h[i] * 1000.0f;
+    Serial.print(F(",fm")); Serial.print(i + 1); Serial.print(F("_m3h:")); Serial.print(flowRates_m3_h[i], 4);
+    Serial.print(F(",fm")); Serial.print(i + 1); Serial.print(F("_Lh:"));  Serial.print(Lh, 1);
+  }
+
+  // ---- 리미트 스위치 상태 ----
   for (int i = 0; i < NUM_SERVOS; i++) {
-    Serial.print(",V"); Serial.print(i); Serial.print("_LS_OPEN:");   Serial.print(currentLimitSwitchStates[i][0]);
-    Serial.print(",V"); Serial.print(i); Serial.print("_LS_CLOSED:"); Serial.print(currentLimitSwitchStates[i][1]);
+    Serial.print(F(",V")); Serial.print(i); Serial.print(F("_LS_OPEN:"));   Serial.print(currentLimitSwitchStates[i][0]);
+    Serial.print(F(",V")); Serial.print(i); Serial.print(F("_LS_CLOSED:")); Serial.print(currentLimitSwitchStates[i][1]);
   }
   Serial.println();
 }
