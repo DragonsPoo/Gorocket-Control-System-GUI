@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { PlayCircle, ShieldAlert, Zap, Wind } from 'lucide-react';
+import { PlayCircle, ShieldAlert, Zap, Wind, Gauge, OctagonX } from 'lucide-react';
 interface SequencePanelProps {
   onSequence: (sequenceName: string) => void;
   onCancel: () => void;
@@ -22,13 +22,20 @@ interface SequencePanelProps {
 
 const sequenceMeta: Record<
   string,
-  { icon: React.ReactElement; variant: 'default' | 'outline' | 'destructive' }
+  { icon: React.ReactElement; variant: 'default' | 'outline' | 'destructive' | 'secondary' }
 > = {
-  'Pre-launch Check': { icon: <PlayCircle />, variant: 'outline' },
-  'Ignition Sequence': { icon: <Zap />, variant: 'default' },
+  'Tank Pressurization': { icon: <Gauge />, variant: 'outline' },
+  Ignition: { icon: <Zap />, variant: 'default' },
+  Shutdown: { icon: <OctagonX />, variant: 'secondary' },
   'System Purge': { icon: <Wind />, variant: 'outline' },
   'Emergency Shutdown': { icon: <ShieldAlert />, variant: 'destructive' },
 };
+
+const sequencesRequiringConfirmation = [
+  'Tank Pressurization',
+  'Ignition',
+  'System Purge',
+];
 
 const SequencePanel: React.FC<SequencePanelProps> = ({
   onSequence,
@@ -48,38 +55,46 @@ const SequencePanel: React.FC<SequencePanelProps> = ({
             icon: <PlayCircle />,
             variant: 'outline' as const,
           };
-          return name === 'Ignition Sequence' ? (
-            <AlertDialog key={name}>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant={meta.variant}
-                  className="w-full justify-start text-base py-6"
-                  disabled={disabled || !!activeSequence}
-                >
-                  {React.cloneElement(meta.icon, { className: 'w-5 h-5 mr-3' })}
-                  {name}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogTitle>경고: 점화 시퀀스</AlertDialogTitle>
-                <AlertDialogDescription>
-                  점화 시퀀스를 시작하시겠습니까? 이 동작은 되돌릴 수 없습니다.
-                </AlertDialogDescription>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>취소</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => onSequence(name)}>
-                    점화 시작
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          ) : (
+
+          const requiresConfirmation = sequencesRequiringConfirmation.includes(name);
+
+          if (requiresConfirmation) {
+            return (
+              <AlertDialog key={name}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant={meta.variant}
+                    className="w-full justify-start text-base py-6"
+                    disabled={disabled || !!activeSequence}
+                  >
+                    {React.cloneElement(meta.icon, { className: 'w-5 h-5 mr-3' })}
+                    {name}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogTitle>경고: 시퀀스 시작</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    `{name}` 시퀀스를 시작하시겠습니까? 이 동작은 되돌릴 수 없습니다.
+                  </AlertDialogDescription>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>취소</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onSequence(name)}>
+                      시작
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            );
+          }
+
+          return (
             <Button
               key={name}
               variant={meta.variant}
               className="w-full justify-start text-base py-6"
               onClick={() => onSequence(name)}
               disabled={
+                // Emergency shutdown should be available even if another sequence is running
                 name === 'Emergency Shutdown'
                   ? disabled
                   : disabled || !!activeSequence
@@ -96,7 +111,7 @@ const SequencePanel: React.FC<SequencePanelProps> = ({
           onClick={onCancel}
           disabled={!activeSequence}
         >
-          Cancel
+          Cancel Sequence
         </Button>
       </CardContent>
     </Card>
