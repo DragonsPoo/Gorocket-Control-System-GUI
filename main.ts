@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
+import serve from 'electron-serve';
 import isDev from 'electron-is-dev';
+
 import { ConfigManager } from './main/ConfigManager';
 import { SerialManager } from './main/SerialManager';
 import { LogManager } from './main/LogManager';
@@ -45,13 +47,15 @@ class MainApp {
         preload: path.join(__dirname, 'preload.js'),
       },
     });
-    const startUrl = isDev
-      ? 'http://localhost:9002'
-      : `file://${path.join(__dirname, '../out/index.html')}`;
-    this.mainWindow.loadURL(startUrl);
+
     if (isDev) {
+      this.mainWindow.loadURL('http://localhost:9002');
       this.mainWindow.webContents.openDevTools();
+    } else {
+      const loadURL = serve({ directory: 'out' });
+      loadURL(this.mainWindow);
     }
+
     this.mainWindow.on('closed', () => (this.mainWindow = null));
   }
 
