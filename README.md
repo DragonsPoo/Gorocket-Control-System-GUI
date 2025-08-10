@@ -1,4 +1,5 @@
-<img width="2879" height="1707" alt="image" src="https://github.com/user-attachments/assets/c90cc718-bac5-4cd8-a8b0-35ad40c5e9c1" />
+<img width="2879" height="1707" alt="image" src="https://github.com/user-attachments/assets/9ed51db3-f4d9-49a1-b5fd-7456a9212430" />
+
 
 # 로켓 엔진 테스트용 제어 및 모니터링 GUI
 
