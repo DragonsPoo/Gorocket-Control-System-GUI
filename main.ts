@@ -18,6 +18,8 @@ class MainApp {
       await this.configManager.load(configPath);
     } catch (err) {
       dialog.showErrorBox('Configuration Error', 'Failed to load configuration file.');
+      app.quit();
+      return;
     }
     await app.whenReady();
     this.createWindow();

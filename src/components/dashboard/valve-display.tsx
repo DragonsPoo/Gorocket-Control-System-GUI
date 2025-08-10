@@ -8,7 +8,10 @@ import { DashboardItem } from './dashboard-item';
 
 interface ValveDisplayProps {
   valve: Valve;
-  onValveChange: (valveId: number, targetState: 'OPEN' | 'CLOSED') => void;
+  onValveChange: (
+    valveId: number,
+    targetState: 'OPEN' | 'CLOSED'
+  ) => Promise<void>;
 }
 
 const ValveIcon: React.FC<{ state: ValveState }> = ({ state }) => {
@@ -79,7 +82,9 @@ const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChan
         <Button
           size="sm"
           className="flex-1 h-8 text-xs"
-          onClick={() => onValveChange(valve.id, 'OPEN')}
+          onClick={() => {
+            void onValveChange(valve.id, 'OPEN');
+          }}
           disabled={isTransitioning || valve.state === 'OPEN'}
         >
           Open
@@ -88,7 +93,9 @@ const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChan
           size="sm"
           className="flex-1 h-8 text-xs"
           variant="outline"
-          onClick={() => onValveChange(valve.id, 'CLOSED')}
+          onClick={() => {
+            void onValveChange(valve.id, 'CLOSED');
+          }}
           disabled={isTransitioning || valve.state === 'CLOSED'}
         >
           Close

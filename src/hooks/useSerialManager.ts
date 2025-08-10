@@ -51,8 +51,8 @@ export interface SerialManagerApi {
   selectedPort: string;
   setSelectedPort: (port: string) => void;
   handleConnect: () => Promise<void>;
-  sendCommand: (cmd: SerialCommand) => Promise<void>;
-  handleValveChange: (valveId: number, targetState: 'OPEN' | 'CLOSED') => void;
+  sendCommand: (cmd: SerialCommand) => Promise<boolean>;
+  handleValveChange: (valveId: number, targetState: 'OPEN' | 'CLOSED') => Promise<void>;
   setLogger: (logger: (msg: string) => void) => void;
   setSequenceHandler: (handler: (name: string) => void) => void;
 }
@@ -74,7 +74,7 @@ export function useSerialManager(): SerialManagerApi {
     async (cmd: SerialCommand) => {
       if (state.connectionStatus !== 'connected') {
         toast({ title: 'Not Connected', description: 'Must be connected to send commands.', variant: 'destructive' });
-        return;
+        return false;
       }
       const success = await window.electronAPI.sendToSerial(cmd);
       if (!success) {
@@ -83,6 +83,7 @@ export function useSerialManager(): SerialManagerApi {
       } else {
         loggerRef.current(`Sent: ${JSON.stringify(cmd)}`);
       }
+      return success;
     },
     [state.connectionStatus, toast]
   );
@@ -95,7 +96,14 @@ export function useSerialManager(): SerialManagerApi {
   const updateValves = useCallback(
     (updates: Partial<Record<number, Partial<Valve>>>) => {
       setValves((prev: Valve[]) =>
-        prev.map((v: Valve) => (updates[v.id] ? { ...v, ...updates[v.id]! } : v))
+        prev.map((v: Valve) => {
+          const upd = updates[v.id];
+          if (!upd) return v;
+          const merged: Valve = { ...v, ...upd };
+          if (upd.lsOpen) merged.state = 'OPEN';
+          if (upd.lsClosed) merged.state = 'CLOSED';
+          return merged;
+        })
       );
     },
     [setValves]
@@ -103,7 +111,7 @@ export function useSerialManager(): SerialManagerApi {
 
   const { sensorData, chartData, handleSerialMessage, reset } = useSensorData(
     state.appConfig?.maxChartDataPoints ?? 100,
-    state.appConfig?.pressureLimit ?? 0,
+    state.appConfig?.pressureLimit ?? null,
     handleEmergency,
     updateValves
   );
@@ -122,7 +130,7 @@ export function useSerialManager(): SerialManagerApi {
         const message = err instanceof Error ? err.message : 'An unknown error occurred.';
         toast({
           title: 'Initialization Error',
-          description: `Failed to initialize application: ${message}`,
+          description: `Failed to load configuration (${message}). Emergency shutdown disabled.`,
           variant: 'destructive',
         });
       }
