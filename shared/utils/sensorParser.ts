@@ -3,23 +3,28 @@ import type { SensorData, Valve } from '@shared/types';
 export interface ParsedSensorData {
   sensor: Partial<SensorData>;
   valves: Partial<Record<number, Partial<Valve>>>;
+  errors: string[];
 }
 
 export function parseSensorData(raw: string): ParsedSensorData {
   const parts = raw.split(',');
   const sensor: Partial<SensorData> = {};
   const valves: Partial<Record<number, Partial<Valve>>> = {};
+  const errors: string[] = [];
 
   if (parts.length === 0) {
-    // malformed data
-    console.error(`Invalid sensor data: ${raw}`);
-    return { sensor, valves };
+    const msg = `Invalid sensor data: ${raw}`;
+    errors.push(msg);
+    console.error(msg);
+    return { sensor, valves, errors };
   }
 
   parts.forEach((part) => {
     const [key, rawValue] = part.split(':');
     if (!key || rawValue === undefined) {
-      console.error(`Malformed sensor data segment: ${part}`);
+      const msg = `Malformed sensor data segment: ${part}`;
+      errors.push(msg);
+      console.error(msg);
       return;
     }
     const value = rawValue.trim();
@@ -43,13 +48,15 @@ export function parseSensorData(raw: string): ParsedSensorData {
 
     const num = parseFloat(value);
     if (Number.isNaN(num)) {
-      console.error(`Invalid numeric value for ${key}: ${value}`);
+      const msg = `Invalid numeric value for ${key}: ${value}`;
+      errors.push(msg);
+      console.error(msg);
       return;
     }
     (sensor as Record<string, number>)[key] = num;
   });
 
-  return { sensor, valves };
+  return { sensor, valves, errors };
 }
 
 export function exceedsPressureLimit(data: SensorData, limit: number): boolean {

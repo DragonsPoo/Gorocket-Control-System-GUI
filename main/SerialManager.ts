@@ -19,6 +19,7 @@ export declare interface SerialManager {
 export class SerialManager extends EventEmitter {
   private port: SerialPort | null = null;
   private parser: ReadlineParser | null = null;
+  private manualClose = false;
 
   async listPorts(): Promise<string[]> {
     const ports = await SerialPort.list();
@@ -30,6 +31,7 @@ export class SerialManager extends EventEmitter {
       await this.disconnect();
     }
     let success = false;
+    this.manualClose = false;
     try {
       this.port = new SerialPort({ path, baudRate });
       this.parser = this.port.pipe(new ReadlineParser({ delimiter: '\n' }));
@@ -78,9 +80,11 @@ export class SerialManager extends EventEmitter {
         }, 3000);
       });
 
-      this.port.on('close', () =>
-        this.emit('error', new Error('Port closed unexpectedly'))
-      );
+      this.port.on('close', () => {
+        if (!this.manualClose) {
+          this.emit('error', new Error('Port closed unexpectedly'));
+        }
+      });
       this.parser.on('data', (d: string) => this.emit('data', d));
       this.port.on('error', (e) => this.emit('error', e));
       success = true;
@@ -107,6 +111,7 @@ export class SerialManager extends EventEmitter {
 
   async disconnect(): Promise<boolean> {
     if (!this.port) return false;
+    this.manualClose = true;
     return new Promise((resolve) => {
       const currentPort = this.port!;
       currentPort.close((err) => {
@@ -119,6 +124,7 @@ export class SerialManager extends EventEmitter {
         currentPort.removeAllListeners();
         this.parser?.removeAllListeners();
         this.parser = null;
+        this.manualClose = false;
       });
       this.port = null;
     });

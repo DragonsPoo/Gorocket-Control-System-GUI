@@ -22,6 +22,7 @@ export interface SequenceManagerApi {
   handleSequence: (sequenceName: string) => void;
   addLog: (message: string) => void;
   cancelSequence: () => void;
+  sequences: string[];
 }
 
 const delay = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -141,5 +142,6 @@ export function useSequenceManager(
     }
   }, [toast]);
 
-  return { sequenceLogs, activeSequence, handleSequence, addLog, cancelSequence };
+  const sequences = Object.keys(sequenceConfigs);
+  return { sequenceLogs, activeSequence, handleSequence, addLog, cancelSequence, sequences };
 }

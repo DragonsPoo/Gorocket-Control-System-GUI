@@ -50,7 +50,10 @@ export class LogManager {
   }
 
   formatLogLine(raw: string): string {
-    const { sensor, valves } = parseSensorData(raw);
+    const { sensor, valves, errors } = parseSensorData(raw);
+    if (errors.length) {
+      errors.forEach((e) => this.write(`# ${e}\n`));
+    }
     const fields = [
       'pt1',
       'pt2',

@@ -12,12 +12,11 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { PlayCircle, ShieldAlert, Zap, Wind } from 'lucide-react';
-import sequencesData from '@/sequences.json';
-
 interface SequencePanelProps {
   onSequence: (sequenceName: string) => void;
   onCancel: () => void;
   activeSequence: string | null;
+  sequences: string[];
 }
 
 const sequenceMeta: Record<
@@ -30,12 +29,11 @@ const sequenceMeta: Record<
   'Emergency Shutdown': { icon: <ShieldAlert />, variant: 'destructive' },
 };
 
-const sequenceNames = Object.keys(sequencesData);
-
 const SequencePanel: React.FC<SequencePanelProps> = ({
   onSequence,
   onCancel,
   activeSequence,
+  sequences,
 }) => {
   return (
     <Card className="bg-card/50 border-border/60">
@@ -43,7 +41,7 @@ const SequencePanel: React.FC<SequencePanelProps> = ({
         <CardTitle>Control Sequences</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {sequenceNames.map((name) => {
+        {sequences.map((name) => {
           const meta = sequenceMeta[name] ?? {
             icon: <PlayCircle />,
             variant: 'outline' as const,
@@ -92,7 +90,7 @@ const SequencePanel: React.FC<SequencePanelProps> = ({
           onClick={onCancel}
           disabled={!activeSequence}
         >
-          Cancel Sequence
+          Cancel
         </Button>
       </CardContent>
     </Card>
