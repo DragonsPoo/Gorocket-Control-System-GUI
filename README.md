@@ -98,7 +98,11 @@
 │   ├── app/               # 웹 페이지와 레이아웃 정의
 │   ├── components/        # 버튼, 차트 등 재사용 가능한 UI 조각들
 │   ├── hooks/             # 데이터 관리 등 반복되는 로직을 모아둔 훅
-│   └── types/             # 프로젝트 전체에서 사용하는 데이터 타입 정의
+│   ├── lib/               # 프론트엔드 전용 유틸리티 함수
+│   └── sequences.json     # 자동 테스트 시퀀스 설정 파일
+├── shared/                # 프론트엔드와 백엔드에서 공유하는 타입 및 유틸
+│   ├── types/             # 전역 타입 정의
+│   └── utils/             # 공용 유틸리티 함수
 ├── docs/                  # 프로젝트 관련 참고 문서나 설계 자료
 ├── main.ts                # Electron 앱이 처음 시작될 때 실행되는 메인 프로세스 진입점
 ├── preload.ts             # UI(Renderer)와 메인 프로세스를 안전하게 연결하는 다리 역할
@@ -176,40 +180,34 @@ npm run build
 
 자동 테스트 시퀀스는 미리 정해진 순서에 따라 밸브를 제어하고 대기하는 작업들의 모음입니다. 이 시퀀스는 사용자의 필요에 맞게 직접 수정할 수 있습니다.
 
-시퀀스 로직은 프론트엔드 코드에 정의되어 있으며, 핵심 파일은 `src/hooks/useSequence.ts` 입니다.
+시퀀스 로직은 `src/hooks/useSequenceManager.ts`와 `src/sequences.json`에 정의되어 있습니다. JSON 파일에 시퀀스 단계를 추가하거나 수정하면 UI에도 자동으로 반영됩니다.
 
-파일을 열어보면 `startSequence` 함수 내부에 다음과 유사한 구조를 찾을 수 있습니다.
+`src/sequences.json` 예시는 다음과 같습니다.
 
-```typescript
-// src/hooks/useSequence.ts 예시
-
-const startSequence = async (sequenceName: string) => {
-  switch (sequenceName) {
-    case 'purge':
-      await runCommand('VALVE_OPEN', 'N2O Purge');
-      await delay(5000); // 5초 대기
-      await runCommand('VALVE_CLOSE', 'N2O Purge');
-      break;
-
-    case 'main_combustion':
-      await runCommand('VALVE_OPEN', 'N2O Main');
-      await delay(1000);
-      await runCommand('VALVE_OPEN', 'Ethanol Main');
-      await delay(10000); // 10초 연소
-      await runCommand('VALVE_CLOSE', 'N2O Main');
-      await runCommand('VALVE_CLOSE', 'Ethanol Main');
-      break;
-
-    // 다른 시퀀스 추가 가능
-  }
-};
+```json
+{
+  "Ignition Sequence": [
+    {
+      "message": "Opening valves 1 and 2",
+      "delay": 500,
+      "commands": ["V,1,O", "V,2,O"]
+    }
+  ],
+  "Emergency Shutdown": [
+    {
+      "message": "Emergency shutdown: close all valves",
+      "delay": 100,
+      "commands": ["V,0,C", "V,1,C", "V,2,C", "V,3,C", "V,4,C", "V,5,C", "V,6,C"]
+    }
+  ]
+}
 ```
 
 ### 조정 방법
 
-- **밸브 제어**: `runCommand('VALVE_OPEN', '밸브이름')` 또는 `runCommand('VALVE_CLOSE', '밸브이름')` 형식으로 원하는 밸브를 제어하는 코드를 추가/수정합니다. '밸브이름'은 `config.json`에 정의된 이름을 사용해야 합니다.
-- **대기 시간**: `await delay(밀리초)` 형식으로 원하는 시간만큼 대기하는 코드를 추가/수정합니다. (e.g., 3초 대기는 `await delay(3000)`)
-- **새로운 시퀀스 추가**: `case '새로운시퀀스이름':` 블록을 추가하여 자신만의 시퀀스를 만들 수 있습니다. 만든 후에는 `src/components/SequenceControls.tsx` 파일에 새로운 버튼을 추가하여 UI에 표시해야 합니다.
+- **새 시퀀스 추가**: `src/sequences.json`에 새 키와 단계를 추가합니다. 각 단계는 `message`(로그 메시지), `delay`(밀리초), `commands`(시리얼로 보낼 명령 문자열 배열)로 구성됩니다.
+- **명령 수정**: `commands` 배열에 `"V,서보번호,O"` 또는 `"V,서보번호,C"`처럼 아두이노에 보낼 제어 명령을 원하는 대로 작성합니다.
+- **UI 커스터마이즈(선택 사항)**: 시퀀스 버튼의 아이콘이나 색을 바꾸고 싶다면 `src/components/dashboard/sequence-panel.tsx`의 `sequenceMeta` 객체를 수정하세요.
 
 ---
 
