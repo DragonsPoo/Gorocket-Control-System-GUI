@@ -43,6 +43,7 @@ function reducer(state: SerialState, action: Action): SerialState {
 }
 
 export interface SerialManagerApi {
+  appConfig: AppConfig | null;
   sensorData: SensorData | null;
   chartData: SensorData[];
   valves: Valve[];
@@ -203,6 +204,7 @@ export function useSerialManager(): SerialManagerApi {
   }, []);
 
   return {
+    appConfig: state.appConfig,
     sensorData,
     chartData,
     valves,

@@ -1,28 +1,75 @@
 {
-  "Pre-launch Check": [
+  "Tank Pressurization": [
     {
-      "message": "Opening valve 0",
+      "message": "Opening Pressurant Fill valve to pressurize tanks.",
       "delay": 500,
-      "commands": ["V,0,O"]
+      "commands": ["V,4,O"]
+    },
+    {
+      "message": "Waiting for tanks to reach pressure.",
+      "delay": 5000,
+      "commands": []
+    },
+    {
+      "message": "Closing Pressurant Fill valve.",
+      "delay": 500,
+      "commands": ["V,4,C"]
     }
   ],
-  "Ignition Sequence": [
+  "Ignition": [
     {
-      "message": "Opening valves 1 and 2",
+      "message": "Opening Igniter Fuel valve.",
       "delay": 500,
-      "commands": ["V,1,O", "V,2,O"]
+      "commands": ["V,6,O"]
+    },
+    {
+      "message": "Waiting for igniter fuel flow.",
+      "delay": 1000,
+      "commands": []
+    },
+    {
+      "message": "Opening Main valves for ignition.",
+      "delay": 500,
+      "commands": ["V,0,O", "V,1,O"]
+    }
+  ],
+  "Shutdown": [
+    {
+      "message": "Closing Main and Igniter valves.",
+      "delay": 500,
+      "commands": ["V,0,C", "V,1,C", "V,6,C"]
     }
   ],
   "System Purge": [
     {
-      "message": "Closing all valves",
+      "message": "Purging fuel and oxidizer lines.",
       "delay": 500,
-      "commands": ["V,0,C", "V,1,C", "V,2,C", "V,3,C", "V,4,C", "V,5,C", "V,6,C"]
+      "commands": ["V,2,O", "V,3,O"]
+    },
+    {
+      "message": "Waiting for lines to purge.",
+      "delay": 3000,
+      "commands": []
+    },
+    {
+      "message": "Opening System Vent.",
+      "delay": 500,
+      "commands": ["V,5,O"]
+    },
+    {
+      "message": "Waiting for system to vent.",
+      "delay": 2000,
+      "commands": []
+    },
+    {
+      "message": "Closing all purge and vent valves.",
+      "delay": 500,
+      "commands": ["V,2,C", "V,3,C", "V,5,C"]
     }
   ],
   "Emergency Shutdown": [
     {
-      "message": "Emergency shutdown: close all valves",
+      "message": "EMERGENCY SHUTDOWN: Closing all valves immediately.",
       "delay": 100,
       "commands": ["V,0,C", "V,1,C", "V,2,C", "V,3,C", "V,4,C", "V,5,C", "V,6,C"]
     }

@@ -15,6 +15,7 @@ import { useSequenceManager } from '@/hooks/useSequenceManager';
 export default function Home() {
   const { toast } = useToast();
   const {
+    appConfig,
     sensorData,
     chartData,
     valves,
@@ -39,12 +40,14 @@ export default function Home() {
     cancelSequence,
     sequences,
     sequencesValid,
-  } = useSequenceManager(
-    (cmd) => sendCommand({ type: 'RAW', payload: cmd }),
-    (name) => {
+  } = useSequenceManager({
+    valves,
+    appConfig,
+    sendCommand: (cmd) => sendCommand({ type: 'RAW', payload: cmd }),
+    onSequenceComplete: (name) => {
       if (name === 'Emergency Shutdown') resetEmergency();
-    }
-  );
+    },
+  });
 
   const [isLogging, setIsLogging] = useState(false);
 
