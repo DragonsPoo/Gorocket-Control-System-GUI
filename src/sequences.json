@@ -1,9 +1,23 @@
 {
+  "Pre-launch Check": [
+    {
+      "message": "Sending command: PRELAUNCH_CHECK_START",
+      "delay": 500,
+      "command": "SEQ_PRELAUNCH_START"
+    }
+  ],
   "Ignition Sequence": [
     {
       "message": "Sending command: IGNITION_SEQUENCE_START",
       "delay": 500,
       "command": "SEQ_IGNITION_START"
+    }
+  ],
+  "System Purge": [
+    {
+      "message": "Sending command: SYSTEM_PURGE",
+      "delay": 500,
+      "command": "SEQ_PURGE"
     }
   ],
   "Emergency Shutdown": [

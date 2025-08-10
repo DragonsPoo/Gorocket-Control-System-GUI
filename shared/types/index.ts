@@ -30,7 +30,8 @@ export type ValveState =
   | 'CLOSED'
   | 'OPENING'
   | 'CLOSING'
-  | 'ERROR';
+  | 'ERROR'
+  | 'STUCK';
 
 export interface Valve {
   id: number;
