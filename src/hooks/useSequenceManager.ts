@@ -11,7 +11,7 @@ interface SequenceStep {
 interface SequenceConfigStep {
   message: string;
   delay: number;
-  command: string;
+  commands: string[];
 }
 
 const sequenceConfigs = sequencesData as Record<string, SequenceConfigStep[]>;
@@ -98,11 +98,17 @@ export function useSequenceManager(
       controllerRef.current = controller;
       const config = sequenceConfigs[sequenceName];
       if (config) {
-        const steps = config.map((s) => ({
-          message: s.message,
-          delay: s.delay,
-          action: () => sendCommand(s.command),
-        }));
+          const steps = config.map((s) => ({
+            message: s.message,
+            delay: s.delay,
+            action: async () => {
+              for (const cmd of s.commands) {
+                const ok = await sendCommand(cmd);
+                if (!ok) return false;
+              }
+              return true;
+            },
+          }));
         void runSequence(sequenceName, steps, controller);
       } else {
         void runSequence(
