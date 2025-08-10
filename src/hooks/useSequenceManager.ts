@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import type { SequenceConfig } from '@shared/types';
+import type { SequenceConfig, Valve, AppConfig } from '@shared/types';
 
 interface SequenceStep {
   message: string;
@@ -18,6 +18,13 @@ export interface SequenceManagerApi {
   sequencesValid: boolean;
 }
 
+interface UseSequenceManagerOptions {
+  valves: Valve[];
+  appConfig: AppConfig | null;
+  sendCommand: (cmd: string) => Promise<boolean>;
+  onSequenceComplete?: (name: string) => void;
+}
+
 const delay = (ms: number, signal: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {
     const id = setTimeout(resolve, ms);
@@ -27,10 +34,12 @@ const delay = (ms: number, signal: AbortSignal): Promise<void> =>
     });
   });
 
-export function useSequenceManager(
-  sendCommand: (cmd: string) => Promise<boolean>,
-  onSequenceComplete?: (name: string) => void
-): SequenceManagerApi {
+export function useSequenceManager({
+  valves,
+  appConfig,
+  sendCommand,
+  onSequenceComplete,
+}: UseSequenceManagerOptions): SequenceManagerApi {
   const { toast } = useToast();
   const [sequenceLogs, setSequenceLogs] = useState<string[]>(['Awaiting sequence data...']);
   const [activeSequence, setActiveSequence] = useState<string | null>(null);
@@ -79,6 +88,43 @@ export function useSequenceManager(
     return cleanup;
   }, [addLog, toast]);
 
+  const waitForValveFeedback = useCallback(
+    (valveIndex: number, targetState: 'OPEN' | 'CLOSED', controller: AbortController) => {
+      return new Promise<void>((resolve, reject) => {
+        if (!appConfig?.valveFeedbackTimeout) {
+          addLog('Warning: valveFeedbackTimeout not configured. Skipping feedback check.');
+          resolve();
+          return;
+        }
+
+        const valveId = valveIndex + 1;
+
+        const timeoutId = setTimeout(() => {
+          clearInterval(intervalId);
+          reject(new Error(`Timeout: Valve ${valveIndex} (${targetState}) did not provide feedback.`));
+        }, appConfig.valveFeedbackTimeout);
+
+        const intervalId = setInterval(() => {
+          const valve = valves.find((v) => v.id === valveId);
+          const feedbackReceived = targetState === 'OPEN' ? valve?.lsOpen : valve?.lsClosed;
+
+          if (feedbackReceived) {
+            clearTimeout(timeoutId);
+            clearInterval(intervalId);
+            resolve();
+          }
+        }, 100); // Check every 100ms
+
+        controller.signal.addEventListener('abort', () => {
+          clearTimeout(timeoutId);
+          clearInterval(intervalId);
+          reject(new Error('aborted'));
+        });
+      });
+    },
+    [valves, appConfig, addLog]
+  );
+
   const runSequence = useCallback(
     async (name: string, steps: SequenceStep[], controller: AbortController) => {
       setActiveSequence(name);
@@ -91,8 +137,8 @@ export function useSequenceManager(
           addLog(step.message);
           const result = await step.action?.();
           if (result === false) {
-            addLog('Command failed. Aborting sequence.');
-            throw new Error('Command failed');
+            addLog('Action failed. Aborting sequence.');
+            throw new Error('Action failed');
           }
         }
         addLog(`Sequence ${name} complete.`);
@@ -123,7 +169,6 @@ export function useSequenceManager(
 
       if (sequenceName === 'Emergency Shutdown' && activeSequence) {
         controllerRef.current?.abort();
-        // Still run the emergency shutdown sequence itself
       } else if (activeSequence) {
         toast({
           title: 'Sequence in Progress',
@@ -133,8 +178,8 @@ export function useSequenceManager(
         return;
       }
 
-      const config = sequences[sequenceName];
-      if (!config) {
+      const sequenceConfig = sequences[sequenceName];
+      if (!sequenceConfig) {
         toast({
           title: 'Sequence Not Found',
           description: `The sequence "${sequenceName}" is not defined in sequences.json.`,
@@ -145,20 +190,53 @@ export function useSequenceManager(
 
       const controller = new AbortController();
       controllerRef.current = controller;
-      const steps = config.map((s) => ({
+
+      const steps = sequenceConfig.map((s) => ({
         message: s.message,
         delay: s.delay,
         action: async () => {
           for (const cmd of s.commands) {
+            if (controller.signal.aborted) throw new Error('aborted');
+
             const ok = await sendCommand(cmd);
-            if (!ok) return false;
+            if (!ok) {
+              addLog(`Command failed to send: ${cmd}`);
+              return false;
+            }
+
+            const parts = cmd.split(',');
+            if (parts[0] === 'V' && parts.length === 3) {
+              const valveIndex = parseInt(parts[1], 10);
+              const targetState = parts[2] === 'O' ? 'OPEN' : 'CLOSED';
+              try {
+                addLog(`Waiting for feedback from valve ${valveIndex} (${targetState})...`);
+                await waitForValveFeedback(valveIndex, targetState, controller);
+                addLog(`Feedback received for valve ${valveIndex}.`);
+              } catch (error) {
+                if ((error as Error).message !== 'aborted') {
+                  addLog(`Valve feedback error: ${(error as Error).message}`);
+                  handleSequence('Emergency Shutdown');
+                }
+                return false;
+              }
+            }
           }
           return true;
         },
       }));
+
       void runSequence(sequenceName, steps, controller);
     },
-    [sequencesValid, activeSequence, sequences, toast, runSequence, sendCommand]
+    [
+      sequencesValid,
+      activeSequence,
+      sequences,
+      toast,
+      runSequence,
+      sendCommand,
+      addLog,
+      waitForValveFeedback,
+    ]
   );
 
   const cancelSequence = useCallback(() => {
@@ -168,8 +246,6 @@ export function useSequenceManager(
   }, [activeSequence]);
 
   useEffect(() => {
-    // This is a safety check. If the emergency shutdown is running, we don't want to unmount and lose the abort signal.
-    // In a real app, you might handle this differently, but for now, it's a simple cancel.
     return () => {
       controllerRef.current?.abort();
     };
