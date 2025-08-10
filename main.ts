@@ -4,7 +4,7 @@ import isDev from 'electron-is-dev';
 import { ConfigManager } from './main/ConfigManager';
 import { SerialManager } from './main/SerialManager';
 import { LogManager } from './main/LogManager';
-import type { SerialCommand } from '@/types/ipc';
+import type { SerialCommand } from '@shared/types/ipc';
 
 class MainApp {
   private mainWindow: BrowserWindow | null = null;
@@ -59,7 +59,7 @@ class MainApp {
 
     ipcMain.handle('get-config', () => this.configManager.get());
 
-    ipcMain.on('start-logging', () => this.logManager.start());
+    ipcMain.on('start-logging', () => this.logManager.start(this.mainWindow));
     ipcMain.on('stop-logging', () => this.logManager.stop());
 
     this.serialManager.on('data', (data) => {

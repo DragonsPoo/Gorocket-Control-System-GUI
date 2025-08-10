@@ -1,14 +1,22 @@
 import fs from 'fs';
 import path from 'path';
-import { app } from 'electron';
+import { app, BrowserWindow } from 'electron';
 
 export class LogManager {
   private stream: fs.WriteStream | null = null;
 
-  start() {
+  start(window?: BrowserWindow | null) {
     const filePath = this.getLogPath();
-    this.stream = fs.createWriteStream(filePath, { flags: 'w' });
-    this.stream.write('timestamp,pt1,pt2,pt3,pt4,flow1,flow2,tc1\n');
+    try {
+      this.stream = fs.createWriteStream(filePath, { flags: 'w' });
+      this.stream.on('error', () => {
+        window?.webContents.send('log-creation-failed');
+      });
+      this.stream.write('timestamp,pt1,pt2,pt3,pt4,flow1,flow2,tc1,tc2\n');
+    } catch {
+      window?.webContents.send('log-creation-failed');
+      this.stream = null;
+    }
   }
 
   stop() {

@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 import { CartesianGrid, XAxis, YAxis, LineChart, Line, ReferenceLine } from 'recharts';
-import type { SensorData } from '@/types';
+import type { SensorData } from '@shared/types';
 
 interface DataChartPanelProps {
     data: SensorData[];

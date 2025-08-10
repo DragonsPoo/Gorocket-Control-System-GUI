@@ -1,7 +1,7 @@
 import { useReducer, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import type { SensorData, Valve, AppConfig } from '@/types';
-import type { SerialCommand } from '@/types/ipc';
+import type { SensorData, Valve, AppConfig } from '@shared/types';
+import type { SerialCommand } from '@shared/types/ipc';
 import { useValveControl } from './useValveControl';
 import { useSensorData } from './useSensorData';
 

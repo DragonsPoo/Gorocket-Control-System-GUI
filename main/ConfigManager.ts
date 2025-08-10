@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { z } from 'zod';
-import type { AppConfig } from '@/types';
+import type { AppConfig } from '@shared/types';
 
 const valveSchema = z.object({
   id: z.number(),

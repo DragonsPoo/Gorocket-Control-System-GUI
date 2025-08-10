@@ -1,7 +1,7 @@
 import { useState, useCallback, Dispatch, SetStateAction } from 'react';
-import type { Valve, AppConfig } from '@/types';
-import type { SerialCommand } from '@/types/ipc';
-import { ValveCommandType } from '@/types/ipc';
+import type { Valve, AppConfig } from '@shared/types';
+import type { SerialCommand } from '@shared/types/ipc';
+import { ValveCommandType } from '@shared/types/ipc';
 
 export interface ValveControlApi {
   valves: Valve[];

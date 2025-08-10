@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import type { SensorData, Valve } from '@/types';
+import type { SensorData, Valve } from '@shared/types';
 import { parseSensorData, exceedsPressureLimit } from '@/utils/sensorParser';
 
 export interface SensorDataApi {
