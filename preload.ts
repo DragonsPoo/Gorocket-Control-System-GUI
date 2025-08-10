@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import type { SerialCommand } from '@/types/ipc';
-import type { AppConfig } from '@/types';
+import type { SerialCommand } from '@shared/types/ipc';
+import type { AppConfig } from '@shared/types';
 
 const api = {
   getSerialPorts: (): Promise<string[]> => ipcRenderer.invoke('get-serial-ports'),

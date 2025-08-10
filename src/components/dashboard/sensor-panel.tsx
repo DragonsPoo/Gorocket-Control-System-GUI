@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Gauge, Thermometer, Waves, AlertTriangle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { SensorData } from '@/types';
+import type { SensorData } from '@shared/types';
 import { DashboardItem } from './dashboard-item';
 
 interface SensorPanelProps {

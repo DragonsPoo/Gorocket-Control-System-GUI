@@ -1,4 +1,4 @@
-import type { SensorData, Valve } from '@/types';
+import type { SensorData, Valve } from '@shared/types';
 
 export interface ParsedSensorData {
   sensor: Partial<SensorData>;
@@ -14,14 +14,14 @@ export function parseSensorData(raw: string): ParsedSensorData {
     const [key, rawValue] = part.split(':');
     if (!key || !rawValue) return;
     const value = rawValue.trim();
-    const match = key.match(/^V(\d)(LS_OPEN|LS_CLOSED)$/);
+    const match = key.match(/^V(\d)_LS_(OPEN|CLOSED)$/);
     if (match) {
       const valveId = parseInt(match[1], 10);
       const lsType = match[2];
       const lsValue = value === '1';
       if (!valves[valveId]) valves[valveId] = {};
-      if (lsType === 'LS_OPEN') valves[valveId]!.lsOpen = lsValue;
-      if (lsType === 'LS_CLOSED') valves[valveId]!.lsClosed = lsValue;
+      if (lsType === 'OPEN') valves[valveId]!.lsOpen = lsValue;
+      if (lsType === 'CLOSED') valves[valveId]!.lsClosed = lsValue;
       return;
     }
     if (key === 'tc1' || key === 'tc2') {

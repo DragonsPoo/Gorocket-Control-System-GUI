@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { RotateCw, CheckCircle, XCircle } from 'lucide-react';
-import type { Valve, ValveState } from '@/types';
+import type { Valve, ValveState } from '@shared/types';
 import { DashboardItem } from './dashboard-item';
 
 interface ValveDisplayProps {
