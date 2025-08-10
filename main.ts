@@ -4,6 +4,7 @@ import isDev from 'electron-is-dev';
 import { ConfigManager } from './main/ConfigManager';
 import { SerialManager } from './main/SerialManager';
 import { LogManager } from './main/LogManager';
+import { SequenceDataManager } from './main/SequenceDataManager';
 import type { SerialCommand } from '@shared/types/ipc';
 
 class MainApp {
@@ -11,6 +12,7 @@ class MainApp {
   private configManager = new ConfigManager();
   private serialManager = new SerialManager();
   private logManager = new LogManager();
+  private sequenceManager: SequenceDataManager | null = null;
   private ipcInitialized = false;
 
   async init() {
@@ -23,8 +25,14 @@ class MainApp {
       return;
     }
     await app.whenReady();
+    this.sequenceManager = new SequenceDataManager(app.getAppPath());
+    this.sequenceManager.loadAndValidate();
     this.createWindow();
     this.setupIpc();
+
+    this.sequenceManager.watch((sequences, result) => {
+      this.mainWindow?.webContents.send('sequences-updated', { sequences, result });
+    });
   }
 
   private createWindow() {
@@ -63,6 +71,14 @@ class MainApp {
     });
 
     ipcMain.handle('get-config', () => this.configManager.get());
+
+    ipcMain.handle('get-sequences', () => {
+      if (!this.sequenceManager) return { sequences: {}, result: { valid: false, errors: 'Sequence manager not initialized' } };
+      return {
+        sequences: this.sequenceManager.getSequences(),
+        result: this.sequenceManager.getValidationResult(),
+      };
+    });
 
     ipcMain.on('start-logging', () => this.logManager.start(this.mainWindow));
     ipcMain.on('stop-logging', () => this.logManager.stop());

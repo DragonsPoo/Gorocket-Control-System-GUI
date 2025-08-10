@@ -17,6 +17,7 @@ interface SequencePanelProps {
   onCancel: () => void;
   activeSequence: string | null;
   sequences: string[];
+  disabled?: boolean;
 }
 
 const sequenceMeta: Record<
@@ -34,6 +35,7 @@ const SequencePanel: React.FC<SequencePanelProps> = ({
   onCancel,
   activeSequence,
   sequences,
+  disabled = false,
 }) => {
   return (
     <Card className="bg-card/50 border-border/60">
@@ -52,7 +54,7 @@ const SequencePanel: React.FC<SequencePanelProps> = ({
                 <Button
                   variant={meta.variant}
                   className="w-full justify-start text-base py-6"
-                  disabled={!!activeSequence}
+                  disabled={disabled || !!activeSequence}
                 >
                   {React.cloneElement(meta.icon, { className: 'w-5 h-5 mr-3' })}
                   {name}
@@ -77,7 +79,11 @@ const SequencePanel: React.FC<SequencePanelProps> = ({
               variant={meta.variant}
               className="w-full justify-start text-base py-6"
               onClick={() => onSequence(name)}
-              disabled={!!activeSequence}
+              disabled={
+                name === 'Emergency Shutdown'
+                  ? disabled
+                  : disabled || !!activeSequence
+              }
             >
               {React.cloneElement(meta.icon, { className: 'w-5 h-5 mr-3' })}
               {name}

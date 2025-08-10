@@ -40,3 +40,11 @@ export interface Valve {
   lsOpen: boolean;
   lsClosed: boolean;
 }
+
+export interface SequenceConfigStep {
+  message: string;
+  delay: number;
+  commands: string[];
+}
+
+export type SequenceConfig = Record<string, SequenceConfigStep[]>;

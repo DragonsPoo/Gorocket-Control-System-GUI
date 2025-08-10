@@ -38,6 +38,7 @@ export default function Home() {
     addLog,
     cancelSequence,
     sequences,
+    sequencesValid,
   } = useSequenceManager(
     (cmd) => sendCommand({ type: 'RAW', payload: cmd }),
     (name) => {
@@ -148,6 +149,7 @@ export default function Home() {
               onCancel={cancelSequence}
               activeSequence={activeSequence}
               sequences={sequences}
+              disabled={!sequencesValid}
             />
             <TerminalPanel logs={sequenceLogs} activeSequence={activeSequence} />
           </div>

@@ -14,4 +14,12 @@ export interface RawSerialCommand {
   payload: string;
 }
 
+import type { SequenceConfig } from './index';
+import type { ValidationResult } from '../../main/SequenceDataManager';
+
 export type SerialCommand = ValveSerialCommand | RawSerialCommand;
+
+export type SequencesPayload = {
+  sequences: SequenceConfig;
+  result: ValidationResult;
+};
