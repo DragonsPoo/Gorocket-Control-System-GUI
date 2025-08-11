@@ -7,6 +7,7 @@ import type {
   SequenceCondition,
   SensorData,
 } from '@shared/types';
+import type { SerialCommand } from '@shared/types/ipc';
 
 interface SequenceStep {
   message: string;
@@ -27,7 +28,7 @@ export interface SequenceManagerApi {
 interface UseSequenceManagerOptions {
   valves: Valve[];
   appConfig: AppConfig | null;
-  sendCommand: (cmd: string) => Promise<boolean>;
+  sendCommand: (cmd: SerialCommand) => Promise<boolean>;
   getSensorData: () => SensorData | null;
   onSequenceComplete?: (name: string) => void;
 }
@@ -54,11 +55,44 @@ export function useSequenceManager({
   const [sequences, setSequences] = useState<SequenceConfig>({});
   const [sequencesValid, setSequencesValid] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
+  const valvesRef = useRef(valves);
+  useEffect(() => {
+    valvesRef.current = valves;
+  }, [valves]);
+  const emergencyRef = useRef(false);
 
   const addLog = useCallback((message: string) => {
     const timestamp = new Date().toLocaleTimeString();
-    setSequenceLogs((prev) => [...prev, `[${timestamp}] ${message}`]);
+    setSequenceLogs((prev) => {
+      const next = [...prev, `[${timestamp}] ${message}`];
+      return next.length > 500 ? next.slice(-500) : next;
+    });
   }, []);
+
+  const triggerEmergency = useCallback(() => {
+    if (emergencyRef.current) return;
+    emergencyRef.current = true;
+    controllerRef.current?.abort();
+    setTimeout(() => {
+      emergencyRef.current = false;
+    }, 2000);
+  }, []);
+
+  function resolveCommand(raw: string): string {
+    if (raw.startsWith('V,')) return raw;
+    if (raw.startsWith('CMD,')) {
+      const [, name, act] = raw.split(',');
+      const v = valvesRef.current.find((x) => x.name === name);
+      if (!v) throw new Error(`Unknown valve name: ${name}`);
+      const vAny = v as unknown as { servoIndex?: number };
+      const idx =
+        appConfig?.valveMappings[name]?.servoIndex ??
+        vAny.servoIndex ??
+        v.id - 1;
+      return `V,${idx},${/^open$/i.test(act) ? 'O' : 'C'}`;
+    }
+    return raw;
+  }
 
   useEffect(() => {
     const fetchSequences = async () => {
@@ -98,66 +132,56 @@ export function useSequenceManager({
 
   const waitForValveFeedback = useCallback(
     (valveIndex: number, targetState: 'OPEN' | 'CLOSED', controller: AbortController) => {
-      return new Promise<void>((resolve, reject) => {
-        if (!appConfig?.valveFeedbackTimeout) {
-          addLog('Warning: valveFeedbackTimeout not configured. Skipping feedback check.');
-          resolve();
-          return;
-        }
-
-        const valveId = valveIndex + 1;
-
-        const timeoutId = setTimeout(() => {
-          clearInterval(intervalId);
-          reject(new Error(`Timeout: Valve ${valveIndex} (${targetState}) did not provide feedback.`));
-        }, appConfig.valveFeedbackTimeout);
-
-        const intervalId = setInterval(() => {
-          const valve = valves.find((v) => v.id === valveId);
-          const feedbackReceived = targetState === 'OPEN' ? valve?.lsOpen : valve?.lsClosed;
-
-          if (feedbackReceived) {
-            clearTimeout(timeoutId);
-            clearInterval(intervalId);
-            resolve();
+      return new Promise<void>((res, rej) => {
+        const timeout = setTimeout(() => {
+          clearInterval(t);
+          rej(new Error('valve-timeout'));
+        }, appConfig?.valveFeedbackTimeout ?? 0);
+        const t = setInterval(() => {
+          const valve = valvesRef.current.find((v) => v.id === valveIndex + 1);
+          const ok = targetState === 'OPEN' ? valve?.lsOpen : valve?.lsClosed;
+          if (ok) {
+            clearTimeout(timeout);
+            clearInterval(t);
+            res();
           }
-        }, 100); // Check every 100ms
-
+        }, 100);
         controller.signal.addEventListener('abort', () => {
-          clearTimeout(timeoutId);
-          clearInterval(intervalId);
-          reject(new Error('aborted'));
+          clearTimeout(timeout);
+          clearInterval(t);
+          rej(new Error('aborted'));
         });
       });
     },
-    [valves, appConfig, addLog]
+    [appConfig]
   );
 
   const waitForSensorCondition = useCallback(
-    (condition: SequenceCondition, controller: AbortController) => {
-      return new Promise<void>((resolve, reject) => {
-        const check = () => {
-          const data = getSensorData();
-          if (!data) return false;
-          const value = data[condition.sensor];
-          return typeof value === 'number' && value >= condition.min;
-        };
-
-        if (check()) {
-          resolve();
-          return;
-        }
-
-        const intervalId = setInterval(() => {
-          if (check()) {
-            clearInterval(intervalId);
-            resolve();
+    (cond: SequenceCondition, controller: AbortController) => {
+      return new Promise<void>((res, rej) => {
+        const start = Date.now();
+        const timeoutMs = cond.timeoutMs ?? 30000;
+        const op = cond.op ?? 'gte';
+        const t = setInterval(() => {
+          const v = getSensorData()?.[cond.sensor as keyof SensorData];
+          if (typeof v !== 'number') return;
+          if (cond.max != null && v > cond.max) {
+            clearInterval(t);
+            return rej(new Error('condition-exceeded'));
+          }
+          const ok = op === 'lte' ? v <= cond.min : v >= cond.min;
+          if (ok) {
+            clearInterval(t);
+            res();
+          }
+          if (Date.now() - start > timeoutMs) {
+            clearInterval(t);
+            rej(new Error('condition-timeout'));
           }
         }, 100);
-
         controller.signal.addEventListener('abort', () => {
-          clearInterval(intervalId);
-          reject(new Error('aborted'));
+          clearInterval(t);
+          rej(new Error('aborted'));
         });
       });
     },
@@ -248,21 +272,22 @@ export function useSequenceManager({
                 addLog(
                   `Sensor condition error: ${(error as Error).message}`
                 );
+                triggerEmergency();
                 handleSequence('Emergency Shutdown');
               }
               return false;
             }
           }
-          for (const cmd of s.commands) {
+          for (const raw of s.commands) {
             if (controller.signal.aborted) throw new Error('aborted');
-
-            const ok = await sendCommand(cmd);
+            const cmdStr = resolveCommand(raw);
+            const ok = await sendCommand({ type: 'RAW', payload: cmdStr });
             if (!ok) {
-              addLog(`Command failed to send: ${cmd}`);
+              addLog(`Command failed to send: ${cmdStr}`);
               return false;
             }
 
-            const parts = cmd.split(',');
+            const parts = cmdStr.split(',');
             if (parts[0] === 'V' && parts.length === 3) {
               const valveIndex = parseInt(parts[1], 10);
               const targetState = parts[2] === 'O' ? 'OPEN' : 'CLOSED';
@@ -273,6 +298,7 @@ export function useSequenceManager({
               } catch (error) {
                 if ((error as Error).message !== 'aborted') {
                   addLog(`Valve feedback error: ${(error as Error).message}`);
+                  triggerEmergency();
                   handleSequence('Emergency Shutdown');
                 }
                 return false;
@@ -295,6 +321,8 @@ export function useSequenceManager({
       addLog,
       waitForValveFeedback,
       waitForSensorCondition,
+      triggerEmergency,
+      resolveCommand,
     ]
   );
 

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Rocket Ground System Sequences",
+  "type": "object",
+  "additionalProperties": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "required": ["message", "delay", "commands"],
+      "properties": {
+        "message": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "delay": { "type": "number", "minimum": 0 },
+        "commands": {
+          "type": "array",
+          "minItems": 0,
+          "items": {
+            "type": "string",
+            "anyOf": [
+              { "pattern": "^V,(\\d+),(O|C)$" },
+              { "pattern": "^CMD,[^,]{1,64},(Open|Close)$" }
+            ]
+          }
+        },
+        "condition": {
+          "type": "object",
+          "required": ["sensor", "min"],
+          "properties": {
+            "sensor": { "type": "string", "pattern": "^[A-Za-z0-9_]+$" },
+            "min": { "type": "number" },
+            "max": { "type": ["number", "null"] },
+            "op": { "type": "string", "enum": ["gte", "lte"] },
+            "timeoutMs": { "type": "number", "minimum": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

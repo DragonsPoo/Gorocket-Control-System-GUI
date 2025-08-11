@@ -10,19 +10,28 @@
     "next:dev": "next dev --turbopack -p 9002",
     "electron:dev": "wait-on http://localhost:9002 && electron .",
     "build:electron": "rimraf dist && tsc -p tsconfig.electron.json && tsc-alias -p tsconfig.electron.json && node -e \"require('fs').copyFileSync('config.json','dist/config.json')\"",
-    "build": "npm run build:electron && next build",
+    "build:web": "next build --no-lint",
+    "build": "npm run build:electron && npm run build:web",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "rebuild": "electron-rebuild -f -w serialport",
     "predev": "npm run build:electron",
     "package": "npm run build && electron-builder",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "validate:seq": "node -e \"const Ajv=require('ajv');const fs=require('fs');const s=JSON.parse(fs.readFileSync('./sequences.schema.json','utf8'));const d=JSON.parse(fs.readFileSync('./sequences.json','utf8'));const ajv=new Ajv({allErrors:true,strict:false});const v=ajv.compile(s)(d);console.log('AJV_OK',v);if(!v)console.log(ajv.errors)\""
   },
   "build": {
     "appId": "com.gorocket.control-system-gui",
     "productName": "GoRocket Control System GUI",
     "npmRebuild": false,
+    "asar": true,
+    "asarUnpack": ["**/serialport/**"],
+    "extraResources": [
+      { "from": "sequences.json", "to": "sequences.json" },
+      { "from": "sequences.schema.json", "to": "sequences.schema.json" },
+      { "from": "config.json", "to": "config.json" }
+    ],
     "directories": {
       "output": "release"
     },
