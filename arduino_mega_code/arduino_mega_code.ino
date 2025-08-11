@@ -89,7 +89,7 @@ void setup() {
   for (int i=0; i<NUM_SERVOS; i++) {
     pinMode(limitSwitchPins[i][0], INPUT_PULLUP);
     pinMode(limitSwitchPins[i][1], INPUT_PULLUP);
-    servos[i].detach();
+    servos[i].detach(); // 제어 신호만 분리 (전원 차단 아님)
     servoStates[i] = IDLE;
   }
 
