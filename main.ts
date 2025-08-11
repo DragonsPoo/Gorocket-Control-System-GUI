@@ -133,6 +133,16 @@ if (!app.requestSingleInstanceLock()) {
   const appInstance = new MainApp();
   appInstance.init();
 
+
+  app.on('second-instance', () => {
+    const win = (appInstance as any).mainWindow as BrowserWindow | null;
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+
+
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
       app.quit();
@@ -144,7 +154,7 @@ if (!app.requestSingleInstanceLock()) {
     if (BrowserWindow.getAllWindows().length === 0) appInstance.init();
   });
 
-  app.on('before-quit', () => {
-    appInstance.cleanup();
-  });
+
+  app.on('before-quit', () => appInstance.cleanup?.());
+
 }

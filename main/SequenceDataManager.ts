@@ -31,8 +31,15 @@ export class SequenceDataManager {
    */
   public loadAndValidate(): ValidationResult {
     try {
-      if (!fs.existsSync(this.sequencesPath) || !fs.existsSync(this.schemaPath)) {
-        this.validationResult = { valid: false, errors: 'sequences.json not found.' };
+
+      if (!fs.existsSync(this.sequencesPath)) {
+        this.validationResult = { valid: false, errors: `sequences.json not found at ${this.sequencesPath}` };
+        this.sequences = {};
+        return this.validationResult;
+      }
+      if (!fs.existsSync(this.schemaPath)) {
+        this.validationResult = { valid: false, errors: `sequences.schema.json not found at ${this.schemaPath}` };
+
         this.sequences = {};
         return this.validationResult;
       }
@@ -58,7 +65,7 @@ export class SequenceDataManager {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       this.validationResult = {
         valid: false,
-        errors: `Failed to read or parse sequences.json: ${errorMessage}`,
+        errors: `Failed to read/validate sequences: ${errorMessage}`,
       };
     }
     return this.validationResult;
@@ -78,23 +85,13 @@ export class SequenceDataManager {
     return this.validationResult;
   }
 
-  /**
-   * Watches the sequences.json file for changes and triggers a callback.
-   * @param onUpdate - Callback to execute when the file changes and data is reloaded.
-   * It receives the new sequences and the validation result.
-   */
-  public watch(onUpdate: (sequences: SequenceConfig, result: ValidationResult) => void): void {
-    if (!fs.existsSync(path.dirname(this.sequencesPath))) {
-      console.error(`Cannot watch file. Directory does not exist: ${path.dirname(this.sequencesPath)}`);
-      return;
-    }
-
-    fs.watch(this.sequencesPath, (eventType) => {
-      if (eventType === 'change') {
-        console.log('sequences.json changed. Reloading...');
-        const result = this.loadAndValidate();
-        onUpdate(this.getSequences(), result);
-      }
-    });
+  /** watch both sequence & schema to revalidate on change */
+  public watch(cb: (seq: SequenceConfig, result: ValidationResult) => void) {
+    const onChange = () => {
+      this.loadAndValidate();
+      cb(this.sequences, this.validationResult);
+    };
+    try { fs.watch(this.sequencesPath, { persistent: false }, onChange); } catch {}
+    try { fs.watch(this.schemaPath, { persistent: false }, onChange); } catch {}
   }
 }
