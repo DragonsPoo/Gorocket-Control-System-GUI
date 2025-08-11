@@ -53,7 +53,7 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data }) => {
                 {/* Flow Chart */}
 
                 <div className="lg:col-span-1">
-                    <h3 className="font-semibold mb-2 ml-2">Flow (kg/s)</h3>
+                    <h3 className="font-semibold mb-2 ml-2">Flow (L/h)</h3>
                     <ChartContainer config={chartConfig} className="h-[200px] w-full">
 
                         <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>

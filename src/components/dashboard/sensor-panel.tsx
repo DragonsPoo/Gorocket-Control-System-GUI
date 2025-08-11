@@ -52,8 +52,8 @@ const SensorPanel: React.FC<SensorPanelProps> = ({ data }) => {
           <SensorDisplay icon={<Gauge className="w-6 h-6" />} label="PT-2 (Oxidizer Tank)" value={formatValue(data?.pt2)} unit="PSI" />
           <SensorDisplay icon={<Gauge className="w-6 h-6" />} label="PT-3 (Fuel Line)" value={formatValue(data?.pt3)} unit="PSI" />
           <SensorDisplay icon={<Gauge className="w-6 h-6" />} label="PT-4 (Oxidizer Line)" value={formatValue(data?.pt4)} unit="PSI" />
-          <SensorDisplay icon={<Waves className="w-6 h-6" />} label="Flow-1 (Fuel)" value={formatValue(data?.flow1, 3)} unit="kg/s" />
-          <SensorDisplay icon={<Waves className="w-6 h-6" />} label="Flow-2 (Oxidizer)" value={formatValue(data?.flow2, 3)} unit="kg/s" />
+          <SensorDisplay icon={<Waves className="w-6 h-6" />} label="Flow-1 (Fuel)" value={formatValue(data?.flow1, 3)} unit="L/h" />
+          <SensorDisplay icon={<Waves className="w-6 h-6" />} label="Flow-2 (Oxidizer)" value={formatValue(data?.flow2, 3)} unit="L/h" />
           <SensorDisplay
             icon={tc1State.isError ? <AlertTriangle className="w-6 h-6" /> : <Thermometer className="w-6 h-6" />}
             label="TC-1 (Chamber)"
