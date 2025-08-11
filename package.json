@@ -10,7 +10,8 @@
     "next:dev": "next dev --turbopack -p 9002",
     "electron:dev": "wait-on http://localhost:9002 && electron .",
     "build:electron": "rimraf dist && tsc -p tsconfig.electron.json && tsc-alias -p tsconfig.electron.json && node -e \"require('fs').copyFileSync('config.json','dist/config.json')\"",
-    "build": "npm run build:electron && next build",
+    "build:web": "next build --no-lint && next export -o out",
+    "build": "npm run build:electron && npm run build:web",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -23,6 +24,13 @@
     "appId": "com.gorocket.control-system-gui",
     "productName": "GoRocket Control System GUI",
     "npmRebuild": false,
+    "asar": true,
+    "asarUnpack": ["**/serialport/**"],
+    "extraResources": [
+      { "from": "sequences.json", "to": "sequences.json" },
+      { "from": "sequences.schema.json", "to": "sequences.schema.json" },
+      { "from": "config.json", "to": "config.json" }
+    ],
     "directories": {
       "output": "release"
     },

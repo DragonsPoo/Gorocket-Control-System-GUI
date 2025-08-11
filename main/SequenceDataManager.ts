@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import * as Ajv from 'ajv';
 import type { SequenceConfig } from '@shared/types';
-import schema from '../src/sequences.schema.json';
 
 export interface ValidationResult {
   valid: boolean;
@@ -11,18 +10,18 @@ export interface ValidationResult {
 
 export class SequenceDataManager {
   private readonly sequencesPath: string;
+  private readonly schemaPath: string;
   private sequences: SequenceConfig = {};
   private readonly ajv: Ajv.Ajv;
   private validationResult: ValidationResult = { valid: false };
 
   /**
    * Manages loading, validation, and watching of the sequences.json file.
-   * @param appPath - The root path of the application (e.g., app.getAppPath()).
+   * @param basePath - Base path where sequences.json and sequences.schema.json reside.
    */
-  constructor(appPath: string) {
-    // In production, files from 'src' are often copied to the 'resources' directory.
-    // We construct a path that works for both development and production.
-    this.sequencesPath = path.join(appPath, 'src', 'sequences.json');
+  constructor(basePath: string) {
+    this.sequencesPath = path.join(basePath, 'sequences.json');
+    this.schemaPath = path.join(basePath, 'sequences.schema.json');
     this.ajv = new Ajv.default();
   }
 
@@ -33,15 +32,20 @@ export class SequenceDataManager {
   public loadAndValidate(): ValidationResult {
     try {
       if (!fs.existsSync(this.sequencesPath)) {
-        this.validationResult = { valid: false, errors: 'sequences.json not found.' };
+        this.validationResult = { valid: false, errors: `sequences.json not found at ${this.sequencesPath}` };
+        this.sequences = {};
+        return this.validationResult;
+      }
+      if (!fs.existsSync(this.schemaPath)) {
+        this.validationResult = { valid: false, errors: `sequences.schema.json not found at ${this.schemaPath}` };
         this.sequences = {};
         return this.validationResult;
       }
 
       const fileContent = fs.readFileSync(this.sequencesPath, 'utf-8');
       const data = JSON.parse(fileContent);
-
-      const validate = this.ajv.compile(schema);
+      const schemaData = JSON.parse(fs.readFileSync(this.schemaPath, 'utf-8'));
+      const validate = this.ajv.compile(schemaData);
       const valid = validate(data);
 
       if (valid) {
@@ -59,7 +63,7 @@ export class SequenceDataManager {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       this.validationResult = {
         valid: false,
-        errors: `Failed to read or parse sequences.json: ${errorMessage}`,
+        errors: `Failed to read/validate sequences: ${errorMessage}`,
       };
     }
     return this.validationResult;
@@ -79,23 +83,13 @@ export class SequenceDataManager {
     return this.validationResult;
   }
 
-  /**
-   * Watches the sequences.json file for changes and triggers a callback.
-   * @param onUpdate - Callback to execute when the file changes and data is reloaded.
-   * It receives the new sequences and the validation result.
-   */
-  public watch(onUpdate: (sequences: SequenceConfig, result: ValidationResult) => void): void {
-    if (!fs.existsSync(path.dirname(this.sequencesPath))) {
-      console.error(`Cannot watch file. Directory does not exist: ${path.dirname(this.sequencesPath)}`);
-      return;
-    }
-
-    fs.watch(this.sequencesPath, (eventType) => {
-      if (eventType === 'change') {
-        console.log('sequences.json changed. Reloading...');
-        const result = this.loadAndValidate();
-        onUpdate(this.getSequences(), result);
-      }
-    });
+  /** watch both sequence & schema to revalidate on change */
+  public watch(cb: (seq: SequenceConfig, result: ValidationResult) => void) {
+    const onChange = () => {
+      this.loadAndValidate();
+      cb(this.sequences, this.validationResult);
+    };
+    try { fs.watch(this.sequencesPath, { persistent: false }, onChange); } catch {}
+    try { fs.watch(this.schemaPath, { persistent: false }, onChange); } catch {}
   }
 }

@@ -19,7 +19,8 @@ class MainApp {
 
   async init() {
     try {
-      const configPath = path.join(__dirname, 'config.json');
+      const basePath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+      const configPath = path.join(basePath, 'config.json');
       await this.configManager.load(configPath);
     } catch (err) {
       dialog.showErrorBox('Configuration Error', 'Failed to load configuration file.');
@@ -27,7 +28,8 @@ class MainApp {
       return;
     }
     await app.whenReady();
-    this.sequenceManager = new SequenceDataManager(app.getAppPath());
+    const basePath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    this.sequenceManager = new SequenceDataManager(basePath);
     this.sequenceManager.loadAndValidate();
     this.createWindow();
     this.setupIpc();
@@ -44,6 +46,8 @@ class MainApp {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: true,
+        webviewTag: false,
         preload: path.join(__dirname, 'preload.js'),
       },
     });
@@ -55,7 +59,8 @@ class MainApp {
       const loadURL = serve({ directory: 'out' });
       loadURL(this.mainWindow);
     }
-
+    this.mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    this.mainWindow.webContents.on('will-navigate', (e) => e.preventDefault());
     this.mainWindow.on('closed', () => (this.mainWindow = null));
   }
 
@@ -116,18 +121,36 @@ class MainApp {
     });
   }
 
+  cleanup() {
+    void this.serialManager.disconnect();
+  }
+
 }
 
-const appInstance = new MainApp();
-appInstance.init();
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  const appInstance = new MainApp();
+  appInstance.init();
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+  app.on('second-instance', () => {
+    const win = (appInstance as any).mainWindow as BrowserWindow | null;
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
 
-app.on('activate', () => {
-  // eslint-disable-next-line @typescript-eslint/no-floating-promises
-  if (BrowserWindow.getAllWindows().length === 0) appInstance.init();
-});
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+
+  app.on('activate', () => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    if (BrowserWindow.getAllWindows().length === 0) appInstance.init();
+  });
+
+  app.on('before-quit', () => appInstance.cleanup?.());
+}

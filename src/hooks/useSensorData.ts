@@ -22,6 +22,7 @@ export function useSensorData(
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const sensorRef = useRef<SensorData | null>(null);
   const [chartData, setChartData] = useState<SensorData[]>([]);
+  const overCnt = useRef(0);
 
   const handleSerialMessage = useCallback(
     (data: string) => {
@@ -34,12 +35,21 @@ export function useSensorData(
         } as SensorData;
         setSensorData(updated);
         sensorRef.current = updated;
-        setChartData((prev) => [...prev, updated].slice(-maxPoints));
+        setChartData((prev) => {
+          const next = [...prev, updated];
+          if (next.length > maxPoints) next.splice(0, next.length - maxPoints);
+          return next;
+        });
         if (
           pressureLimit !== null &&
           exceedsPressureLimit(updated, pressureLimit)
         ) {
-          onEmergency();
+          if (++overCnt.current >= 3) {
+            onEmergency();
+            overCnt.current = 0;
+          }
+        } else {
+          overCnt.current = 0;
         }
       }
       if (Object.keys(valves).length > 0) {
