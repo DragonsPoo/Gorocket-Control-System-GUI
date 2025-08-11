@@ -46,6 +46,22 @@ export function parseSensorData(raw: string): ParsedSensorData {
       return;
     }
 
+    // Handle flow rate mapping
+    if (key === 'fm1_Lh') {
+      const num = parseFloat(value);
+      if (!Number.isNaN(num)) {
+        (sensor as Record<string, number>)['flow1'] = num;
+      }
+      return;
+    }
+    if (key === 'fm2_Lh') {
+      const num = parseFloat(value);
+      if (!Number.isNaN(num)) {
+        (sensor as Record<string, number>)['flow2'] = num;
+      }
+      return;
+    }
+
     const num = parseFloat(value);
     if (Number.isNaN(num)) {
       const msg = `Invalid numeric value for ${key}: ${value}`;

@@ -1,18 +1,20 @@
 // =================================================================
 // Gorocket-Control-System-GUI (MEGA)
-// - Dual MAX6675
+// - Dual MAX6675 (Adafruit 라이브러리 사용)
 // - Dual Flow (D2/D3, 18V→분압 입력)
 // - 실제 dt 기반 유량 계산 + EWMA + ISR 글리치 필터
+// - 견고한 시리얼 파서(라인 버퍼)로 HELLO 핸드셰이크 안정화
 // - K = 1484.11 pulse/L → 1,484,110 pulse/m³ 적용
+// - 온도센서 문제 해결: Adafruit MAX6675 라이브러리로 변경
 // =================================================================
 #include <SPI.h>
 #include <Servo.h>
-#include "MAX6675.h"
+#include "max6675.h"
 
 // =========================== 서보 ===========================
 #define NUM_SERVOS 7
-const int initialOpenAngles[NUM_SERVOS]   = {9,9,9,9,9,9,9};
-const int initialClosedAngles[NUM_SERVOS] = {96,96,96,96,96,96,96};
+const int initialOpenAngles[NUM_SERVOS]   = {42,44,45,47,46,38,45};
+const int initialClosedAngles[NUM_SERVOS] = {135,135,138,135,134,127,135};
 const int servoPins[NUM_SERVOS]           = {13,12,11,10,9,8,7};
 Servo servos[NUM_SERVOS];
 
@@ -34,8 +36,8 @@ const int pressurePins[NUM_PRESSURE_SENSORS] = {A0, A1, A2, A3};
 #define TC_SCK_PIN 52
 #define TC1_CS_PIN 49
 #define TC2_CS_PIN 48
-MAX6675 thermocouple1(TC1_CS_PIN, TC_SO_PIN, TC_SCK_PIN);
-MAX6675 thermocouple2(TC2_CS_PIN, TC_SO_PIN, TC_SCK_PIN);
+MAX6675 thermocouple1(TC_SCK_PIN, TC1_CS_PIN, TC_SO_PIN);
+MAX6675 thermocouple2(TC_SCK_PIN, TC2_CS_PIN, TC_SO_PIN);
 
 // =========================== 리미트 스위치 ===========================
 const int limitSwitchPins[NUM_SERVOS][2] = {
@@ -62,11 +64,28 @@ volatile unsigned long lastPulseMicros[NUM_FLOW_SENSORS] = {0,0};
 
 // 계산값/타이밍
 float flowRates_m3_h[NUM_FLOW_SENSORS] = {0.0f, 0.0f};
+float tempCelsius1 = 0.0f;  // TC1 온도 저장
+float tempCelsius2 = 0.0f;  // TC2 온도 저장
 #define SENSOR_READ_INTERVAL 100
+#define TEMP_READ_INTERVAL 250  // MAX6675 최소 간격
 unsigned long lastSensorReadTime = 0;
+unsigned long lastTempReadTime = 0;
 unsigned long lastFlowCalcMs     = 0;
 // EWMA 필터 타임콘스턴트(ms)
 #define FLOW_EWMA_TAU_MS 300
+
+// =========================== 시리얼 파서(라인 버퍼) ===========================
+// - 개행(\n) 기준. CRLF 허용( \r 무시 ).
+// - 개행이 안 오는 송신측도 고려: 마지막 바이트 이후 200ms 지나면 라인 완료로 간주.
+// - “HELLO” 또는 “H” → “READY” 응답. 대소문자 무시.
+static char  cmdBuf[96];
+static size_t cmdLen = 0;
+static unsigned long lastByteMs = 0;
+#define LINE_IDLE_COMMIT_MS 200
+
+void processCommandLine(const char* raw);
+void readSerialCommands();
+void updateTemperatureReadings();
 
 // =========================== ISR ===========================
 void countPulse1() {
@@ -85,12 +104,17 @@ void countPulse2() {
 // =================================================================
 void setup() {
   Serial.begin(115200);
-  Serial.setTimeout(20);
-  Serial.println(F("Arduino Mega: Controller (Dual MAX6675 + Dual Flow w/Divider) Init..."));
+  // readStringUntil 타임아웃 의존 제거 → setTimeout은 의미 없음. 남겨둬도 무해.
+  Serial.setTimeout(200);
 
-  SPI.begin();
-  thermocouple1.begin();
-  thermocouple2.begin();
+  // 부트 직후 PC 쪽 잔여 바이트 제거
+  while (Serial.available()) { Serial.read(); }
+  delay(50);
+
+  Serial.println(F("BOOT")); // GUI 디버깅에 유용(선택)
+
+  // MAX6675 초기화 - Adafruit 라이브러리는 자동으로 SPI 설정함
+  delay(500); // MAX6675 안정화 대기
 
   for (int i=0; i<NUM_SERVOS; i++) {
     pinMode(limitSwitchPins[i][0], INPUT_PULLUP);
@@ -106,26 +130,23 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(flowSensorPins[1]), countPulse2, RISING);
 
   lastFlowCalcMs = millis();
-  Serial.println(F("Initialization complete. System ready."));
+  Serial.println(F("READY")); // 초기 READY 알림(선택). GUI가 기다린다면 유용.
 }
 
 void loop() {
   const unsigned long now = millis();
 
-  if (Serial.available() > 0) {
-    char c = Serial.peek();
-    if (c == 'H') {
-      String line = Serial.readStringUntil('\n'); line.trim();
-      if (line == "HELLO") Serial.println(F("READY"));
-    } else if (c == 'V') {
-      handleValveCommand();
-    } else {
-      Serial.readStringUntil('\n'); // flush
-    }
-  }
+  // 견고한 시리얼 처리
+  readSerialCommands();
 
   updateLimitSwitchStates();
   manageAllServoMovements(now);
+
+  // 온도센서 별도 타이밍으로 읽기
+  if (now - lastTempReadTime >= TEMP_READ_INTERVAL) {
+    lastTempReadTime = now;
+    updateTemperatureReadings();
+  }
 
   if (now - lastSensorReadTime >= SENSOR_READ_INTERVAL) {
     lastSensorReadTime = now;
@@ -133,23 +154,82 @@ void loop() {
   }
 }
 
-// ========================= 시리얼 제어 =========================
-void handleValveCommand() {
-  if (Serial.read() != 'V') { while (Serial.available()) Serial.read(); return; }
-  if (Serial.read() != ',') { while (Serial.available()) Serial.read(); return; }
-  int servoIndex = Serial.parseInt();
-  if (Serial.read() == ',') {
-    char stateCmd = Serial.read();
-    if (servoIndex >= 0 && servoIndex < NUM_SERVOS && servoStates[servoIndex] == IDLE) {
-      servos[servoIndex].attach(servoPins[servoIndex], 500, 2500);
-      delay(10);
-      targetAngles[servoIndex] = (stateCmd == 'O') ? initialOpenAngles[servoIndex] : initialClosedAngles[servoIndex];
-      servos[servoIndex].write(targetAngles[servoIndex]);
-      servoStates[servoIndex] = MOVING;
-      lastMoveTime[servoIndex] = millis();
+// ========================= 시리얼 처리 =========================
+void readSerialCommands() {
+  while (Serial.available() > 0) {
+    char ch = (char)Serial.read();
+    lastByteMs = millis();
+
+    if (ch == '\r') {
+      // ignore CR
+      continue;
+    } else if (ch == '\n') {
+      // 라인 완료
+      cmdBuf[cmdLen] = '\0';
+      if (cmdLen > 0) processCommandLine(cmdBuf);
+      cmdLen = 0;
+    } else {
+      if (cmdLen < sizeof(cmdBuf) - 1) {
+        cmdBuf[cmdLen++] = ch;
+      } else {
+        // 버퍼 오버런 보호: 라인 버림
+        cmdLen = 0;
+      }
     }
   }
-  while (Serial.available() && Serial.read() != '\n');
+
+  // 개행이 오지 않는 상대(예: “HELLO”만 보내고 개행 X) 대비
+  if (cmdLen > 0 && (millis() - lastByteMs) > LINE_IDLE_COMMIT_MS) {
+    cmdBuf[cmdLen] = '\0';
+    processCommandLine(cmdBuf);
+    cmdLen = 0;
+  }
+}
+
+void processCommandLine(const char* raw) {
+  String line = String(raw);
+  line.trim();
+  if (line.length() == 0) return;
+
+  // 대소문자 무시
+  line.toUpperCase();
+
+  // --- 핸드셰이크 ---
+  if (line == "HELLO" || line == "H") {
+    Serial.println(F("READY"));
+    return;
+  }
+
+  // --- 밸브 제어: V,<index>,<O|C> ---
+  if (line.startsWith("V,")) {
+    int first = line.indexOf(',');
+    int second = line.indexOf(',', first + 1);
+    if (first > 0 && second > first) {
+      int servoIndex = line.substring(first + 1, second).toInt();
+      char stateCmd = 0;
+      if (second + 1 < (int)line.length()) stateCmd = line.charAt(second + 1);
+
+      if (servoIndex >= 0 && servoIndex < NUM_SERVOS && servoStates[servoIndex] == IDLE) {
+        servos[servoIndex].attach(servoPins[servoIndex], 500, 2500);
+        delay(10);
+        targetAngles[servoIndex] = (stateCmd == 'O') ? initialOpenAngles[servoIndex] : initialClosedAngles[servoIndex];
+        servos[servoIndex].write(targetAngles[servoIndex]);
+        servoStates[servoIndex] = MOVING;
+        lastMoveTime[servoIndex] = millis();
+        Serial.print(F("VACK,")); Serial.print(servoIndex); Serial.print(',');
+        Serial.println((stateCmd == 'O') ? F("O") : F("C"));
+      } else {
+        Serial.println(F("VERR"));
+      }
+    }
+    return;
+  }
+
+  // --- 핑/퐁(선택) ---
+  if (line == "PING") { Serial.println(F("PONG")); return; }
+
+  // 기타: 알 수 없는 명령
+  Serial.println(F("ERR_CMD"));
 }
 
 // ========================= 서보 상태 머신 =========================
@@ -220,16 +300,45 @@ void readAndSendAllSensorData(const unsigned long now) {
     Serial.print(F("pt")); Serial.print(i+1); Serial.print(':'); Serial.print(psi,2); Serial.print(',');
   }
 
-  // TC1
-  int s1=thermocouple1.read(); Serial.print(F("tc1:"));
-  if (s1==STATUS_OK){ float k=thermocouple1.getCelsius()+273.15f; Serial.print(k,2); }
-  else               { Serial.print(F("ERR")); }
+<<<<<<< Updated upstream
+  // TC1 - 저장된 온도값 사용
+  Serial.print(F("tc1:"));
+  if (isnan(tempCelsius1)) {
+    Serial.print(F("ERR"));
+  } else {
+    float k = tempCelsius1 + 273.15f;
+    Serial.print(k,2);
+  }
   Serial.print(',');
 
-  // TC2
-  int s2=thermocouple2.read(); Serial.print(F("tc2:"));
-  if (s2==STATUS_OK){ float k=thermocouple2.getCelsius()+273.15f; Serial.print(k,2); }
-  else               { Serial.print(F("ERR")); }
+  // TC2 - 저장된 온도값 사용
+  Serial.print(F("tc2:"));
+  if (isnan(tempCelsius2)) {
+    Serial.print(F("ERR"));
+  } else {
+    float k = tempCelsius2 + 273.15f;
+    Serial.print(k,2);
+  }
+=======
+  // TC1 - 저장된 온도값 사용
+  Serial.print(F("tc1:"));
+  if (isnan(tempCelsius1)) {
+    Serial.print(F("ERR"));
+  } else {
+    float k = tempCelsius1 + 273.15f;
+    Serial.print(k,2);
+  }
+  Serial.print(',');
+
+  // TC2 - 저장된 온도값 사용
+  Serial.print(F("tc2:"));
+  if (isnan(tempCelsius2)) {
+    Serial.print(F("ERR"));
+  } else {
+    float k = tempCelsius2 + 273.15f;
+    Serial.print(k,2);
+  }
+>>>>>>> Stashed changes
 
   // 유량 (m3/h, L/h)
   for (int i=0;i<NUM_FLOW_SENSORS;i++){
@@ -244,4 +353,19 @@ void readAndSendAllSensorData(const unsigned long now) {
     Serial.print(F(",V")); Serial.print(i); Serial.print(F("_LS_CLOSED:")); Serial.print(currentLimitSwitchStates[i][1]);
   }
   Serial.println();
+}
+
+// ========================= 온도 센서 읽기 =========================
+void updateTemperatureReadings() {
+  // TC1
+  double celsius1 = thermocouple1.readCelsius();
+  if (!isnan(celsius1)) {
+    tempCelsius1 = celsius1;
+  }
+  
+  // TC2  
+  double celsius2 = thermocouple2.readCelsius();
+  if (!isnan(celsius2)) {
+    tempCelsius2 = celsius2;
+  }
 }

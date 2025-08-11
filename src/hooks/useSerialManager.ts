@@ -147,7 +147,7 @@ export function useSerialManager(): SerialManagerApi {
     };
     init();
     const cleanupData = window.electronAPI.onSerialData((d) => {
-      loggerRef.current(`Received: ${d}`);
+      // loggerRef.current(`Received: ${d}`); // 0.1초마다 출력되는 데이터 로그 비활성화
       handleSerialMessage(d);
     });
     const cleanupError = window.electronAPI.onSerialError((err) => {
