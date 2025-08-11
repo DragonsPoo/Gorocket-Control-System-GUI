@@ -3,6 +3,7 @@
 // - Dual MAX6675
 // - Dual Flow (D2/D3, 18V→분압 입력)
 // - 실제 dt 기반 유량 계산 + EWMA + ISR 글리치 필터
+// - K = 1484.11 pulse/L → 1,484,110 pulse/m³ 적용
 // =================================================================
 #include <SPI.h>
 #include <Servo.h>
@@ -45,8 +46,13 @@ int currentLimitSwitchStates[NUM_SERVOS][2] = {0};
 // =========================== 유량(분압 입력) ===========================
 #define NUM_FLOW_SENSORS 2
 const int flowSensorPins[NUM_FLOW_SENSORS] = {2, 3}; // D2(INT0), D3(INT1)
-// k-factor: pulses per m^3 (센서 스펙에 맞게 조정)
-const float kFactors[NUM_FLOW_SENSORS] = {450000.0f, 450000.0f};
+
+// ---- K 적용 구간 ----
+// 센서 K: 1484.11 pulse/L  →  m³당 펄스(×1000)로 변환해 사용
+#define K_PULSE_PER_L 1484.11f
+// k-factor: pulses per m^3
+const float kFactors[NUM_FLOW_SENSORS] = { K_PULSE_PER_L * 1000.0f, K_PULSE_PER_L * 1000.0f };
+// ----------------------
 
 // ISR 공유 변수
 volatile unsigned long pulseCounts[NUM_FLOW_SENSORS] = {0,0};
