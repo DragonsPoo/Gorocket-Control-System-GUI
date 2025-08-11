@@ -31,6 +31,7 @@ export class SequenceDataManager {
    */
   public loadAndValidate(): ValidationResult {
     try {
+
       if (!fs.existsSync(this.sequencesPath)) {
         this.validationResult = { valid: false, errors: `sequences.json not found at ${this.sequencesPath}` };
         this.sequences = {};
@@ -38,6 +39,7 @@ export class SequenceDataManager {
       }
       if (!fs.existsSync(this.schemaPath)) {
         this.validationResult = { valid: false, errors: `sequences.schema.json not found at ${this.schemaPath}` };
+
         this.sequences = {};
         return this.validationResult;
       }
