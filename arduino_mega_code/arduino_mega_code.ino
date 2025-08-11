@@ -223,15 +223,13 @@ void readAndSendAllSensorData(const unsigned long now) {
   // TC1
   int s1=thermocouple1.read(); Serial.print(F("tc1:"));
   if (s1==STATUS_OK){ float k=thermocouple1.getCelsius()+273.15f; Serial.print(k,2); }
-  else if (s1==STATUS_OPEN) Serial.print(F("OPEN_ERR"));
-  else                      Serial.print(F("COM_ERR"));
+  else               { Serial.print(F("ERR")); }
   Serial.print(',');
 
   // TC2
   int s2=thermocouple2.read(); Serial.print(F("tc2:"));
   if (s2==STATUS_OK){ float k=thermocouple2.getCelsius()+273.15f; Serial.print(k,2); }
-  else if (s2==STATUS_OPEN) Serial.print(F("OPEN_ERR"));
-  else                      Serial.print(F("COM_ERR"));
+  else               { Serial.print(F("ERR")); }
 
   // 유량 (m3/h, L/h)
   for (int i=0;i<NUM_FLOW_SENSORS;i++){
