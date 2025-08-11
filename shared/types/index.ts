@@ -45,6 +45,9 @@ export interface Valve {
 export interface SequenceCondition {
   sensor: keyof SensorData;
   min: number;
+  max?: number | null;
+  op?: 'gte' | 'lte';
+  timeoutMs?: number;
 }
 
 export interface SequenceConfigStep {

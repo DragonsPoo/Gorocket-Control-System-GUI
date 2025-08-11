@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import * as Ajv from 'ajv';
 import type { SequenceConfig } from '@shared/types';
-import schema from '../src/sequences.schema.json';
 
 export interface ValidationResult {
   valid: boolean;
@@ -11,18 +10,18 @@ export interface ValidationResult {
 
 export class SequenceDataManager {
   private readonly sequencesPath: string;
+  private readonly schemaPath: string;
   private sequences: SequenceConfig = {};
   private readonly ajv: Ajv.Ajv;
   private validationResult: ValidationResult = { valid: false };
 
   /**
    * Manages loading, validation, and watching of the sequences.json file.
-   * @param appPath - The root path of the application (e.g., app.getAppPath()).
+   * @param basePath - Base path where sequences.json and sequences.schema.json reside.
    */
-  constructor(appPath: string) {
-    // In production, files from 'src' are often copied to the 'resources' directory.
-    // We construct a path that works for both development and production.
-    this.sequencesPath = path.join(appPath, 'src', 'sequences.json');
+  constructor(basePath: string) {
+    this.sequencesPath = path.join(basePath, 'sequences.json');
+    this.schemaPath = path.join(basePath, 'sequences.schema.json');
     this.ajv = new Ajv.default();
   }
 
@@ -32,7 +31,7 @@ export class SequenceDataManager {
    */
   public loadAndValidate(): ValidationResult {
     try {
-      if (!fs.existsSync(this.sequencesPath)) {
+      if (!fs.existsSync(this.sequencesPath) || !fs.existsSync(this.schemaPath)) {
         this.validationResult = { valid: false, errors: 'sequences.json not found.' };
         this.sequences = {};
         return this.validationResult;
@@ -40,8 +39,8 @@ export class SequenceDataManager {
 
       const fileContent = fs.readFileSync(this.sequencesPath, 'utf-8');
       const data = JSON.parse(fileContent);
-
-      const validate = this.ajv.compile(schema);
+      const schemaData = JSON.parse(fs.readFileSync(this.schemaPath, 'utf-8'));
+      const validate = this.ajv.compile(schemaData);
       const valid = validate(data);
 
       if (valid) {
