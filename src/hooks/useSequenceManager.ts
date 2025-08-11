@@ -280,8 +280,10 @@ export function useSequenceManager({
           }
           for (const raw of s.commands) {
             if (controller.signal.aborted) throw new Error('aborted');
+
             const cmdStr = resolveCommand(raw);
             const ok = await sendCommand({ type: 'RAW', payload: cmdStr });
+
             if (!ok) {
               addLog(`Command failed to send: ${cmdStr}`);
               return false;
