@@ -7,6 +7,7 @@ import type {
   SequenceCondition,
   SensorData,
 } from '@shared/types';
+import type { SerialCommand } from '@shared/types/ipc';
 
 interface SequenceStep {
   message: string;
@@ -27,7 +28,7 @@ export interface SequenceManagerApi {
 interface UseSequenceManagerOptions {
   valves: Valve[];
   appConfig: AppConfig | null;
-  sendCommand: (cmd: string) => Promise<boolean>;
+  sendCommand: (cmd: SerialCommand) => Promise<boolean>;
   getSensorData: () => SensorData | null;
   onSequenceComplete?: (name: string) => void;
 }
@@ -279,15 +280,16 @@ export function useSequenceManager({
           }
           for (const raw of s.commands) {
             if (controller.signal.aborted) throw new Error('aborted');
-            const cmd = resolveCommand(raw);
 
-            const ok = await sendCommand(cmd);
+            const cmdStr = resolveCommand(raw);
+            const ok = await sendCommand({ type: 'RAW', payload: cmdStr });
+
             if (!ok) {
-              addLog(`Command failed to send: ${cmd}`);
+              addLog(`Command failed to send: ${cmdStr}`);
               return false;
             }
 
-            const parts = cmd.split(',');
+            const parts = cmdStr.split(',');
             if (parts[0] === 'V' && parts.length === 3) {
               const valveIndex = parseInt(parts[1], 10);
               const targetState = parts[2] === 'O' ? 'OPEN' : 'CLOSED';

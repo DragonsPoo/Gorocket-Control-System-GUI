@@ -44,8 +44,8 @@ export default function Home() {
   } = useSequenceManager({
     valves,
     appConfig,
-    sendCommand: (cmd) => sendCommand({ type: 'RAW', payload: cmd }),
-     getSensorData: getLatestSensorData,
+    sendCommand,
+    getSensorData: getLatestSensorData,
     onSequenceComplete: (name) => {
       if (name === 'Emergency Shutdown') resetEmergency();
     },

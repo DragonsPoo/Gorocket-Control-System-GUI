@@ -149,6 +149,7 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
+
   app.on('activate', () => {
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     if (BrowserWindow.getAllWindows().length === 0) appInstance.init();
