@@ -1,95 +1,173 @@
 <img width="2879" height="1707" alt="image" src="https://github.com/user-attachments/assets/9ed51db3-f4d9-49a1-b5fd-7456a9212430" />
 
-# 로켓 엔진 테스트용 제어 및 모니터링 GUI
+# GoRocket Control System GUI
 
-## 🚀 소개
+로켓 엔진 테스트용 제어 및 모니터링 GUI 시스템
 
-이 프로젝트는 로켓 엔진 테스트를 더 쉽고 안전하게 진행할 수 있도록 돕는 데스크톱 GUI 애플리케이션입니다. 복잡한 명령어 없이 마우스 클릭만으로 센서 데이터를 확인하고 밸브를 제어할 수 있어, 로켓 엔진 테스트 스탠드를 처음 다루는 분들도 직관적으로 사용할 수 있습니다.
+## 🚀 프로젝트 개요
 
-이 애플리케이션은 **Electron**을 기반으로 만들어져 Windows, macOS, Linux 등 다양한 운영체제에서 동일하게 동작합니다. 사용자 인터페이스(UI)는 **Next.js**와 **React**를 사용해 만들어져 빠르고 현대적인 웹 기술을 데스크톱 환경에서 그대로 경험할 수 있습니다.
+GoRocket Control System GUI는 로켓 엔진 테스트 스탠드를 위한 전문적인 제어 및 모니터링 시스템입니다. 복잡한 로켓 추진제 시스템을 안전하고 정밀하게 제어할 수 있도록 설계된 Electron 기반 데스크톱 애플리케이션입니다.
 
-### ✨ 주요 기술 스택
+이 시스템은 실시간 센서 모니터링, 자동화된 밸브 제어, 사전 정의된 테스트 시퀀스 실행, 그리고 포괄적인 데이터 로깅 기능을 제공하여 로켓 엔진 테스트의 안전성과 효율성을 크게 향상시킵니다.
 
-- **Electron**: 웹 기술(HTML, CSS, JavaScript)로 데스크톱 앱을 만들 수 있게 해주는 프레임워크입니다.
-- **Next.js / React**: 사용자 인터페이스를 만들기 위한 JavaScript 라이브러리입니다.
-- **TypeScript**: 코드의 안정성과 가독성을 높여주는 JavaScript의 확장 언어입니다.
-- **Tailwind CSS & shadcn/ui**: 세련되고 일관된 디자인을 쉽게 적용할 수 있게 돕는 UI 라이브러리입니다.
-- **Recharts**: 센서 데이터를 실시간 그래프로 아름답게 시각화하는 라이브러리입니다.
-- **Node-Serialport**: PC와 아두이노(Arduino) 같은 하드웨어 간의 시리얼 통신을 가능하게 합니다.
-- **Arduino**: 실제 센서를 읽고 밸브를 움직이는 역할을 하는 마이크로컨트롤러 보드입니다.
+## ✨ 주요 특징
+
+- **실시간 센서 모니터링**: 8개 센서(압력 4개, 유량 2개, 온도 2개)의 실시간 데이터 시각화
+- **지능형 밸브 제어**: 7개 서보 밸브의 원격 제어 및 상태 피드백
+- **자동화된 테스트 시퀀스**: 사전 정의된 안전한 테스트 절차 실행
+- **포괄적 데이터 로깅**: 모든 센서 데이터 및 시스템 이벤트 기록
+- **안전 기능**: 압력 한계 모니터링 및 자동 긴급 정지
+
+### 🛠️ 기술 스택
+
+**Frontend**
+- Next.js 15.3.3 + React 18 + TypeScript
+- Tailwind CSS + Radix UI (shadcn/ui)
+- Recharts (실시간 데이터 시각화)
+
+**Backend**
+- Electron 37.2.3 (데스크톱 애플리케이션)
+- Node.js SerialPort (Arduino 통신)
+- Ajv (JSON Schema 검증)
+- Zod (타입 안전 설정 관리)
+
+**Hardware**
+- Arduino Mega 2560 (펌웨어)
+- MAX6675 온도센서 모듈
+- 압력 센서, 유량 센서, 서보 모터
 
 ---
 
-## 🎯 주요 기능
+## 🎯 시스템 기능
 
-### 1. 실시간 센서 모니터링
+### 실시간 센서 모니터링
 
-- **직관적인 데이터 확인**: 4개의 압력 센서(PT), 2개의 유량 센서(Flow), 2개의 열전대(TC)에서 들어오는 데이터를 실시간으로 보여줍니다.
-- **시각적 그래프**: 모든 센서 데이터는 시간에 따른 변화를 쉽게 파악할 수 있도록 시계열 그래프로 표시됩니다.
-- **한눈에 보는 대시보드**: 현재 값을 큰 숫자로 표시하여 중요한 정보를 놓치지 않도록 돕습니다.
-- **압력 한계 감지**: 설정된 압력 한계값을 넘으면 자동으로 'Emergency Shutdown' 시퀀스를 실행하여 안전을 확보합니다.
+**센서 구성**
+- **PT-1 ~ PT-4**: 압력 센서 (연료탱크, 산화제탱크, 연료라인, 산화제라인)
+- **Flow-1, Flow-2**: 유량 센서 (연료/산화제 유량 측정)
+- **TC-1, TC-2**: 온도 센서 (연소실/노즐 온도)
 
-### 2. 간편한 밸브 제어
+**주요 기능**
+- 100ms 주기 실시간 데이터 수집
+- 시계열 차트를 통한 데이터 시각화
+- 압력 한계 초과 시 자동 긴급 정지 (현재: 850 PSI)
+- 센서 오류 감지 및 알림
 
-- **원격 밸브 조작**: 총 7개의 서보 밸브를 버튼 클릭만으로 개별적으로 열고 닫을 수 있습니다.
-- **정확한 상태 피드백**: 각 밸브에 달린 2개의 리미트 스위치가 현재 밸브가 완전히 열렸는지, 아니면 닫혔는지를 감지하여 화면에 명확하게 표시해 줍니다.
+### 밸브 제어 시스템
 
-### 3. 자동 테스트 시퀀스 실행
+**밸브 구성 (7개)**
+1. **Ethanol Main** - 에탄올 주 공급 밸브
+2. **N2O Main** - 아산화질소 주 공급 밸브  
+3. **Ethanol Purge** - 에탄올 퍼지 밸브
+4. **N2O Purge** - 아산화질소 퍼지 밸브
+5. **Pressurant Fill** - 가압가스 공급 밸브
+6. **System Vent** - 시스템 벤트 밸브
+7. **Igniter Fuel** - 점화기 연료 밸브
 
-- **원클릭 테스트**: 퍼지(Purge), 점화(Ignition), 메인 연소(Main Combustion) 등 미리 설정된 복잡한 테스트 단계를 버튼 하나로 순차적으로 실행합니다.
-- **진행 상황 확인**: 각 단계의 실행 과정과 결과는 터미널 형태의 패널에 순서대로 기록되어 모든 과정을 쉽게 추적할 수 있습니다.
-- **사용자 맞춤 시퀀스**: 테스트 시퀀스의 각 단계(밸브 개폐, 대기 시간 등)는 코드 내에서 쉽게 수정할 수 있습니다. 자세한 내용은 [자동 테스트 시퀀스 조정](#-자동-테스트-시퀀스-조정) 섹션을 참고하세요.
-- **피드백 검증**: 각 밸브 명령 후 리미트 스위치 응답을 확인하며, 지정된 시간 내 응답이 없으면 자동으로 'Emergency Shutdown'이 실행됩니다.
+**제어 기능**
+- 개별 밸브 원격 제어 (Open/Close)
+- 리미트 스위치를 통한 실시간 상태 피드백
+- 밸브 응답 타임아웃 모니터링 (기본 2초)
+- 서보 모터 전력 최적화 (목표 위치 도달 시 자동 분리)
 
-### 4. 데이터 로깅 및 저장
+### 자동화된 테스트 시퀀스
 
-- **모든 데이터 기록**: 테스트 중 측정되는 모든 센서 데이터는 타임스탬프와 함께 PC에 CSV 파일로 자동 저장됩니다.
-- **손쉬운 제어**: GUI에서 '로깅 시작'과 '로깅 중지' 버튼으로 데이터 기록 시점을 자유롭게 제어할 수 있습니다.
-- **분석용 데이터 확보**: 저장된 파일은 Excel이나 Python 등으로 열어 테스트 결과를 정밀하게 분석하고 보고서를 작성하는 데 활용할 수 있습니다.
+**사전 정의된 시퀀스**
+1. **Pre-Test Purge**: 테스트 전 라인 퍼지
+2. **Tank Pressurization**: 탱크 가압 (PT1 ≥ 50 PSI 대기)
+3. **Engine Chill & Pre-Flow**: 엔진 냉각 및 사전 유량 설정
+4. **Igniter Arm**: 점화기 활성화
+5. **Safe Vent**: 안전 벤트 절차
+6. **Emergency Shutdown**: 긴급 정지 절차
 
-### 5. 안정적인 하드웨어 연결
+**시퀀스 특징**
+- JSON 기반 시퀀스 정의 및 실시간 리로드
+- 센서 조건 기반 단계 진행
+- 각 단계별 타임아웃 및 오류 처리
+- 실시간 진행 상황 로깅
 
-- **자동 포트 검색**: PC에 연결된 장치 중 통신 가능한 시리얼 포트를 자동으로 찾아 목록으로 보여줍니다.
-- **명확한 연결 상태**: 사용자가 목록에서 아두이노 보드를 선택하면, 연결 성공 여부가 UI에 명확히 표시되어 통신 상태를 쉽게 알 수 있습니다.
+### 데이터 로깅 시스템
+
+- **자동 CSV 로깅**: 모든 센서 데이터 및 시스템 이벤트
+- **파일 위치**: `Documents/rocket-logs/` 디렉토리
+- **파일명 형식**: `rocket-test-YYYY-MM-DD-HH-mm-ss.csv`
+- **로그 내용**: 타임스탬프, 센서값, 밸브 상태, 시퀀스 이벤트
+- **GUI 제어**: 시작/중지 버튼을 통한 수동 제어
+
+### 안전 기능
+
+- **압력 한계 모니터링**: 설정값 초과 시 자동 Emergency Shutdown
+- **밸브 피드백 검증**: 명령 후 리미트 스위치 응답 확인
+- **통신 상태 감시**: 시리얼 연결 상태 실시간 모니터링
+- **시퀀스 중단**: 언제든지 수동 시퀀스 중단 가능
 
 ---
 
 ## 🏗️ 시스템 아키텍처
 
-이 애플리케이션은 크게 세 부분으로 나뉘어 동작합니다.
+### 전체 시스템 구조
 
 ```
-+--------------------------------+
-|       UI Layer (Frontend)      |  <-- 사용자가 보는 화면 (in src/)
-|  (Next.js / React / TypeScript)|
-+--------------------------------+
-             ^      | IPC (내부 통신)
-             |      v
-+--------------------------------+
-|  Main Process Layer (Backend)  |  <-- 앱의 핵심 로직 (in main/ and main.ts)
-|   (Electron / Node.js / TS)    |
-+--------------------------------+
-             ^      | Serial (직렬 통신)
-             |      v
-+--------------------------------+
-|      Hardware Layer (Device)   |  <-- 실제 장치 (in arduino_mega_code/)
-|         (Arduino Mega)         |
-+--------------------------------+
+┌─────────────────────────────────────┐
+│           Frontend Layer            │
+│      (Next.js + React + TS)         │  ← 사용자 인터페이스
+│   ┌─────────────────────────────┐   │
+│   │  Dashboard Components       │   │
+│   │  • SensorPanel             │   │
+│   │  • ValveDisplay            │   │
+│   │  • SequencePanel           │   │  
+│   │  • DataChartPanel          │   │
+│   │  • TerminalPanel           │   │
+│   └─────────────────────────────┘   │
+└─────────────────────────────────────┘
+                   │
+              IPC 통신 (preload.ts)
+                   │
+┌─────────────────────────────────────┐
+│           Electron Main             │
+│         (Node.js + TS)              │  ← 백엔드 로직
+│   ┌─────────────────────────────┐   │
+│   │  Core Managers              │   │
+│   │  • SerialManager            │   │
+│   │  • ConfigManager            │   │
+│   │  • SequenceDataManager     │   │
+│   │  • LogManager               │   │
+│   └─────────────────────────────┘   │
+└─────────────────────────────────────┘
+                   │
+            SerialPort 통신 (115200 bps)
+                   │
+┌─────────────────────────────────────┐
+│         Arduino Mega 2560           │
+│            (C++ 펌웨어)              │  ← 하드웨어 제어
+│   ┌─────────────────────────────┐   │
+│   │  Hardware Control           │   │
+│   │  • 7x Servo Motors          │   │
+│   │  • 14x Limit Switches       │   │
+│   │  • 4x Pressure Sensors      │   │
+│   │  • 2x Flow Sensors          │   │
+│   │  • 2x Temperature Sensors   │   │
+│   └─────────────────────────────┘   │
+└─────────────────────────────────────┘
 ```
 
-1.  **UI Layer (Frontend)**
-    - 사용자가 직접 보고 상호작용하는 화면 부분입니다. (`src` 폴더)
-    - Next.js와 React를 기반으로 만들어졌으며, `preload.ts` 파일을 통해 아래의 Main Process와 안전하게 데이터를 주고받습니다.
+### 주요 구성 요소
 
-2.  **Main Process Layer (Backend)**
-    - 눈에 보이지 않는 곳에서 앱의 핵심 기능을 담당하는 부분입니다. (`main.ts`와 `main` 폴더)
-    - Electron의 메인 프로세스로, 시리얼 포트 연결, 데이터 파일 저장, 설정 관리 등 중요한 작업을 처리합니다.
-    - 아두이노 보드와 직접 통신하며 명령을 보내고 데이터를 받습니다.
+**Frontend Layer (src/)**
+- **대시보드 컴포넌트**: 센서 데이터, 밸브 상태, 시퀀스 제어 UI
+- **React Hooks**: 데이터 관리 및 비즈니스 로직 (`useSerialManager`, `useSequenceManager`)
+- **실시간 차트**: Recharts를 이용한 센서 데이터 시각화
 
-3.  **Hardware Layer (Device)**
-    - 실제 로켓 테스트 스탠드에 연결된 아두이노 보드입니다. (`arduino_mega_code` 폴더)
-    - 센서 값을 읽고, 서보 모터를 제어하는 펌웨어 코드가 이 보드 위에서 실행됩니다.
-    - Main Process로부터 받은 명령을 수행하고, 측정한 데이터를 PC로 보냅니다.
+**Backend Layer (main/)**
+- **SerialManager**: Arduino와의 시리얼 통신 및 명령어 처리
+- **ConfigManager**: 설정 파일 로딩 및 타입 검증 (Zod 사용)
+- **SequenceDataManager**: 시퀀스 파일 관리 및 JSON Schema 검증
+- **LogManager**: CSV 형태 데이터 로깅 시스템
+
+**Hardware Layer (arduino_mega_code/)**
+- **센서 인터페이스**: 아날로그/디지털 센서 데이터 수집
+- **서보 제어**: 상태 머신 기반 정밀 밸브 제어
+- **통신 프로토콜**: 견고한 시리얼 명령어 파싱 및 응답
 
 ---
 
@@ -154,196 +232,319 @@
    - UI의 로그 토글은 `start-logging`/`stop-logging` IPC를 통해 `LogManager`를 제어하며, 생성 실패 시 UI에 알립니다
    - 로그는 사용자 문서 폴더 아래 `rocket-logs`에 CSV로 저장되고, 파싱 오류는 `#` 주석으로 기록하여 문제 데이터를 추적할 수 있게 합니다
 
-## 📂 파일 구조
-
-프로젝트 폴더는 다음과 같이 구성되어 있습니다.
+## 📂 프로젝트 구조
 
 ```
-.
-├── arduino_mega_code/     # 아두이노 보드에 업로드할 펌웨어 코드
-├── main/                  # Electron 메인 프로세스에서 사용할 모듈 (e.g., 시리얼, 로깅)
-├── src/                   # Next.js/React로 작성된 프론트엔드 UI 코드
-│   ├── app/               # 웹 페이지와 레이아웃 정의
-│   ├── components/        # 버튼, 차트 등 재사용 가능한 UI 조각들
-│   ├── hooks/             # 데이터 관리 등 반복되는 로직을 모아둔 훅
-│   ├── lib/               # 프론트엔드 전용 유틸리티 함수
-│   └── sequences.json     # 자동 테스트 시퀀스 설정 파일
-├── shared/                # 프론트엔드와 백엔드에서 공유하는 타입 및 유틸
-│   ├── types/             # 전역 타입 정의
-│   └── utils/             # 공용 유틸리티 함수
-├── docs/                  # 프로젝트 관련 참고 문서나 설계 자료
-├── main.ts                # Electron 앱이 처음 시작될 때 실행되는 메인 프로세스 진입점
-├── preload.ts             # UI(Renderer)와 메인 프로세스를 안전하게 연결하는 다리 역할
-├── config.json            # 시리얼 통신 속도, 밸브 이름 등 앱의 설정을 담는 파일
-└── package.json           # 프로젝트에 필요한 라이브러리 목록과 실행 명령어 정의
+Gorocket-Control-System-GUI/
+│
+├── 📁 src/                          # Frontend (React + Next.js)
+│   ├── 📁 app/                      # Next.js App Router
+│   │   ├── layout.tsx               # 전체 앱 레이아웃
+│   │   ├── page.tsx                 # 메인 대시보드
+│   │   └── globals.css              # 전역 스타일
+│   ├── 📁 components/               # UI 컴포넌트
+│   │   ├── 📁 dashboard/            # 대시보드 전용 컴포넌트
+│   │   │   ├── header.tsx           # 연결 상태 & 로깅 제어
+│   │   │   ├── sensor-panel.tsx     # 8개 센서 데이터 표시
+│   │   │   ├── valve-display.tsx    # 7개 밸브 제어 & 상태
+│   │   │   ├── sequence-panel.tsx   # 자동 시퀀스 제어
+│   │   │   ├── terminal-panel.tsx   # 실시간 로그 출력
+│   │   │   └── data-chart-panel.tsx # 센서 데이터 차트
+│   │   └── 📁 ui/                   # 재사용 가능한 UI 컴포넌트 (shadcn/ui)
+│   ├── 📁 hooks/                    # React Hooks
+│   │   ├── useSerialManager.ts      # 시리얼 통신 & 센서 데이터 관리
+│   │   ├── useSequenceManager.ts    # 자동 시퀀스 실행 관리
+│   │   └── useValveControl.ts       # 밸브 제어 로직
+│   └── 📁 lib/                      # 유틸리티 함수
+│
+├── 📁 main/                         # Backend (Electron Main Process)
+│   ├── SerialManager.ts             # Arduino 시리얼 통신
+│   ├── ConfigManager.ts             # 설정 파일 관리
+│   ├── SequenceDataManager.ts       # 시퀀스 데이터 관리 & 검증
+│   └── LogManager.ts                # 데이터 로깅 시스템
+│
+├── 📁 shared/                       # 공통 타입 & 유틸리티
+│   ├── 📁 types/                    # TypeScript 타입 정의
+│   │   ├── index.ts                 # SensorData, Valve 등 핵심 타입
+│   │   ├── ipc.ts                   # IPC 통신 타입
+│   │   └── global.d.ts              # 전역 타입 선언
+│   └── 📁 utils/
+│       └── sensorParser.ts          # 센서 데이터 파싱 로직
+│
+├── 📁 arduino_mega_code/            # Arduino 펌웨어
+│   └── arduino_mega_code.ino        # Arduino Mega 2560 펌웨어
+│
+├── 📄 main.ts                       # Electron 메인 프로세스 진입점
+├── 📄 preload.ts                    # 보안 IPC 브릿지
+├── 📄 config.json                   # 시스템 설정 파일
+├── 📄 sequences.json                # 자동 시퀀스 정의
+├── 📄 sequences.schema.json         # 시퀀스 JSON 스키마
+└── 📄 package.json                  # 프로젝트 의존성 & 스크립트
 ```
 
 ---
 
-## 🛠️ 개발 환경 준비
+## ⚙️ 설치 및 설정
 
-이 프로젝트를 직접 수정하고 실행해 보려면 다음 단계를 따라주세요.
+### 시스템 요구사항
 
-### 1. 필수 소프트웨어 설치
+**소프트웨어**
+- Node.js 18.0 이상
+- Arduino IDE 2.0 이상 (펌웨어 업로드용)
+- Git (선택사항)
 
-- **[Node.js](https://nodejs.org/) (버전 18 이상)**: JavaScript 실행 환경입니다. `npm`이 함께 설치됩니다.
-- **[Arduino IDE](https://www.arduino.cc/en/software)**: 아두이노 보드에 펌웨어를 업로드할 때 필요합니다.
-- **Git** (선택 사항): 코드 버전을 관리하고 GitHub에서 프로젝트를 내려받을 때 편리합니다.
+**하드웨어**
+- Arduino Mega 2560
+- USB 케이블
+- Windows/macOS/Linux 운영체제
 
-설치가 완료되면 터미널(명령 프롬프트 또는 PowerShell)에서 아래 명령어로 설치를 확인합니다.
+### 설치 과정
 
-```bash
-node -v
-npm -v
-```
-
-### 2. 프로젝트 내려받기 및 의존성 설치
-
-터미널을 열고 아래 명령어를 순서대로 입력합니다.
+#### 1. 프로젝트 클론 및 의존성 설치
 
 ```bash
-# 1. GitHub에서 프로젝트를 복제합니다.
-git clone https://github.com/your-username/Gorocket-Control-System-GUI.git
-
-# 2. 프로젝트 폴더로 이동합니다.
+# 프로젝트 복제
+git clone https://github.com/jungho1902/Gorocket-Control-System-GUI.git
 cd Gorocket-Control-System-GUI
 
-# 3. package.json에 기록된 모든 라이브러리를 자동으로 설치합니다.
+# 의존성 설치
 npm install
-```
 
-### 3. 네이티브 모듈 재빌드
-
-이 프로젝트는 하드웨어 통신을 위해 `serialport`라는 라이브러리를 사용합니다. 이 라이브러리는 C++로 만들어진 부분이 있어, 현재 설치된 Electron 버전에 맞게 다시 컴파일(재빌드)해야 합니다.
-
-```bash
+# 네이티브 모듈 재빌드 (serialport)
 npm run rebuild
 ```
 
-> **⚠️ Windows 사용자 주의**: 이 과정에서 오류가 발생한다면, C++ 코드를 컴파일하는 데 필요한 도구가 설치되지 않았을 가능성이 높습니다. 터미널을 **관리자 권한으로** 실행한 뒤, 아래 명령어를 실행하여 빌드 도구를 먼저 설치하고 다시 시도해 보세요. `npm install --global windows-build-tools`
+#### 2. Arduino 펌웨어 업로드
 
-### 4. Arduino 펌웨어 업로드
+1. **Arduino IDE에서 펌웨어 열기**
+   ```
+   파일 > 열기 > arduino_mega_code/arduino_mega_code.ino
+   ```
 
-1.  PC에 Arduino Mega 보드를 USB 케이블로 연결합니다.
-2.  Arduino IDE를 실행합니다.
-3.  **파일 > 열기**를 선택하여 이 프로젝트의 `arduino_mega_code/arduino_mega_code.ino` 파일을 엽니다.
-4.  **툴 > 보드** 메뉴에서 `Arduino Mega or Mega 2560`을 선택합니다.
-5.  **툴 > 포트** 메뉴에서 Arduino가 연결된 COM 포트를 선택합니다. (e.g., `COM3`)
-6.  IDE의 **업로드** 버튼(오른쪽 화살표 아이콘)을 눌러 펌웨어를 보드에 탑재합니다.
+2. **보드 및 포트 설정**
+   - 보드: `Arduino Mega or Mega 2560`
+   - 포트: Arduino가 연결된 COM 포트 선택
+
+3. **펌웨어 업로드**
+   - 업로드 버튼 클릭 (→)
+   - "Initialization complete" 메시지 확인
+
+#### 3. 설정 파일 확인
+
+**config.json 주요 설정**
+```json
+{
+  "serial": { "baudRate": 115200 },
+  "pressureLimit": 850,
+  "valveFeedbackTimeout": 2000,
+  "maxChartDataPoints": 100
+}
+```
+
+**sequences.json 시퀀스 설정**
+- 사전 정의된 6개 시퀀스
+- JSON Schema 기반 검증
+- 실시간 파일 변경 감지
 
 ---
 
-## ▶️ 실행 방법
+## 🚀 실행 방법
 
-### 개발 모드 (Development)
-
-코드를 수정하면서 바로바로 변경 사항을 확인하고 싶을 때 사용합니다.
+### 개발 모드
 
 ```bash
+# 개발 서버 시작 (권장)
 npm run dev
 ```
 
-이 명령어를 실행하면 UI 개발 서버와 Electron 앱이 동시에 실행되며, 코드를 저장할 때마다 앱이 자동으로 새로고침됩니다.
+**실행 과정**
+1. Next.js 개발 서버 시작 (`localhost:9002`)
+2. Electron 메인 프로세스 빌드
+3. Electron 앱 실행
+4. 코드 변경 시 자동 리로드
 
-### 프로덕션 빌드 (Production)
-
-다른 사람에게 배포할 수 있는 설치 파일(.exe 등)을 만들 때 사용합니다.
+### 사용 가능한 스크립트
 
 ```bash
+# 타입 검사
+npm run typecheck
+
+# 린트 검사  
+npm run lint
+
+# 시퀀스 파일 검증
+npm run validate:seq
+
+# 프로덕션 빌드 (실험적)
 npm run build
+npm run package
 ```
 
-> **⚠️ 경고**: 현재 프로덕션 빌드(`npm run build`)는 불안정하며 정상적으로 동작하지 않을 수 있습니다. 배포용으로 사용하기보다는 개발 모드(`npm run dev`)로 실행하는 것을 권장합니다.
+### 앱 사용법
+
+1. **Arduino 연결**
+   - USB 케이블로 Arduino 연결
+   - 헤더에서 포트 선택 후 "연결" 클릭
+
+2. **센서 모니터링**
+   - 연결 후 자동으로 센서 데이터 수신 시작
+   - 실시간 차트에서 데이터 추이 확인
+
+3. **밸브 제어**
+   - 개별 밸브 수동 제어 가능
+   - 리미트 스위치 상태 실시간 확인
+
+4. **자동 시퀀스 실행**
+   - 사전 정의된 시퀀스 선택 후 실행
+   - 터미널에서 진행 상황 모니터링
+
+5. **데이터 로깅**
+   - "로깅 시작" 버튼으로 데이터 기록 시작
+   - `Documents/rocket-logs/` 폴더에 CSV 저장
 
 ---
 
-## 🔬 자동 테스트 시퀀스 조정
+## 🔧 시퀀스 및 설정 커스터마이징
 
-자동 테스트 시퀀스는 미리 정해진 순서에 따라 밸브를 제어하고 대기하는 작업들의 모음입니다. 이 시퀀스는 사용자의 필요에 맞게 직접 수정할 수 있습니다.
+### 자동 시퀀스 수정
 
-시퀀스 로직은 `src/hooks/useSequenceManager.ts`와 `src/sequences.json`에 정의되어 있습니다. 앱은 `src/sequences.schema.json`을 기준으로 시퀀스 파일을 검증하며, `sequences.json`이 변경되면 자동으로 다시 로드되어 유효한 경우 UI에 즉시 반영됩니다.
+시퀀스는 `sequences.json` 파일에서 정의되며, JSON Schema 기반 검증을 통해 안전성을 보장합니다.
 
-`src/sequences.json` 예시는 다음과 같습니다.
+**현재 시퀀스**
+- `Pre-Test Purge`: 테스트 전 라인 퍼지
+- `Tank Pressurization`: 탱크 가압 (PT1 ≥ 50 PSI)
+- `Engine Chill & Pre-Flow`: 엔진 냉각 및 사전 유량
+- `Igniter Arm`: 점화기 활성화
+- `Safe Vent`: 안전 벤트 절차
+- `Emergency Shutdown`: 긴급 정지
 
+**시퀀스 구조 예시**
 ```json
 {
-  "Ignition Sequence": [
+  "Tank Pressurization": [
     {
-      "message": "Opening valves 1 and 2",
-      "delay": 500,
-      "commands": ["V,1,O", "V,2,O"]
+      "message": "Open Pressurant Fill",
+      "delay": 0,
+      "commands": ["CMD,Pressurant Fill,Open"]
     },
     {
-      "message": "Wait for PT1 pressure",
+      "message": "Wait for PT1 ≥ 50 psi",
       "delay": 0,
-      "condition": { "sensor": "pt1", "min": 100 },
+      "condition": {
+        "sensor": "pt1",
+        "min": 50,
+        "timeoutMs": 60000
+      },
       "commands": []
-    }
-  ],
-  "Emergency Shutdown": [
-    {
-      "message": "Emergency shutdown: close all valves",
-      "delay": 100,
-      "commands": ["V,0,C", "V,1,C", "V,2,C", "V,3,C", "V,4,C", "V,5,C", "V,6,C"]
     }
   ]
 }
 ```
 
-### 조정 방법
+**수정 방법**
+1. `sequences.json` 파일 편집
+2. 파일 저장 시 자동 검증 및 리로드
+3. UI에서 즉시 변경사항 반영
 
-- **새 시퀀스 추가**: `src/sequences.json`에 새 키와 단계를 추가합니다. 각 단계는 `message`(로그 메시지), `delay`(밀리초), `commands`(시리얼로 보낼 명령 문자열 배열)로 구성됩니다. 필요하다면 `condition`을 추가해 특정 센서 값이 기준 이상이 될 때까지 대기할 수 있습니다.
-- **명령 수정**: `commands` 배열에 `"V,서보번호,O"` 또는 `"V,서보번호,C"`처럼 아두이노에 보낼 제어 명령을 원하는 대로 작성합니다.
-- **UI 커스터마이즈(선택 사항)**: 시퀀스 버튼의 아이콘이나 색을 바꾸고 싶다면 `src/components/dashboard/sequence-panel.tsx`의 `sequenceMeta` 객체를 수정하세요.
-- **저장 즉시 반영**: `sequences.json`을 저장하면 앱이 파일 변경을 감지해 자동으로 시퀀스를 다시 로드합니다.
+### 시스템 설정 (`config.json`)
 
----
-
-## ⚙️ 설정 파일 (`config.json`)
-
-앱의 세부 동작은 `config.json` 파일을 수정하여 변경할 수 있습니다.
-
+**주요 설정값**
 ```json
 {
+  "pressureLimit": 850,           // PSI, 압력 한계값
+  "valveFeedbackTimeout": 2000,   // ms, 밸브 응답 대기시간
+  "maxChartDataPoints": 100,      // 차트 표시 데이터 포인트
   "serial": {
-    "baudRate": 115200
-  },
-  "maxChartDataPoints": 100,
-  "pressureLimit": 850,
-  "valveFeedbackTimeout": 2000,
-  "initialValves": [
-    {
-      "id": 1,
-      "name": "Ethanol Main",
-      "state": "CLOSED",
-      "lsOpen": false,
-      "lsClosed": false
-    }
-  ],
-  "valveMappings": {
-    "Ethanol Main": { "servoIndex": 0 }
+    "baudRate": 115200             // Arduino 통신 속도
   }
 }
 ```
 
-- `serial.baudRate`: 아두이노와 통신할 때의 속도입니다. 펌웨어 코드의 `Serial.begin()`에 설정된 값과 반드시 일치해야 합니다.
-- `maxChartDataPoints`: 실시간 차트에 표시될 데이터 포인트의 최대 개수입니다. 이 값을 넘어가면 가장 오래된 데이터부터 사라집니다.
-- `pressureLimit`: 특정 압력 센서 값이 이 기준(PSI 단위)을 초과하면 UI에 경고를 표시하고 'Emergency Shutdown' 시퀀스를 자동으로 실행합니다.
-- `valveFeedbackTimeout`: 밸브 명령 후 리미트 스위치 응답을 기다리는 최대 시간(ms)으로, 이를 초과하면 시퀀스가 실패합니다.
-- `initialValves`: 앱이 시작될 때 화면에 표시될 밸브의 이름과 초기 상태, 그리고 리미트 스위치 상태(`lsOpen`, `lsClosed`) 목록입니다.
-- `valveMappings`: UI의 밸브 이름(e.g., "Ethanol Main")과 아두이노 펌웨어에서 실제로 제어하는 서보 모터의 번호(인덱스)를 연결해주는 중요한 설정입니다.
+**밸브 매핑**
+- `valveMappings`: UI 밸브 이름 → Arduino 서보 인덱스
+- `initialValves`: 앱 시작시 밸브 초기 상태
 
 ---
 
-## 🤔 문제 해결 팁
+### 통신 프로토콜
 
-- **`npm run rebuild` 실행 중 에러가 발생해요.**
-  - 대부분 C++ 컴파일 도구가 없어서 발생하는 문제입니다. [개발 환경 준비](#3-네이티브-모듈-재빌드)의 Windows 사용자 주의사항을 참고하여 빌드 도구를 설치해 보세요.
+**Arduino → PC (센서 데이터)**
+```
+pt1:123.45,pt2:67.89,flow1:0.125,tc1:298.15,V0_LS_OPEN:1,V0_LS_CLOSED:0,...
+```
 
-- **앱에서 시리얼 포트가 보이지 않아요.**
-  - 아두이노 보드가 PC에 제대로 연결되었는지 USB 케이블을 확인해 보세요.
-  - 장치 관리자(Windows) 또는 시스템 정보(macOS)에서 보드가 정상적으로 인식되었는지 확인하고, 필요하다면 드라이버를 설치하세요.
+**PC → Arduino (제어 명령)**
+```
+CMD,Valve_Name,Action  // 예: CMD,Ethanol Main,Open
+V,ServoIndex,O|C       // 예: V,0,O (서보 0번 열기)
+```
+
+**핸드셰이크**
+- PC → Arduino: `HELLO\n`
+- Arduino → PC: `READY`
+- 연결 성공 후 실시간 데이터 스트림 시작
 
 ---
 
-이 문서는 프로젝트의 기본적인 소개와 사용법을 안내합니다. 프로젝트를 사용하시면서 발견한 버그나 개선 아이디어가 있다면 언제든지 GitHub 이슈로 등록해 주세요!
+## 🛠️ 문제 해결
+
+### 일반적인 문제
+
+**serialport 모듈 빌드 실패**
+```bash
+# Windows (관리자 권한 필요)
+npm install -g windows-build-tools
+npm run rebuild
+
+# macOS/Linux
+npm run rebuild
+```
+
+**Arduino 연결 실패**
+- USB 케이블 및 드라이버 확인
+- 다른 프로그램에서 포트 사용 여부 확인
+- Arduino IDE에서 시리얼 모니터 닫기
+- 보드 재시작 (리셋 버튼)
+
+**시퀀스 검증 실패**
+```bash
+# 시퀀스 파일 검증
+npm run validate:seq
+
+# 스키마 오류 확인 및 수정
+```
+
+**센서 데이터 수신 안됨**
+- Arduino 펌웨어 업로드 상태 확인
+- 시리얼 통신 속도 일치 확인 (115200 bps)
+- 센서 하드웨어 연결 점검
+
+### 개발 모드 디버깅
+
+**Electron DevTools**
+- `Ctrl+Shift+I` (Windows/Linux)
+- `Cmd+Option+I` (macOS)
+
+**로그 확인**
+- 브라우저 콘솔: Frontend 로그
+- Electron 메인 프로세스: 터미널 출력
+- Arduino: 시리얼 모니터 (115200 bps)
+
+---
+
+## 📞 지원 및 기여
+
+**이슈 리포팅**
+- [GitHub Issues](https://github.com/jungho1902/Gorocket-Control-System-GUI/issues)
+
+**프로젝트 기여**
+- Fork → Branch → Pull Request
+- 코딩 스타일: ESLint + Prettier 설정 준수
+- 타입 안전성: TypeScript strict 모드
+
+**라이선스**
+- 이 프로젝트의 라이선스 정보는 LICENSE 파일을 참조하세요.
+
+---
+
+*이 문서는 최신 코드베이스 분석을 바탕으로 작성되었습니다. (업데이트: 2024)*
