@@ -18,12 +18,15 @@ const int initialClosedAngles[NUM_SERVOS] = {103,121,105,117,129,135,135};
 const int servoPins[NUM_SERVOS]           = {13,12,11,10,9,8,7};
 Servo servos[NUM_SERVOS];
 
-enum ServoState { IDLE, MOVING, INCHING_OPEN, INCHING_CLOSED };
+enum ServoState { IDLE, MOVING, INCHING_OPEN, INCHING_CLOSED, STALL_RELIEF };
 ServoState servoStates[NUM_SERVOS];
 int targetAngles[NUM_SERVOS];
+int reliefAngles[NUM_SERVOS];  // 스톨 방지용 릴리프 각도
 unsigned long lastMoveTime[NUM_SERVOS];
 #define SERVO_SETTLE_TIME 500
 #define INCHING_INTERVAL  50
+#define STALL_RELIEF_ANGLE 3    // 리미트 스위치 눌린 후 반대방향 회전 각도
+#define STALL_RELIEF_TIME 200   // 릴리프 동작 후 대기 시간
 
 // =========================== 압력 ===========================
 #define NUM_PRESSURE_SENSORS 4
@@ -50,10 +53,14 @@ int currentLimitSwitchStates[NUM_SERVOS][2] = {0};
 const int flowSensorPins[NUM_FLOW_SENSORS] = {2, 3}; // D2(INT0), D3(INT1)
 
 // ---- K 적용 구간 ----
-// 센서 K: 1484.11 pulse/L  →  m³당 펄스(×1000)로 변환해 사용
-#define K_PULSE_PER_L 1484.11f
-// k-factor: pulses per m^3
-const float kFactors[NUM_FLOW_SENSORS] = { K_PULSE_PER_L * 1000.0f, K_PULSE_PER_L * 1000.0f };
+// 센서 K 계수 (pulse/L): Flow1=1484.11, Flow2=1593.79
+#define K_PULSE_PER_L_FLOW1 1484.11f
+#define K_PULSE_PER_L_FLOW2 1593.79f
+// k-factor: pulses per m^3 (L 단위를 m³로 변환하기 위해 ×1000)
+const float kFactors[NUM_FLOW_SENSORS] = { 
+  K_PULSE_PER_L_FLOW1 * 1000.0f,  // Flow1: 1484.11 * 1000 = 1,484,110 pulse/m³
+  K_PULSE_PER_L_FLOW2 * 1000.0f   // Flow2: 1593.79 * 1000 = 1,593,790 pulse/m³
+};
 // ----------------------
 
 // ISR 공유 변수
@@ -121,6 +128,7 @@ void setup() {
     pinMode(limitSwitchPins[i][1], INPUT_PULLUP);
     servos[i].detach(); // 제어 신호만 분리 (전원 차단 아님)
     servoStates[i] = IDLE;
+    reliefAngles[i] = 90; // 기본 릴리프 각도 초기화
   }
 
   // 유량 핀: 외부 분압 푸시풀 → 내부 풀업 사용 금지
@@ -241,24 +249,52 @@ void manageAllServoMovements(const unsigned long now) {
           bool isOpen  = (currentLimitSwitchStates[i][0] == 1);
           bool isClose = (currentLimitSwitchStates[i][1] == 1);
           if ((targetAngles[i] < 50 && isOpen) || (targetAngles[i] > 50 && isClose)) {
-            servoStates[i] = IDLE; servos[i].detach();
+            // 리미트 스위치가 눌렸으면 스톨 방지 릴리프 모드로 전환
+            reliefAngles[i] = targetAngles[i] + ((targetAngles[i] < 50) ? STALL_RELIEF_ANGLE : -STALL_RELIEF_ANGLE);
+            reliefAngles[i] = constrain(reliefAngles[i], 0, 180);
+            servos[i].write(reliefAngles[i]);
+            servoStates[i] = STALL_RELIEF;
+            lastMoveTime[i] = now;
           } else {
             servoStates[i] = (targetAngles[i] < 50) ? INCHING_OPEN : INCHING_CLOSED;
           }
         }
         break;
       case INCHING_OPEN:
-        if (currentLimitSwitchStates[i][0] == 1) { servoStates[i]=IDLE; servos[i].detach(); }
+        if (currentLimitSwitchStates[i][0] == 1) { 
+          // 리미트 스위치가 눌렸으면 스톨 방지 릴리프 실행
+          reliefAngles[i] = targetAngles[i] + STALL_RELIEF_ANGLE;
+          reliefAngles[i] = constrain(reliefAngles[i], 0, 180);
+          servos[i].write(reliefAngles[i]);
+          servoStates[i] = STALL_RELIEF;
+          lastMoveTime[i] = now;
+        }
         else if (now - lastMoveTime[i] > INCHING_INTERVAL) {
           targetAngles[i] = max(0, targetAngles[i]-1);
           servos[i].write(targetAngles[i]); lastMoveTime[i]=now;
         }
         break;
       case INCHING_CLOSED:
-        if (currentLimitSwitchStates[i][1] == 1) { servoStates[i]=IDLE; servos[i].detach(); }
+        if (currentLimitSwitchStates[i][1] == 1) { 
+          // 리미트 스위치가 눌렸으면 스톨 방지 릴리프 실행
+          reliefAngles[i] = targetAngles[i] - STALL_RELIEF_ANGLE;
+          reliefAngles[i] = constrain(reliefAngles[i], 0, 180);
+          servos[i].write(reliefAngles[i]);
+          servoStates[i] = STALL_RELIEF;
+          lastMoveTime[i] = now;
+        }
         else if (now - lastMoveTime[i] > INCHING_INTERVAL) {
           targetAngles[i] = min(180, targetAngles[i]+1);
           servos[i].write(targetAngles[i]); lastMoveTime[i]=now;
+        }
+        break;
+      case STALL_RELIEF:
+        // 스톨 방지 릴리프 동작 후 대기
+        if (now - lastMoveTime[i] > STALL_RELIEF_TIME) {
+          servoStates[i] = IDLE; 
+          servos[i].detach();
+          // 디버그 출력 (필요시)
+          // Serial.print(F("Servo ")); Serial.print(i); Serial.println(F(" stall relief completed"));
         }
         break;
       case IDLE: default: break;
