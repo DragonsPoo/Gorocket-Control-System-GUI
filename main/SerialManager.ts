@@ -5,8 +5,9 @@ import type { SerialCommand } from '../shared/types/ipc';
 import { ValveCommandType } from '../shared/types/ipc';
 
 export interface SerialManagerEvents {
-  data: (data: string) => void;
-  error: (error: Error) => void;
+  data: (data: string) => void;   // 텔레메트리/로그 라인
+  error: (error: Error) => void;  // 포트/프로토콜 에러
+  status?: (s: { state: 'connected' | 'disconnected' | 'reconnecting', path?: string }) => void; // 선택적
 }
 
 export declare interface SerialManager {
@@ -16,11 +17,43 @@ export declare interface SerialManager {
   ): this;
 }
 
+type OutMsg = {
+  payload: string;          // ex) "V,0,O" or already-framed line if isFramed=true
+  framed: string;           // ex) "V,0,O,42,3A"
+  msgId: number;
+  attempts: number;
+  maxRetries: number;
+  ackTimeoutMs: number;
+  resolve: (v: boolean) => void;
+  reject: (e: Error) => void;
+  timer?: NodeJS.Timeout;
+  isFramed: boolean;
+};
+
 export class SerialManager extends EventEmitter {
   private port: SerialPort | null = null;
   private parser: ReadlineParser | null = null;
   private manualClose = false;
 
+  // 신뢰성/큐
+  private queue: OutMsg[] = [];
+  private inflight: OutMsg | null = null;
+  private pendingById = new Map<number, OutMsg>();
+  private nextMsgId = 1;
+
+  // 연결/재연결 상태
+  private lastPath: string | null = null;
+  private lastBaud: number | null = null;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private reconnectDelayMs = 300;
+
+  // 기본 파라미터
+  private DEFAULT_ACK_TIMEOUT = 1500; // ms
+  private DEFAULT_RETRIES = 5;        // 총 시도 횟수(초기+재시도)
+  private NACK_RETRY_DELAY = 80;      // ms
+  private BACKOFF_MAX = 5000;         // ms
+
+  // ====================== 포트 열기/닫기 ======================
   async listPorts(): Promise<string[]> {
     const ports = await SerialPort.list();
     return ports.map((p) => p.path);
@@ -30,63 +63,43 @@ export class SerialManager extends EventEmitter {
     if (this.port?.isOpen) {
       await this.disconnect();
     }
-    let success = false;
+
+    this.lastPath = path;
+    this.lastBaud = baudRate;
+
     this.manualClose = false;
+    let success = false;
+
     try {
-      this.port = new SerialPort({ path, baudRate });
+      this.port = new SerialPort({ path, baudRate, autoOpen: true });
       this.parser = this.port.pipe(new ReadlineParser({ delimiter: '\n' }));
 
+      // open 대기
       await new Promise<void>((resolve, reject) => {
-        const onError = (err: Error) => {
-          cleanup();
-          reject(err);
-        };
-        const onOpen = () => {
-          cleanup();
-          resolve();
-        };
-        const cleanup = () => {
-          this.port?.off('error', onError);
-          this.port?.off('open', onOpen);
-        };
-        this.port?.once('error', onError);
-        this.port?.once('open', onOpen);
-        setTimeout(() => {
-          onError(new Error('Connection timeout'));
+        const timeout = setTimeout(() => {
+          cleanup(); reject(new Error('Connection timeout'));
         }, 5000);
-      });
-
-      // handshake
-      await new Promise<void>((resolve, reject) => {
-        const onData = (d: string) => {
-          if (d.trim() === 'READY') {
-            cleanup();
-            resolve();
-          }
-        };
-        const onError = (err: Error) => {
-          cleanup();
-          reject(err);
-        };
+        const onOpen = () => { cleanup(); resolve(); };
+        const onErr = (e: Error) => { cleanup(); reject(e); };
         const cleanup = () => {
-          this.parser?.off('data', onData);
-          this.port?.off('error', onError);
+          clearTimeout(timeout);
+          this.port?.off('open', onOpen);
+          this.port?.off('error', onErr);
         };
-        this.parser?.on('data', onData);
-        this.port?.once('error', onError);
-        this.port?.write('HELLO\n');
-        setTimeout(() => {
-          onError(new Error('Handshake timeout'));
-        }, 3000);
+        this.port?.once('open', onOpen);
+        this.port?.once('error', onErr);
       });
 
-      this.port.on('close', () => {
-        if (!this.manualClose) {
-          this.emit('error', new Error('Port closed unexpectedly'));
-        }
-      });
-      this.parser.on('data', (d: string) => this.emit('data', d));
-      this.port.on('error', (e) => this.emit('error', e));
+      // 수신 핸들러 구성
+      this.port.on('close', () => this.onPortClosed());
+      this.port.on('error', (e) => this.onPortError(e));
+      this.parser.on('data', (d: string) => this.onLine(d));
+
+      // 헬로 핸드셰이크 (CRC 프레이밍)
+      await this.sendHelloHandshake();
+
+      this.reconnectDelayMs = 300;
+      this.emitStatus('connected', path);
       success = true;
       return true;
     } catch (err) {
@@ -94,17 +107,7 @@ export class SerialManager extends EventEmitter {
       return false;
     } finally {
       if (!success) {
-        if (this.port) {
-          try {
-            if (this.port.isOpen) {
-              await new Promise((res) => this.port!.close(() => res(undefined)));
-            }
-          } catch {}
-          this.port.removeAllListeners();
-        }
-        this.parser?.removeAllListeners();
-        this.port = null;
-        this.parser = null;
+        await this.cleanupPort();
       }
     }
   }
@@ -112,16 +115,12 @@ export class SerialManager extends EventEmitter {
   async disconnect(): Promise<boolean> {
     if (!this.port) return false;
     this.manualClose = true;
+    const p = this.port;
     return new Promise((resolve) => {
-      const currentPort = this.port!;
-      currentPort.close((err) => {
-        if (err) {
-          this.emit('error', err);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-        currentPort.removeAllListeners();
+      p.close((err) => {
+        if (err) this.emit('error', err);
+        resolve(!err);
+        p.removeAllListeners();
         this.parser?.removeAllListeners();
         this.parser = null;
         this.manualClose = false;
@@ -130,30 +129,312 @@ export class SerialManager extends EventEmitter {
     });
   }
 
-  async send(command: SerialCommand): Promise<boolean> {
-    if (!this.port || !this.port.isOpen) return false;
-    const cmdStr = this.buildCommand(command);
+  // ====================== 신뢰성 전송 API ======================
+  async send(command: SerialCommand | { raw: string } | string): Promise<boolean> {
+    if (!this.port || !this.port.isOpen) {
+      // 연결 안됨 → 재연결 시도
+      this.scheduleReconnect();
+      return Promise.reject(new Error('Port not open'));
+    }
+
+    const { payload, isFramed, msgId: parsedId } = this.buildPayload(command);
+    const { framed, msgId } = isFramed
+      ? { framed: payload, msgId: parsedId! }
+      : this.frame(payload);
+
+    const ackTimeoutMs: number = (command as any)?.ackTimeoutMs ?? this.DEFAULT_ACK_TIMEOUT;
+    const maxRetries: number = (command as any)?.retries ?? this.DEFAULT_RETRIES;
+
     return new Promise<boolean>((resolve, reject) => {
-      this.port!.write(cmdStr + '\n', (err) => {
-        if (err) reject(err);
-        else resolve(true);
-      });
-    }).catch((err) => {
-      this.emit('error', err);
-      return false as boolean;
+      const msg: OutMsg = {
+        payload, framed, msgId, attempts: 0, maxRetries, ackTimeoutMs,
+        resolve, reject, isFramed
+      };
+      this.queue.push(msg);
+      this.processQueue();
     });
   }
 
-  private buildCommand(cmd: SerialCommand): string {
-    switch (cmd.type) {
-      case 'V':
-        return `V,${cmd.servoIndex},${
-          cmd.action === ValveCommandType.OPEN ? 'O' : 'C'
-        }`;
-      case 'RAW':
-        return cmd.payload;
+  // ====================== 내부 구현 ======================
+  private processQueue() {
+    if (!this.port || !this.port.isOpen) return;
+    if (this.inflight) return;
+    const msg = this.queue.shift();
+    if (!msg) return;
+
+    // 전송
+    this.inflight = msg;
+    msg.attempts++;
+    this.pendingById.set(msg.msgId, msg);
+
+    this.port.write(this.ensureLF(msg.framed), (err) => {
+      if (err) {
+        // write 실패 → 재시도
+        this.onWriteError(msg, err);
+        return;
+      }
+      // ACK 타이머
+      msg.timer = setTimeout(() => {
+        this.onAckTimeout(msg);
+      }, msg.ackTimeoutMs);
+    });
+  }
+
+  private onAckTimeout(msg: OutMsg) {
+    // 타임아웃 → 재시도
+    this.clearInflightTimer(msg);
+    this.pendingById.delete(msg.msgId);
+    this.inflight = null;
+
+    if (msg.attempts >= msg.maxRetries) {
+      msg.reject(new Error(`ACK timeout after ${msg.attempts} attempts for msgId=${msg.msgId}`));
+    } else {
+      // 재큐
+      setTimeout(() => { this.queue.unshift(msg); this.processQueue(); }, this.NACK_RETRY_DELAY);
+    }
+  }
+
+  private onWriteError(msg: OutMsg, err: Error) {
+    this.clearInflightTimer(msg);
+    this.pendingById.delete(msg.msgId);
+    this.inflight = null;
+    this.emit('error', err);
+    // 포트 상태 확인 후 재전송 시도
+    if (!this.port || !this.port.isOpen) this.scheduleReconnect();
+    if (msg.attempts >= msg.maxRetries) {
+      msg.reject(new Error(`Write failed: ${err.message}`));
+    } else {
+      setTimeout(() => { this.queue.unshift(msg); this.processQueue(); }, this.NACK_RETRY_DELAY);
+    }
+  }
+
+  private onLine(raw: string) {
+    const line = raw.trim();
+    if (!line) return;
+
+    const parsed = this.parseAckNack(line);
+    if (parsed) {
+      if (parsed.kind === 'ack') {
+        const msg = this.pendingById.get(parsed.msgId);
+        if (msg) {
+          this.pendingById.delete(parsed.msgId);
+          this.clearInflightTimer(msg);
+          this.inflight = null;
+          msg.resolve(true);
+          // 다음 처리
+          this.processQueue();
+        }
+      } else if (parsed.kind === 'nack') {
+        const msg = this.pendingById.get(parsed.msgId);
+        if (msg) {
+          this.pendingById.delete(parsed.msgId);
+          this.clearInflightTimer(msg);
+          this.inflight = null;
+          if (msg.attempts >= msg.maxRetries) {
+            msg.reject(new Error(`NACK(${parsed.reason}) for msgId=${parsed.msgId}`));
+          } else {
+            // 재시도
+            setTimeout(() => { this.queue.unshift(msg); this.processQueue(); }, this.NACK_RETRY_DELAY);
+          }
+        } else {
+          // 대기 중 아님(예: HB 등) → 알림만
+          this.emit('error', new Error(`NACK(${parsed.reason}) for unknown msgId=${parsed.msgId}`));
+        }
+      }
+      // ACK/NACK 라인도 그대로 상위에 보낼지 여부는 정책에 따름.
+      // 여기서는 디버그/상호운용을 위해 그대로 data 이벤트로도 흘려보냅니다.
+      this.emit('data', line);
+      return;
+    }
+
+    // 일반 텔레메트리/로그 라인
+    this.emit('data', line);
+  }
+
+  private async sendHelloHandshake(): Promise<void> {
+    // 프레임드 HELLO 송신 후 READY or ACK 대기(둘 중 하나면 성공 처리)
+    const { framed, msgId } = this.frame('HELLO');
+
+    await new Promise<void>((resolve, reject) => {
+      let done = false;
+      const to = setTimeout(() => {
+        cleanup(); reject(new Error('Handshake timeout'));
+      }, 3000);
+
+      const onData = (d: string) => {
+        const line = d.trim();
+        if (!line) return;
+        if (line === 'READY') { finish(); }
+        const ack = this.parseAckNack(line);
+        if (ack && ack.kind === 'ack' && ack.msgId === msgId) { finish(); }
+      };
+      const onErr = (e: Error) => { cleanup(); reject(e); };
+      const finish = () => { if (!done) { done = true; cleanup(); resolve(); } };
+      const cleanup = () => {
+        clearTimeout(to);
+        this.parser?.off('data', onData);
+        this.port?.off('error', onErr);
+      };
+
+      this.parser?.on('data', onData);
+      this.port?.once('error', onErr);
+      this.port?.write(this.ensureLF(framed));
+    });
+  }
+
+  private onPortClosed() {
+    if (this.manualClose) {
+      this.emitStatus('disconnected');
+      return;
+    }
+    this.emit('error', new Error('Port closed unexpectedly'));
+    // inflight 재큐
+    if (this.inflight) {
+      const msg = this.inflight;
+      this.clearInflightTimer(msg);
+      this.pendingById.delete(msg.msgId);
+      this.queue.unshift(msg);
+      this.inflight = null;
+    }
+    this.emitStatus('disconnected');
+    this.scheduleReconnect();
+  }
+
+  private onPortError(err: Error) {
+    this.emit('error', err);
+    // inflight 보존 후 재연결
+    if (!this.port || !this.port.isOpen) this.scheduleReconnect();
+  }
+
+  private scheduleReconnect() {
+    if (this.manualClose) return;
+    if (this.reconnectTimer) return;
+    this.emitStatus('reconnecting', this.lastPath ?? undefined);
+
+    const attempt = async () => {
+      this.reconnectTimer = null;
+      if (!this.lastPath || !this.lastBaud) {
+        // 연결 정보 없음
+        return;
+      }
+      const ok = await this.connect(this.lastPath, this.lastBaud);
+      if (!ok) {
+        this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, this.BACKOFF_MAX);
+        this.reconnectTimer = setTimeout(attempt, this.reconnectDelayMs);
+      } else {
+        // 재연결 성공 → 큐 재개
+        this.processQueue();
+      }
+    };
+    this.reconnectTimer = setTimeout(attempt, this.reconnectDelayMs);
+  }
+
+  private async cleanupPort() {
+    try {
+      if (this.port) {
+        if (this.port.isOpen) {
+          await new Promise<void>((res) => this.port!.close(() => res()));
+        }
+        this.port.removeAllListeners();
+      }
+    } catch {}
+    this.parser?.removeAllListeners();
+    this.port = null;
+    this.parser = null;
+  }
+
+  // ====================== 빌드/프레이밍/파싱 ======================
+  private buildPayload(input: SerialCommand | { raw: string } | string): { payload: string; isFramed: boolean; msgId?: number } {
+    if (typeof input === 'string') {
+      const pl = this.stripLF(input);
+      const framed = this.detectFramed(pl);
+      return framed ? { payload: pl, isFramed: true, msgId: framed.msgId } : { payload: pl, isFramed: false };
+    }
+    if ('raw' in input) {
+      const pl = this.stripLF(input.raw);
+      const framed = this.detectFramed(pl);
+      return framed ? { payload: pl, isFramed: true, msgId: framed.msgId } : { payload: pl, isFramed: false };
+    }
+    // SerialCommand
+    switch (input.type) {
+      case 'V': {
+        const act = input.action === ValveCommandType.OPEN ? 'O' : 'C';
+        const pl = `V,${input.servoIndex},${act}`;
+        return { payload: pl, isFramed: false };
+      }
+      case 'RAW': {
+        const pl = this.stripLF(input.payload);
+        const framed = this.detectFramed(pl);
+        return framed ? { payload: pl, isFramed: true, msgId: framed.msgId } : { payload: pl, isFramed: false };
+      }
       default:
         throw new Error('Unknown command');
     }
+  }
+
+  private frame(payload: string): { framed: string; msgId: number } {
+    const msgId = this.nextMsgId++;
+    const base = `${payload},${msgId}`;
+    const crc = this.crc8(Buffer.from(base, 'utf8'));
+    const crcHex = crc.toString(16).toUpperCase().padStart(2, '0');
+    return { framed: `${base},${crcHex}`, msgId };
+  }
+
+  private detectFramed(line: string): { msgId: number } | null {
+    // ...,<msgId>,<crcHex>
+    const m = /,(\d+),([A-Fa-f0-9]{2})$/.exec(line);
+    if (!m) return null;
+    const id = Number(m[1]);
+    if (!Number.isFinite(id)) return null;
+    return { msgId: id };
+    // CRC 검증은 펌웨어/ACK가 보장하므로 여기서 생략
+  }
+
+  private parseAckNack(line: string):
+    | { kind: 'ack'; msgId: number }
+    | { kind: 'nack'; msgId: number; reason: string }
+    | null {
+    if (line.startsWith('ACK,')) {
+      const parts = line.split(',');
+      if (parts.length >= 2) {
+        const id = Number(parts[1]);
+        if (Number.isFinite(id)) return { kind: 'ack', msgId: id };
+      }
+      return null;
+    }
+    if (line.startsWith('NACK,')) {
+      const parts = line.split(',');
+      if (parts.length >= 3) {
+        const id = Number(parts[1]);
+        const reason = parts[2];
+        if (Number.isFinite(id)) return { kind: 'nack', msgId: id, reason };
+      }
+      return null;
+    }
+    return null;
+  }
+
+  private crc8(buf: Uint8Array): number {
+    let crc = 0x00;
+    for (let i = 0; i < buf.length; i++) {
+      crc ^= buf[i];
+      for (let b = 0; b < 8; b++) {
+        crc = (crc & 0x80) ? ((crc << 1) ^ 0x07) & 0xFF : (crc << 1) & 0xFF;
+      }
+    }
+    return crc & 0xFF;
+  }
+
+  private stripLF(s: string): string {
+    return s.replace(/[\r\n]+$/g, '');
+  }
+  private ensureLF(s: string): string {
+    return s.endsWith('\n') ? s : (s + '\n');
+  }
+  private clearInflightTimer(msg: OutMsg) {
+    if (msg.timer) { clearTimeout(msg.timer); msg.timer = undefined; }
+  }
+  private emitStatus(state: 'connected' | 'disconnected' | 'reconnecting', path?: string) {
+    this.emit('status' as any, { state, path });
   }
 }
