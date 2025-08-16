@@ -58,6 +58,13 @@ const api = {
     ipcRenderer.on('sequences-updated', handler);
     return () => ipcRenderer.removeListener('sequences-updated', handler);
   },
+  
+  // <<< 여기에 추가된 코드
+  // 렌더러(UI)에서 감지된 압력 이상 상태를 메인 프로세스로 보고합니다.
+  safetyPressureExceeded: (snapshot: any) => {
+    ipcRenderer.send('safety:pressureExceeded', snapshot);
+  },
+  // >>> 추가된 코드 끝
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);
