@@ -50,6 +50,11 @@ const api = {
   zoomReset: () => ipcRenderer.send('zoom-reset'),
   startLogging: () => ipcRenderer.send('start-logging'),
   stopLogging: () => ipcRenderer.send('stop-logging'),
+  onLogCreationFailed: (callback: (error: string) => void) => {
+    const listener = (_e: IpcRendererEvent, value: string) => callback(value);
+    ipcRenderer.on('log-creation-failed', listener);
+    return () => ipcRenderer.removeListener('log-creation-failed', listener);
+  },
   getConfig: (): Promise<AppConfig> => ipcRenderer.invoke('get-config'),
 
   getSequences: () => ipcRenderer.invoke('get-sequences'),

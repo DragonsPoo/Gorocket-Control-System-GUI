@@ -1,225 +1,492 @@
-# 🚀 로켓 지상 시험 제어 시스템
+# 🚀 GoRocket Control System GUI
 
-## 📋 현장 작업 절차
+> **Rocket Engine Test Control and Monitoring System**  
+> Next.js + Electron 기반의 현대적인 로켓 지상 시험 제어 시스템
 
-### **1단계: 현장 도착 후 기본 준비**
+## 📦 기술 스택
 
-#### 하드웨어 연결 상세 점검
-**전원 시스템**:
+### 프론트엔드
+- **Next.js 15.3.3** - React 프레임워크 (Turbopack 사용)
+- **React 18.3.1** - UI 라이브러리
+- **TypeScript 5** - 타입 안전성
+- **Tailwind CSS 3.4** - 스타일링
+- **Radix UI** - 접근성 기반 UI 컴포넌트
+- **Recharts** - 실시간 데이터 차트
+- **Lucide React** - 아이콘 라이브러리
+
+### 백엔드 (Electron Main Process)
+- **Electron 37.2.3** - 데스크톱 애플리케이션 프레임워크
+- **Node.js** - 런타임 환경
+- **SerialPort** - 아두이노 통신
+- **TypeScript** - 타입 안전성
+
+### 하드웨어 통신
+- **Arduino Mega** - 하드웨어 제어
+- **USB Serial Communication** - PC ↔ Arduino 통신
+- **JSON Protocol** - 명령 및 데이터 전송
+
+## 🏗️ 프로젝트 구조
+
+```
+GoRocket-Control-System-GUI/
+├── src/                          # Next.js 앱 소스
+│   ├── app/                      # App Router 페이지
+│   │   ├── page.tsx             # 메인 대시보드 페이지
+│   │   ├── layout.tsx           # 루트 레이아웃
+│   │   └── globals.css          # 전역 스타일
+│   ├── components/              # React 컴포넌트
+│   │   ├── dashboard/           # 대시보드 전용 컴포넌트
+│   │   │   ├── header.tsx       # 상단 헤더 (연결, 포트 선택)
+│   │   │   ├── sensor-panel.tsx # 센서 데이터 패널
+│   │   │   ├── valve-display.tsx# 밸브 제어 패널
+│   │   │   ├── sequence-panel.tsx# 시퀀스 제어 패널
+│   │   │   ├── data-chart-panel.tsx# 실시간 차트
+│   │   │   └── terminal-panel.tsx# 로그 터미널
+│   │   └── ui/                  # 재사용 가능한 UI 컴포넌트
+│   ├── hooks/                   # Custom React Hooks
+│   │   ├── useSerialManager.ts  # 시리얼 통신 관리
+│   │   ├── useSequenceManager.ts# 시퀀스 실행 관리
+│   │   ├── useSensorData.ts     # 센서 데이터 관리
+│   │   └── useValveControl.ts   # 밸브 제어 관리
+│   └── lib/                     # 유틸리티 라이브러리
+│       ├── utils.ts            # 공통 유틸리티
+│       └── event-bus.ts        # 이벤트 버스
+├── main/                        # Electron Main Process
+│   ├── SerialManager.ts        # 시리얼 포트 관리
+│   ├── SequenceEngine.ts       # 시퀀스 실행 엔진
+│   ├── SequenceDataManager.ts  # 시퀀스 데이터 관리
+│   ├── LogManager.ts           # 로깅 시스템
+│   └── ConfigManager.ts        # 설정 관리
+├── shared/                      # 공유 타입 및 유틸리티
+│   ├── types/                  # TypeScript 타입 정의
+│   └── utils/                  # 공유 유틸리티
+├── arduino_mega_code/          # Arduino 펌웨어
+│   └── arduino_mega_code.ino   # Arduino 메가 코드
+├── main.ts                     # Electron 메인 프로세스
+├── preload.ts                  # Electron Preload 스크립트
+├── config.json                 # 시스템 설정
+├── sequences.json              # 시퀀스 정의
+└── sequences.schema.json       # 시퀀스 JSON 스키마
+```
+
+## ⚡ 시작하기
+
+### 1. 개발 환경 설정
+
+```bash
+# 프로젝트 클론
+git clone <repository-url>
+cd Gorocket-Control-System-GUI
+
+# 종속성 설치
+npm install
+
+# Electron 네이티브 모듈 재빌드 (serialport)
+npm run rebuild
+
+# 개발 서버 시작
+npm run dev
+```
+
+### 2. 빌드 및 패키징
+
+```bash
+# 전체 빌드 (Electron + Next.js)
+npm run build
+
+# 실행 파일 생성
+npm run package
+
+# 타입 체크
+npm run typecheck
+
+# 린팅
+npm run lint
+
+# 시퀀스 스키마 검증
+npm run validate:seq
+```
+
+### 3. 하드웨어 준비
+
+#### 전원 시스템
 - [ ] 주 전원 (24V) 연결 및 전압 확인
 - [ ] 아두이노 메가 전원 LED 점등 확인
 - [ ] 서보모터 전원 분배기 상태 확인
 - [ ] 센서 전원 공급 상태 확인 (5V, 3.3V)
 
-**통신 연결**:
+#### 통신 연결
 - [ ] 아두이노 메가 ↔ PC USB 케이블 연결
-- [ ] 장치 관리자에서 COM 포트 인식 확인 (보통 COM3~COM8)
-- [ ] USB 케이블 품질 확인 (데이터 라인 포함)
+- [ ] 장치 관리자에서 COM 포트 인식 확인
+- [ ] Arduino IDE에서 펌웨어 업로드
 
-**밸브 액추에이터 (7개)**:
-- [ ] Valve 0 (Ethanol Main): 서보 연결 및 리미트 스위치 2개
-- [ ] Valve 1 (N2O Main): 서보 연결 및 리미트 스위치 2개
-- [ ] Valve 2 (Ethanol Purge): 서보 연결 및 리미트 스위치 2개
-- [ ] Valve 3 (N2O Purge): 서보 연결 및 리미트 스위치 2개
-- [ ] Valve 4 (Pressurant Fill): 서보 연결 및 리미트 스위치 2개
-- [ ] Valve 5 (System Vent): 서보 연결 및 리미트 스위치 2개
-- [ ] Valve 6 (Igniter Fuel): 서보 연결 및 리미트 스위치 2개
+#### 밸브 액추에이터 (7개)
+- [ ] Valve 0 (Ethanol Main): 서보 + 리미트 스위치 2개
+- [ ] Valve 1 (N2O Main): 서보 + 리미트 스위치 2개
+- [ ] Valve 2 (Ethanol Purge): 서보 + 리미트 스위치 2개
+- [ ] Valve 3 (N2O Purge): 서보 + 리미트 스위치 2개
+- [ ] Valve 4 (Pressurant Fill): 서보 + 리미트 스위치 2개
+- [ ] Valve 5 (System Vent): 서보 + 리미트 스위치 2개
+- [ ] Valve 6 (Igniter Fuel): 서보 + 리미트 스위치 2개
 
-**센서 연결**:
+#### 센서 연결
 - [ ] 압력 센서 4개 (PT1~PT4): 아날로그 핀 A0~A3
 - [ ] 온도 센서 2개 (TC1, TC2): MAX6675 모듈, SPI 통신
 - [ ] 유량 센서 2개 (Flow1, Flow2): 디지털 핀 2, 3 (인터럽트)
 
-#### 소프트웨어 시작 및 초기 설정
+## 🖥️ 사용자 인터페이스
+
+### 메인 대시보드
+
+#### 1. Header (상단 제어 패널)
+- **포트 선택**: COM 포트 드롭다운 및 새로고침 버튼
+- **연결 상태**: 실시간 연결 상태 표시 (Disconnected/Connecting/Connected)
+- **Connect/Disconnect**: 시리얼 연결 제어 버튼
+- **로깅 제어**: Start/Stop Logging 버튼
+- **응급 셧다운**: Emergency Shutdown 버튼
+
+#### 2. Sensor Panel (센서 데이터)
+- **압력 센서**: PT1~PT4 실시간 압력 값 (PSI)
+- **온도 센서**: TC1, TC2 실시간 온도 값 (K)
+- **유량 센서**: Flow1, Flow2 실시간 유량 값 (L/h)
+- **상태 표시**: 정상/경고/오류 상태별 색상 구분
+
+#### 3. Valve Control Panel (밸브 제어)
+- **밸브 상태**: 각 밸브별 OPEN/CLOSED 상태 표시
+- **리미트 스위치**: LS_OPEN, LS_CLOSED 상태 실시간 표시
+- **제어 버튼**: 각 밸브별 OPEN/CLOSE 버튼
+- **안전 표시**: 압력 한계 초과 시 제어 비활성화
+
+#### 4. Sequence Panel (시퀀스 제어)
+- **시퀀스 목록**: 사용 가능한 모든 시퀀스 표시
+- **실행 상태**: 진행 중인 시퀀스 및 진행률
+- **Cancel 버튼**: 실행 중인 시퀀스 취소
+- **Emergency Shutdown**: 응급 셧다운 시퀀스
+
+#### 5. Data Chart Panel (실시간 차트)
+- **다중 센서 차트**: 모든 센서 데이터 동시 표시
+- **실시간 업데이트**: 0.1초 간격 데이터 갱신
+- **축소/확대**: 시간 범위 조절 가능
+- **데이터 포인트**: 최대 100개 데이터 포인트 유지
+
+#### 6. Terminal Panel (로그 터미널)
+- **실시간 로그**: 모든 시스템 로그 표시
+- **자동 스크롤**: 최신 로그로 자동 이동
+- **로그 필터링**: 로그 레벨별 필터링 가능
+- **최대 로그**: 500개 로그 유지
+
+### 시스템 연결 과정
+
+#### 1. 포트 선택 및 연결
 ```bash
-# 1. 터미널에서 프로젝트 디렉토리 이동
-cd Gorocket-Control-System-GUI
-
-# 2. 종속성 설치 (최초 1회)
-npm install
-
-# 3. 프로그램 실행
-npm run dev
-
-# 4. 브라우저에서 자동 실행 (보통 http://localhost:3000)
+1. Header에서 포트 새로고침 버튼 클릭
+2. COM 포트 드롭다운에서 Arduino 포트 선택
+3. Connect 버튼 클릭
+4. 연결 상태 변화 확인: Disconnected → Connecting → Connected
+5. 센서 데이터 수신 시작 확인
 ```
 
-**GUI 부팅 과정 확인**:
-- [ ] Electron 앱 창 열림 확인
-- [ ] "Awaiting sequence data..." 메시지 표시
-- [ ] 시리얼 포트 목록 로드 확인
-- [ ] 센서 패널 "No Data" 상태 확인
+#### 2. 연결 성공 시 확인사항
+- [ ] 상태 표시: 🟢 Connected
+- [ ] Toast 알림: "Connected to [포트]" 표시
+- [ ] 센서 데이터 실시간 수신 (0.1초 간격)
+- [ ] 밸브 상태 실시간 업데이트
+- [ ] Terminal에 연결 성공 로그 표시
 
-### **2단계: 시스템 연결 및 초기화**
+#### 3. 연결 실패 시 대처
+- USB 케이블 재연결
+- 다른 COM 포트 시도
+- Arduino 리셋 후 재시도
+- 장치 관리자에서 포트 상태 확인
+- Arduino IDE로 펌웨어 상태 확인
 
-#### GUI 시리얼 연결 과정
-**포트 선택 및 연결**:
-1. **포트 새로고침**: 헤더 우측 "🔄" 버튼 클릭
-2. **포트 확인**: 드롭다운에서 아두이노 COM 포트 확인
-   - Windows: `COM3`, `COM4`, `COM5` 등
-   - 포트가 없으면 USB 케이블 및 드라이버 확인
-3. **포트 선택**: 올바른 COM 포트 선택
-4. **연결 시도**: "Connect" 버튼 클릭
-5. **연결 과정 모니터링**:
-   - 상태: "Disconnected" → "Connecting" → "Connected"
-   - 터미널 패널에서 연결 로그 확인
+## 🔧 시스템 기능
 
-**연결 성공 시 확인사항**:
-- [ ] 헤더 연결 상태: 🟢 "Connected" 표시
-- [ ] 터미널: "Successfully connected to COM포트" 메시지
-- [ ] 센서 데이터 실시간 수신 시작 (0.1초마다)
-- [ ] Toast 알림: "Connected to COM포트" 표시
+### 1. 실시간 데이터 모니터링
 
-**연결 실패 시 대처**:
-- [ ] 오류 메시지 확인 (Toast 및 터미널)
-- [ ] USB 케이블 재연결
-- [ ] 다른 COM 포트 시도
-- [ ] 아두이노 리셋 버튼 누르기
-- [ ] 장치 관리자에서 포트 상태 확인
-
-#### 시스템 초기 상태 상세 점검
-**밸브 상태 확인 (Valve Control & Status 패널)**:
-- [ ] 모든 밸브 초기 상태: "CLOSED" (빨간색)
-- [ ] 리미트 스위치 상태: 각 밸브마다 OPEN/CLOSED 스위치 표시
-- [ ] 밸브별 상세 확인:
-  ```
-  Ethanol Main    [CLOSED] [LS_OPEN: ❌] [LS_CLOSED: ✅]
-  N2O Main        [CLOSED] [LS_OPEN: ❌] [LS_CLOSED: ✅]
-  Ethanol Purge   [CLOSED] [LS_OPEN: ❌] [LS_CLOSED: ✅]
-  N2O Purge       [CLOSED] [LS_OPEN: ❌] [LS_CLOSED: ✅]
-  Pressurant Fill [CLOSED] [LS_OPEN: ❌] [LS_CLOSED: ✅]
-  System Vent     [CLOSED] [LS_OPEN: ❌] [LS_CLOSED: ✅]
-  Igniter Fuel    [CLOSED] [LS_OPEN: ❌] [LS_CLOSED: ✅]
-  ```
-
-**센서 데이터 수신 확인 (Sensor Panel)**:
-- [ ] 압력 센서 4개 실시간 값 표시:
-  - PT1: XXX.XX PSI (정상 범위: 0~850)
-  - PT2: XXX.XX PSI
-  - PT3: XXX.XX PSI  
-  - PT4: XXX.XX PSI
-- [ ] 온도 센서 2개 실시간 값 표시:
-  - TC1: XXX.XX K (일반적으로 293~323K, 20~50°C)
-  - TC2: XXX.XX K
-- [ ] 유량 센서 2개 실시간 값 표시:
-  - Flow1: XXX.X L/h (정지 상태에서 0에 가까움)
-  - Flow2: XXX.X L/h
-
-**데이터 수신 품질 확인**:
-- [ ] 센서 값이 0.1초마다 업데이트되는지 확인
-- [ ] "ERR" 값이 표시되는 센서가 있는지 확인
-- [ ] 비정상적으로 높거나 낮은 값이 있는지 확인
-- [ ] 차트에서 안정적인 신호인지 확인 (큰 노이즈 없음)
-
-### **3단계: 시험 준비 및 안전 확인**
-
-#### 압력 시스템 상세 점검
-**압력 한계 설정 확인**:
-- [ ] **config.json** 파일에서 `"pressureLimit": 850` 확인
-- [ ] 현재 모든 압력 센서 값이 한계값 이하인지 확인
-- [ ] 압력 센서별 정상 범위 확인:
-  - PT1 (주 탱크): 0~100 PSI (정상 대기압 근처)
-  - PT2 (N2O 라인): 0~200 PSI
-  - PT3 (에탄올 라인): 0~150 PSI
-  - PT4 (가압 라인): 0~300 PSI
-
-**응급 셧다운 시스템 테스트**:
-1. **수동 응급 셧다운 테스트**:
-   - [ ] "Emergency Shutdown" 버튼 클릭
-   - [ ] 터미널에서 "🚨 EMERGENCY SHUTDOWN INITIATED" 확인
-   - [ ] 모든 주 밸브가 즉시 닫히는지 확인 (100ms 이내)
-   - [ ] System Vent가 열리는지 확인 (200ms 후)
-   - [ ] 완료 메시지 "🛡️ Emergency shutdown completed" 확인
-
-2. **자동 응급 셧다운 조건 확인**:
-   - [ ] 압력 한계 초과 시 자동 트리거 (3회 연속 초과)
-   - [ ] 통신 오류 시 자동 트리거
-   - [ ] 센서 조건 실패 시 자동 트리거
-
-#### 밸브 개별 동작 상세 테스트
-**각 밸브별 동작 확인 절차**:
-
-**1. Ethanol Main (ID: 0)**:
-- [ ] 밸브 카드에서 "OPEN" 버튼 클릭
-- [ ] 동작 과정 관찰:
-  ```
-  1. 서보 초기 각도로 이동 (7도)
-  2. 리미트 스위치 확인 (LS_OPEN)
-  3. 미감지 시 1도씩 감소 (6, 5, 4...)
-  4. LS_OPEN 감지 시 반대로 3도 회전 (감지각도+3)
-  5. 200ms 후 서보 전원 차단
-  6. 상태 변경: CLOSED → OPEN (녹색)
-  ```
-- [ ] "CLOSE" 버튼으로 역동작 확인
-- [ ] 터미널에서 동작 로그 확인
-
-**2. N2O Main (ID: 1)**:
-- [ ] 동일한 과정으로 OPEN/CLOSE 테스트
-- [ ] 초기 각도: OPEN=25도, CLOSE=121도
-- [ ] 리미트 스위치 동작 확인
-
-**3~6. 나머지 밸브들**: 동일한 절차로 테스트
-- [ ] Ethanol Purge (ID: 2): OPEN=12도, CLOSE=105도
-- [ ] N2O Purge (ID: 3): OPEN=13도, CLOSE=117도
-- [ ] Pressurant Fill (ID: 4): OPEN=27도, CLOSE=129도
-- [ ] System Vent (ID: 5): OPEN=39도, CLOSE=135도
-- [ ] Igniter Fuel (ID: 6): OPEN=45도, CLOSE=135도
-
-**밸브 동작 상세 원리**:
-```
-[단계 1] 명령 수신
-├─ GUI에서 OPEN/CLOSE 버튼 클릭
-├─ 시리얼 명령 전송: "V,인덱스,O" 또는 "V,인덱스,C"
-└─ 아두이노에서 명령 파싱
-
-[단계 2] 서보 활성화
-├─ 서보모터 전원 공급 (attach)
-├─ 목표 각도로 즉시 이동
-└─ 상태: IDLE → MOVING
-
-[단계 3] 정밀 위치 조정
-├─ 500ms 대기 (SERVO_SETTLE_TIME)
-├─ 리미트 스위치 상태 확인
-└─ 미감지 시 INCHING 모드 진입
-
-[단계 4] 점진적 이동 (INCHING)
-├─ 50ms마다 1도씩 이동
-├─ OPEN: 각도 감소 (더 열림)
-├─ CLOSE: 각도 증가 (더 닫힘)
-└─ 리미트 스위치 감지까지 반복
-
-[단계 5] 스톨 방지 릴리프
-├─ 리미트 스위치 감지 즉시
-├─ 반대방향으로 3도 회전
-└─ 상태: INCHING → STALL_RELIEF
-
-[단계 6] 완료 및 전원 차단
-├─ 200ms 대기 (STALL_RELIEF_TIME)
-├─ 서보 전원 차단 (detach)
-└─ 상태: STALL_RELIEF → IDLE
+#### 센서 데이터 수집
+```typescript
+interface SensorData {
+  pt1: number;    // 압력 센서 1 (PSI)
+  pt2: number;    // 압력 센서 2 (PSI)
+  pt3: number;    // 압력 센서 3 (PSI)
+  pt4: number;    // 압력 센서 4 (PSI)
+  tc1: number;    // 온도 센서 1 (K)
+  tc2: number;    // 온도 센서 2 (K)
+  flow1: number;  // 유량 센서 1 (L/h)
+  flow2: number;  // 유량 센서 2 (L/h)
+}
 ```
 
-**동작 실패 시 확인사항**:
-- [ ] 서보모터 전원 공급 상태
-- [ ] 리미트 스위치 배선 상태
-- [ ] 기계적 간섭이나 막힘 여부
-- [ ] 터미널에서 "VERR" 오류 메시지 확인
+#### 밸브 상태 추적
+```typescript
+interface ValveState {
+  state: 'OPEN' | 'CLOSED' | 'UNKNOWN';
+  lsOpen: boolean;    // 리미트 스위치 OPEN
+  lsClosed: boolean;  // 리미트 스위치 CLOSED
+  id: number;         // 밸브 ID (0-6)
+  name: string;       // 밸브 이름
+}
+```
 
-### **4단계: 시퀀스 실행**
+### 2. 시퀀스 자동화 시스템
 
-#### 시퀀스 선택 및 실행 준비
-**Sequence Panel 확인**:
-- [ ] "6 sequences loaded successfully" 메시지 확인
-- [ ] 사용 가능한 시퀀스 목록:
-  ```
-  ✅ Random Test A        (9단계, 기본 밸브 테스트)
-  ✅ Random Test B        (9단계, 혼합 동작 테스트)
-  ✅ Random Test C        (10단계, 복합 동작 테스트)
-  ✅ Multi-Open Test      (7단계, 동시 제어 테스트)
-  ✅ Sequential Mix       (9단계, 순차 동작 테스트)
-  ✅ Chaos Test          (8단계, 복잡한 시나리오)
-  🚨 Emergency Shutdown   (5단계, 응급 안전 절차)
-  ```
+#### 시퀀스 구조
+```typescript
+interface SequenceStep {
+  message: string;     // 단계 설명
+  delay: number;       // 지연 시간 (ms)
+  commands: string[];  // 실행할 명령 배열
+  sensors?: {          // 센서 조건 (선택적)
+    condition: string;
+    timeoutMs: number;
+  };
+}
+```
+
+#### 내장 시퀀스
+1. **Random Test A** - 기본 밸브 동작 테스트 (9단계)
+2. **Random Test B** - 혼합 동작 테스트 (9단계)
+3. **Random Test C** - 복합 동작 테스트 (10단계)
+4. **Multi-Open Test** - 동시 제어 테스트 (7단계)
+5. **Sequential Mix** - 순차 동작 테스트 (9단계)
+6. **Chaos Test** - 복잡한 시나리오 (8단계)
+7. **Emergency Shutdown** - 응급 안전 절차 (5단계)
+
+### 3. 안전 시스템
+
+#### 자동 응급 셧다운 트리거
+- **압력 한계 초과**: 850 PSI 초과 시 3회 연속 감지
+- **통신 오류**: Arduino 연결 중단 감지
+- **센서 조건 실패**: 시퀀스 중 타임아웃 발생
+- **수동 트리거**: Emergency Shutdown 버튼
+
+#### 페일세이프 동작
+```typescript
+// 응급 셧다운 시퀀스
+1. 모든 주 밸브 즉시 닫기 (100ms)
+2. 시스템 벤트 열기 (200ms)
+3. 가압 밸브 닫기 (100ms)
+4. 퍼지 밸브 열기 (200ms)
+5. 시스템 안전 상태 확인 (500ms)
+```
+
+### 4. 데이터 로깅
+
+#### 자동 로깅 기능
+- **CSV 형식**: 타임스탬프, 센서 값, 밸브 상태
+- **세션 기반**: 각 세션마다 별도 폴더 생성
+- **설정 스냅샷**: config.json, sequences.json 백업
+- **실시간 플러시**: 2초마다 자동 저장
+
+#### 로그 파일 구조
+```
+Documents/rocket-logs/
+└── session-YYYYMMDD-HHMMSS/
+    ├── data.csv           # 센서 데이터
+    ├── config.json        # 설정 스냅샷
+    └── sequences.json     # 시퀀스 스냅샷
+```
+
+## ⚙️ 설정 및 구성
+
+### config.json
+```json
+{
+  "serial": {
+    "baudRate": 115200           // 시리얼 통신 속도
+  },
+  "pressureLimit": 850,          // 압력 한계값 (PSI)
+  "valveFeedbackTimeout": 0,     // 밸브 피드백 타임아웃 (0=비활성화)
+  "maxChartDataPoints": 100,     // 차트 최대 데이터 포인트
+  "logging": {
+    "enabled": true,             // 로깅 활성화
+    "flushInterval": 2000        // 플러시 간격 (ms)
+  }
+}
+```
+
+### sequences.json
+시퀀스 정의 파일로 JSON 스키마(`sequences.schema.json`)로 검증됩니다.
+
+```json
+{
+  "Random Test A": [
+    {
+      "message": "Open System Vent",
+      "delay": 800,
+      "commands": ["CMD,System Vent,Open"]
+    },
+    {
+      "message": "Open Ethanol Main",
+      "delay": 1200,
+      "commands": ["CMD,Ethanol Main,Open"]
+    }
+    // ... 더 많은 단계
+  ]
+}
+```
+
+### Arduino 설정
+
+#### 유량 센서 계수
+```cpp
+#define K_PULSE_PER_L_FLOW1 1484.11f  // Flow1 (에탄올)
+#define K_PULSE_PER_L_FLOW2 1593.79f  // Flow2 (N2O)
+```
+
+#### 서보 스톨 방지
+```cpp
+#define STALL_RELIEF_ANGLE 3      // 릴리프 각도 (도)
+#define STALL_RELIEF_TIME 200     // 릴리프 시간 (ms)
+#define SERVO_SETTLE_TIME 500     // 서보 안정화 시간 (ms)
+```
+
+## 🔒 보안 및 안전
+
+### Electron 보안 설정
+- **Context Isolation**: 활성화
+- **Node Integration**: 비활성화
+- **Sandbox**: 활성화
+- **Content Security Policy**: 설정됨
+- **Preload Script**: 보안 API 노출
+
+### 안전 점검사항
+- [ ] 모든 인원 안전 거리 확보
+- [ ] 응급 셧다운 절차 숙지
+- [ ] 수동 밸브 제어 방법 확인
+- [ ] 압력 한계 설정 적절성 검토
+- [ ] 비상 연락망 준비
+
+### 금지사항
+- ❌ 압력 한계 초과 상태에서 시험 진행
+- ❌ 센서 오류 상태에서 시퀀스 실행
+- ❌ 응급 셧다운 무시하고 작업 진행
+- ❌ 밸브 피드백 없이 고압 작업
+
+## 🧪 테스트 및 운영
+
+### 시스템 검증 절차
+
+#### 1. 연결 테스트
+```bash
+# 1. Arduino 펌웨어 업로드 확인
+# 2. USB 연결 및 COM 포트 인식
+# 3. GUI에서 포트 선택 및 연결
+# 4. 센서 데이터 수신 확인
+# 5. 밸브 상태 동기화 확인
+```
+
+#### 2. 개별 밸브 테스트
+각 밸브별 동작 확인:
+
+**Valve 0 (Ethanol Main)**
+- 초기 각도: OPEN=7°, CLOSE=98°
+- 동작 시퀀스: IDLE → MOVING → INCHING → STALL_RELIEF → IDLE
+- 리미트 스위치: LS_OPEN, LS_CLOSED 상태 확인
+
+**Valve 1 (N2O Main)**
+- 초기 각도: OPEN=25°, CLOSE=121°
+
+**Valve 2 (Ethanol Purge)**
+- 초기 각도: OPEN=12°, CLOSE=105°
+
+**Valve 3 (N2O Purge)**
+- 초기 각도: OPEN=13°, CLOSE=117°
+
+**Valve 4 (Pressurant Fill)**
+- 초기 각도: OPEN=27°, CLOSE=129°
+
+**Valve 5 (System Vent)**
+- 초기 각도: OPEN=39°, CLOSE=135°
+
+**Valve 6 (Igniter Fuel)**
+- 초기 각도: OPEN=45°, CLOSE=135°
+
+#### 3. 센서 검증
+- **압력 센서**: 0~850 PSI 범위, ±1% 정확도
+- **온도 센서**: MAX6675 기반, 0~1024°C 범위
+- **유량 센서**: 펄스 기반, 교정 계수 적용
+
+### 운영 시나리오
+
+#### 냉간 유동 테스트
+```bash
+1. Random Test A - 기본 밸브 동작 (9.9초)
+2. Multi-Open Test - 동시 제어 (7.6초)
+3. Sequential Mix - 실제 시험 모사 (9.4초)
+```
+
+#### 온간 유동 테스트
+```bash
+1. Chaos Test - 극한 상황 시뮬레이션 (7.2초)
+2. 사용자 정의 시퀀스 실행
+3. 실시간 센서 모니터링 강화
+```
+
+### 응급상황 대응
+
+#### 자동 트리거 조건
+1. **압력 초과**: 850 PSI 초과 3회 연속 (0.3초)
+2. **통신 오류**: Arduino 연결 중단
+3. **센서 타임아웃**: 시퀀스 중 조건 대기 실패
+4. **수동 트리거**: Emergency Shutdown 버튼
+
+#### 응급 셧다운 시퀀스
+```bash
+[T+0ms]   🚨 EMERGENCY SHUTDOWN INITIATED
+[T+100ms] 모든 주 밸브 닫기 (Ethanol Main, N2O Main)
+[T+300ms] 시스템 벤트 열기 (System Vent)
+[T+400ms] 가압 밸브 닫기 (Pressurant Fill)
+[T+600ms] 퍼지 밸브 열기 (Ethanol Purge, N2O Purge)
+[T+1100ms] 🛡️ Emergency shutdown completed
+```
+
+## 🚀 시퀀스 실행 가이드
+
+### 사용 가능한 시퀀스
+
+#### 기본 테스트 시퀀스
+- **Random Test A** (9단계, 9.9초) - 기본 밸브 동작 테스트
+- **Random Test B** (9단계) - 혼합 동작 테스트
+- **Random Test C** (10단계) - 복합 동작 테스트
+
+#### 고급 테스트 시퀀스
+- **Multi-Open Test** (7단계, 7.6초) - 동시 제어 테스트
+- **Sequential Mix** (9단계, 9.4초) - 실제 시험 절차 모사
+- **Chaos Test** (8단계, 7.2초) - 극한 상황 시뮬레이션
+
+#### 안전 시퀀스
+- **Emergency Shutdown** (5단계, 1.1초) - 응급 안전 절차
+
+### 시퀀스 실행 절차
+
+```bash
+1. Sequence Panel에서 원하는 시퀀스 선택
+2. "Start Sequence" 버튼 클릭
+3. 실시간 진행 상황 모니터링
+4. Terminal Panel에서 로그 확인
+5. 필요시 "Cancel" 버튼으로 중단
+```
+
+### 실시간 모니터링
+
+#### Terminal 로그 예시
+```
+[14:23:45] Initiating sequence: Random Test A
+[14:23:45] Step 1/9: Open System Vent
+[14:23:46] Command sent: {"type":"RAW","payload":"V,5,O"}
+[14:23:46] Valve 5 status: CLOSED → OPEN
+[14:23:47] Step 2/9: Open Ethanol Main
+...
+[14:23:55] Sequence Random Test A completed successfully
+```
+
+#### 진행률 표시
+- 현재 단계 / 전체 단계
+- 남은 시간 예상치
+- 실행 중인 명령 실시간 표시
+- 오류 발생 시 즉시 알림
 
 #### 냉간유동 테스트 (차가운 상태에서 유체 흐름 테스트)
 

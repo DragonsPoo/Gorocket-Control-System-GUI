@@ -8,7 +8,7 @@ import { SerialManager } from './main/SerialManager';
 import { LogManager } from './main/LogManager';
 import { SequenceDataManager } from './main/SequenceDataManager';
 import { SequenceEngine } from './main/SequenceEngine'; // SequenceEngine 임포트
-import type { SerialCommand } from '@shared/types/ipc';
+import type { SerialCommand, SerialStatus } from '@shared/types/ipc';
 
 class MainApp {
   private mainWindow: BrowserWindow | null = null;
@@ -60,7 +60,7 @@ class MainApp {
     this.createWindow();
     this.setupIpc();
 
-    this.serialManager.on('status' as any, (s) => {
+    this.serialManager.on('status', (s: SerialStatus) => {
         this.mainWindow?.webContents.send('serial-status', s);
     });
 
@@ -91,6 +91,23 @@ class MainApp {
     }
     this.mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     this.mainWindow.webContents.on('will-navigate', (e) => e.preventDefault());
+    
+    // Set Content Security Policy for better security
+    this.mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self'; " +
+            `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}; ` +
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+            "font-src 'self' https://fonts.gstatic.com; " +
+            "img-src 'self' data:; " +
+            "connect-src 'self';"
+          ]
+        }
+      });
+    });
     this.mainWindow.on('closed', () => (this.mainWindow = null));
     
     // 렌더러 프로세스 종료 감지

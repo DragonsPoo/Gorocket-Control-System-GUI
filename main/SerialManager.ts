@@ -1,13 +1,13 @@
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 import { EventEmitter } from 'events';
-import type { SerialCommand } from '../shared/types/ipc';
+import type { SerialCommand, SerialStatus } from '../shared/types/ipc';
 import { ValveCommandType } from '../shared/types/ipc';
 
 export interface SerialManagerEvents {
   data: (data: string) => void;   // 텔레메트리/로그 라인
   error: (error: Error) => void;  // 포트/프로토콜 에러
-  status?: (s: { state: 'connected' | 'disconnected' | 'reconnecting', path?: string }) => void; // 선택적
+  status?: (s: SerialStatus) => void; // 선택적
 }
 
 export declare interface SerialManager {
@@ -435,6 +435,6 @@ export class SerialManager extends EventEmitter {
     if (msg.timer) { clearTimeout(msg.timer); msg.timer = undefined; }
   }
   private emitStatus(state: 'connected' | 'disconnected' | 'reconnecting', path?: string) {
-    this.emit('status' as any, { state, path });
+    this.emit('status', { state, path });
   }
 }

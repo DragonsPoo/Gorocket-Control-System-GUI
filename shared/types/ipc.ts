@@ -23,3 +23,8 @@ export type SequencesPayload = {
   sequences: SequenceConfig;
   result: ValidationResult;
 };
+
+export type SerialStatus = {
+  state: 'connected' | 'disconnected' | 'reconnecting';
+  path?: string;
+};
