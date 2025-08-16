@@ -83,10 +83,11 @@ export function useSerialManager(): SerialManagerApi {
   const sequenceHandlerRef = useRef<(name: string) => void>(() => {});
   const emergencyTriggered = useRef(false);
 
+  // UI에서 수동 비상 시퀀스 버튼 등을 쓸 수 있도록 유지(자동 보호는 메인/펌웨어가 담당)
   const handleEmergency = useCallback(() => {
     if (emergencyTriggered.current) return;
     emergencyTriggered.current = true;
-    sequenceHandlerRef.current('Emergency Shutdown');
+    sequenceHandlerRef.current?.('Emergency Shutdown');
   }, []);
 
   const sendCommand = useCallback(
@@ -155,8 +156,8 @@ export function useSerialManager(): SerialManagerApi {
     getLatestSensorData,
   } = useSensorData(
     state.appConfig?.maxChartDataPoints ?? 100,
-    state.appConfig?.pressureLimit ?? null,
-    handleEmergency,
+    state.appConfig?.pressureLimit ?? null,             // psi
+    (state.appConfig as any)?.pressureRateLimit ?? null, // psi/s (옵션)
     updateValves
   );
 
@@ -181,7 +182,7 @@ export function useSerialManager(): SerialManagerApi {
     };
     init();
     const cleanupData = window.electronAPI.onSerialData((d) => {
-      // loggerRef.current(`Received: ${d}`); // 0.1초마다 출력되는 데이터 로그 비활성화
+      // loggerRef.current(`Received: ${d}`);
       handleSerialMessage(d);
     });
     const cleanupError = window.electronAPI.onSerialError((err) => {
@@ -215,7 +216,7 @@ export function useSerialManager(): SerialManagerApi {
       cleanupData();
       cleanupError();
     };
-  }, [handleSerialMessage, setValves, toast]);
+  }, [handleSerialMessage, setValves, toast, state.connectionRetryCount, state.selectedPort]);
 
   const handleConnect = useCallback(async () => {
     if (state.connectionStatus === 'connected') {
@@ -232,7 +233,6 @@ export function useSerialManager(): SerialManagerApi {
       return;
     }
     
-    // 포트 가용성 사전 확인
     const availablePorts = await window.electronAPI.getSerialPorts();
     if (!availablePorts.includes(state.selectedPort)) {
       toast({ 
