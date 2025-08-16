@@ -245,30 +245,38 @@ interface SequenceStep {
 ```
 
 #### 내장 시퀀스
-1. **Random Test A** - 기본 밸브 동작 테스트 (9단계)
-2. **Random Test B** - 혼합 동작 테스트 (9단계)
-3. **Random Test C** - 복합 동작 테스트 (10단계)
-4. **Multi-Open Test** - 동시 제어 테스트 (7단계)
-5. **Sequential Mix** - 순차 동작 테스트 (9단계)
-6. **Chaos Test** - 복잡한 시나리오 (8단계)
-7. **Emergency Shutdown** - 응급 안전 절차 (5단계)
+**안전 시퀀스**:
+1. **Emergency Shutdown** - 즈간 안전 상태 (1단계, 0ms)
+2. **Pre-Operation Safe Init** - 기본 안전 상태 (1단계)
+
+**테스트 시퀀스**:
+3. **Random Test (6 valves, no #7)** - V0~V5 밸브 테스트 (12단계)
+4. **Random Test (7 valves, all)** - 전체 V0~V6 밸브 테스트 (14단계)
+
+**운영 시퀀스** (센서 조건 포함):
+5. **Pre-Chill & Purge** - 예냉각 및 퍼지 (6단계)
+6. **Pressurize Ethanol Tank** - pt1 ≥ 250 psi 대기 (3단계)
+7. **Pressurize N2O Tank** - pt2 ≥ 450 psi 대기 (3단계)
+8. **Ethanol Flow Check** - 에탄올 유량 확인 (4단계)
+9. **N2O Flow Check** - N2O 유량 확인 (4단계)
+10. **Igniter Solo Test** - 점화기 단독 테스트 (3단계)
+11. **Vent Down / Safe End** - 시스템 비우기 (5단계)
 
 ### 3. 안전 시스템
 
 #### 자동 응급 셧다운 트리거
 - **압력 한계 초과**: 850 PSI 초과 시 3회 연속 감지
 - **통신 오류**: Arduino 연결 중단 감지
-- **센서 조건 실패**: 시퀀스 중 타임아웃 발생
+- **센서 조건 타임아웃**: 시퀀스 중 센서 값 대기 타임아웃 (120초/60초)
 - **수동 트리거**: Emergency Shutdown 버튼
 
 #### 페일세이프 동작
 ```typescript
-// 응급 셧다운 시퀀스
-1. 모든 주 밸브 즉시 닫기 (100ms)
-2. 시스템 벤트 열기 (200ms)
-3. 가압 밸브 닫기 (100ms)
-4. 퍼지 밸브 열기 (200ms)
-5. 시스템 안전 상태 확인 (500ms)
+// 새로운 Emergency Shutdown (단일 단계 동시 실행)
+1. 즈간 안전 상태 (0ms): 
+   - 주 밸브 4개 닫기: Ethanol Main, N2O Main, Pressurant Fill, Igniter Fuel
+   - 빤트/퍼지 3개 열기: System Vent, Ethanol Purge, N2O Purge
+   - 7개 명령 동시 실행, 전체 시간 <100ms
 ```
 
 ### 4. 데이터 로깅
@@ -297,33 +305,66 @@ Documents/rocket-logs/
     "baudRate": 115200           // 시리얼 통신 속도
   },
   "pressureLimit": 850,          // 압력 한계값 (PSI)
-  "valveFeedbackTimeout": 0,     // 밸브 피드백 타임아웃 (0=비활성화)
+  "valveFeedbackTimeout": 2000,  // 밸브 피드백 타임아웃 (2초 활성화)
   "maxChartDataPoints": 100,     // 차트 최대 데이터 포인트
-  "logging": {
-    "enabled": true,             // 로깅 활성화
-    "flushInterval": 2000        // 플러시 간격 (ms)
+  "initialValves": [             // 밸브 초기 상태 정의 (7개)
+    { "id": 1, "name": "Ethanol Main", "state": "CLOSED" },
+    { "id": 2, "name": "N2O Main", "state": "CLOSED" },
+    // ... 5개 밸브 더
+  ],
+  "valveMappings": {             // 밸브 이름 → 서보 인덱스 매핑
+    "Ethanol Main": { "servoIndex": 0 },
+    "N2O Main": { "servoIndex": 1 },
+    // ... 나머지 5개
   }
 }
 ```
 
-### sequences.json
-시퀀스 정의 파일로 JSON 스키마(`sequences.schema.json`)로 검증됩니다.
+### sequences.json - 새로운 시퀀스 체계
 
+완전히 새로운 시퀀스 시스템으로 업데이트되었습니다:
+
+#### 주요 시퀀스 (11개)
+
+**안전 시퀀스**:
+- `Emergency Shutdown` - 즈간 안전 상태 (0ms, 7개 명령 동시)
+- `Pre-Operation Safe Init` - 기본 안전 상태
+
+**테스트 시퀀스**:
+- `Random Test (6 valves, no #7)` - V0~V5 밸브 테스트 (12단계)
+- `Random Test (7 valves, all)` - 전체 V0~V6 밸브 테스트 (14단계)
+
+**실제 운영 시퀀스** (센서 조건 포함):
+- `Pre-Chill & Purge` - 예냉각/퍼지 (6단계, 5초씩 2회)
+- `Pressurize Ethanol Tank` - pt1 ≥ 250 psi 대기 (2분 타임아웃)
+- `Pressurize N2O Tank` - pt2 ≥ 450 psi 대기 (2분 타임아웃)
+- `Ethanol Flow Check` - 에탄올 유량 확인 (3초 안정화)
+- `N2O Flow Check` - N2O 유량 확인 (3초 안정화)
+- `Igniter Solo Test` - 점화기 단독 테스트 (1초)
+- `Vent Down / Safe End` - 시스템 비우기 (pt1,pt2 ≤ 15 psi)
+
+#### 새로운 Emergency Shutdown
 ```json
 {
-  "Random Test A": [
-    {
-      "message": "Open System Vent",
-      "delay": 800,
-      "commands": ["CMD,System Vent,Open"]
-    },
-    {
-      "message": "Open Ethanol Main",
-      "delay": 1200,
-      "commands": ["CMD,Ethanol Main,Open"]
-    }
-    // ... 더 많은 단계
+  "message": "Immediate safe state (close mains, open vent/purges, stop fills/igniter)",
+  "delay": 0,
+  "commands": [
+    "CMD,Ethanol Main,Close", "CMD,N2O Main,Close",
+    "CMD,Pressurant Fill,Close", "CMD,Igniter Fuel,Close",
+    "CMD,System Vent,Open", "CMD,Ethanol Purge,Open", "CMD,N2O Purge,Open"
   ]
+}
+```
+
+#### 센서 조건 대기 기능
+```json
+{
+  "message": "Wait pt1 >= 250 psi",
+  "delay": 0,
+  "commands": [],
+  "condition": {
+    "sensor": "pt1", "min": 250, "op": "gte", "timeoutMs": 120000
+  }
 }
 ```
 
