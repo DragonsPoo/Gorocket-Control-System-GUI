@@ -19,9 +19,15 @@ export function parseSensorData(raw: string): ParsedSensorData {
     return { sensor, valves, errors };
   }
 
+  // Skip system messages like VACK, VERR, PONG
+  const systemMessages = ['VACK', 'VERR', 'PONG'];
+  if (systemMessages.some(msg => raw.startsWith(msg))) {
+    return { sensor, valves, errors };
+  }
+
   parts.forEach((part) => {
     const [key, rawValue] = part.split(':');
-    if (!key || rawValue === undefined) {
+    if (!key || rawValue === undefined || rawValue === '') {
       const msg = `Malformed sensor data segment: ${part}`;
       errors.push(msg);
       console.error(msg);

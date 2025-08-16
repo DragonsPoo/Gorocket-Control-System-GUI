@@ -12,6 +12,8 @@ interface SerialState {
   serialPorts: string[];
   selectedPort: string;
   appConfig: AppConfig | null;
+  connectionRetryCount: number;
+  lastConnectionError: string | null;
 }
 
 const initialState: SerialState = {
@@ -19,13 +21,18 @@ const initialState: SerialState = {
   serialPorts: [],
   selectedPort: '',
   appConfig: null,
+  connectionRetryCount: 0,
+  lastConnectionError: null,
 };
 
 type Action =
   | { type: 'SET_CONNECTION_STATUS'; status: ConnectionStatus }
   | { type: 'SET_SERIAL_PORTS'; ports: string[] }
   | { type: 'SET_SELECTED_PORT'; port: string }
-  | { type: 'SET_CONFIG'; config: AppConfig };
+  | { type: 'SET_CONFIG'; config: AppConfig }
+  | { type: 'SET_RETRY_COUNT'; count: number }
+  | { type: 'SET_CONNECTION_ERROR'; error: string | null }
+  | { type: 'RESET_CONNECTION_STATE' };
 
 function reducer(state: SerialState, action: Action): SerialState {
   switch (action.type) {
@@ -37,6 +44,12 @@ function reducer(state: SerialState, action: Action): SerialState {
       return { ...state, selectedPort: action.port };
     case 'SET_CONFIG':
       return { ...state, appConfig: action.config };
+    case 'SET_RETRY_COUNT':
+      return { ...state, connectionRetryCount: action.count };
+    case 'SET_CONNECTION_ERROR':
+      return { ...state, lastConnectionError: action.error };
+    case 'RESET_CONNECTION_STATE':
+      return { ...state, connectionRetryCount: 0, lastConnectionError: null };
     default:
       return state;
   }
@@ -59,6 +72,8 @@ export interface SerialManagerApi {
   setLogger: (logger: (msg: string) => void) => void;
   setSequenceHandler: (handler: (name: string) => void) => void;
   resetEmergency: () => void;
+  connectionRetryCount: number;
+  lastConnectionError: string | null;
 }
 
 export function useSerialManager(): SerialManagerApi {
@@ -77,19 +92,38 @@ export function useSerialManager(): SerialManagerApi {
   const sendCommand = useCallback(
     async (cmd: SerialCommand) => {
       if (state.connectionStatus !== 'connected') {
-        toast({ title: 'Not Connected', description: 'Must be connected to send commands.', variant: 'destructive' });
+        const errorMsg = 'Must be connected to send commands.';
+        toast({ title: 'Not Connected', description: errorMsg, variant: 'destructive' });
+        loggerRef.current(`Command failed - not connected: ${JSON.stringify(cmd)}`);
         return false;
       }
-      const success = await window.electronAPI.sendToSerial(cmd);
-      if (!success) {
-        toast({ title: 'Command Error', description: 'Failed to send command.', variant: 'destructive' });
-        loggerRef.current(`Failed to send: ${JSON.stringify(cmd)}`);
-      } else {
-        loggerRef.current(`Sent: ${JSON.stringify(cmd)}`);
+      
+      try {
+        const success = await window.electronAPI.sendToSerial(cmd);
+        if (!success) {
+          const errorMsg = 'Failed to send command. Connection may be unstable.';
+          toast({ title: 'Command Error', description: errorMsg, variant: 'destructive' });
+          loggerRef.current(`Command send failed: ${JSON.stringify(cmd)}`);
+          
+          // 명령 전송 실패 시 연결 상태 재확인
+          const ports = await window.electronAPI.getSerialPorts();
+          if (!ports.includes(state.selectedPort)) {
+            dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
+            loggerRef.current('Connection lost - port no longer available');
+          }
+        } else {
+          loggerRef.current(`Command sent successfully: ${JSON.stringify(cmd)}`);
+          dispatch({ type: 'RESET_CONNECTION_STATE' }); // 성공 시 오류 상태 리셋
+        }
+        return success;
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+        toast({ title: 'Command Error', description: `Unexpected error: ${errorMsg}`, variant: 'destructive' });
+        loggerRef.current(`Command error: ${errorMsg}`);
+        return false;
       }
-      return success;
     },
-    [state.connectionStatus, toast]
+    [state.connectionStatus, state.selectedPort, toast]
   );
 
   const { valves, handleValveChange, setValves } = useValveControl(
@@ -151,8 +185,31 @@ export function useSerialManager(): SerialManagerApi {
       handleSerialMessage(d);
     });
     const cleanupError = window.electronAPI.onSerialError((err) => {
-      toast({ title: 'Serial Error', description: err, variant: 'destructive' });
+      const errorMsg = `Serial communication error: ${err}`;
+      toast({ title: 'Serial Error', description: errorMsg, variant: 'destructive' });
+      loggerRef.current(errorMsg);
       dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
+      dispatch({ type: 'SET_CONNECTION_ERROR', error: err });
+      dispatch({ type: 'SET_RETRY_COUNT', count: state.connectionRetryCount + 1 });
+      
+      // 자동 재연결 시도 (최대 3회)
+      if (state.connectionRetryCount < 3) {
+        loggerRef.current(`Attempting auto-reconnection (${state.connectionRetryCount + 1}/3)...`);
+        setTimeout(async () => {
+          if (state.selectedPort) {
+            const success = await window.electronAPI.connectSerial(state.selectedPort);
+            if (success) {
+              dispatch({ type: 'SET_CONNECTION_STATUS', status: 'connected' });
+              dispatch({ type: 'RESET_CONNECTION_STATE' });
+              loggerRef.current('Auto-reconnection successful');
+            } else {
+              loggerRef.current('Auto-reconnection failed');
+            }
+          }
+        }, 2000 * (state.connectionRetryCount + 1)); // 점진적 지연
+      } else {
+        loggerRef.current('Max reconnection attempts reached. Manual intervention required.');
+      }
     });
     return () => {
       cleanupData();
@@ -164,24 +221,53 @@ export function useSerialManager(): SerialManagerApi {
     if (state.connectionStatus === 'connected') {
       await window.electronAPI.disconnectSerial();
       dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
+      dispatch({ type: 'RESET_CONNECTION_STATE' });
       loggerRef.current(`Disconnected from ${state.selectedPort}.`);
       reset();
       return;
     }
+    
     if (!state.selectedPort) {
       toast({ title: 'Connection Error', description: 'Please select a serial port.', variant: 'destructive' });
       return;
     }
+    
+    // 포트 가용성 사전 확인
+    const availablePorts = await window.electronAPI.getSerialPorts();
+    if (!availablePorts.includes(state.selectedPort)) {
+      toast({ 
+        title: 'Port Unavailable', 
+        description: `Selected port ${state.selectedPort} is not available. Please refresh and select another port.`,
+        variant: 'destructive' 
+      });
+      dispatch({ type: 'SET_SERIAL_PORTS', ports: availablePorts });
+      return;
+    }
+    
     dispatch({ type: 'SET_CONNECTION_STATUS', status: 'connecting' });
     loggerRef.current(`Connecting to ${state.selectedPort}...`);
-    const success = await window.electronAPI.connectSerial(state.selectedPort);
-    if (success) {
-      dispatch({ type: 'SET_CONNECTION_STATUS', status: 'connected' });
-      emergencyTriggered.current = false;
-      loggerRef.current(`Successfully connected to ${state.selectedPort}.`);
-    } else {
+    
+    try {
+      const success = await window.electronAPI.connectSerial(state.selectedPort);
+      if (success) {
+        dispatch({ type: 'SET_CONNECTION_STATUS', status: 'connected' });
+        dispatch({ type: 'RESET_CONNECTION_STATE' });
+        emergencyTriggered.current = false;
+        loggerRef.current(`Successfully connected to ${state.selectedPort}.`);
+        toast({ title: 'Connected', description: `Connected to ${state.selectedPort}`, variant: 'default' });
+      } else {
+        dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
+        const errorMsg = `Failed to connect to ${state.selectedPort}. Check cable and permissions.`;
+        dispatch({ type: 'SET_CONNECTION_ERROR', error: errorMsg });
+        loggerRef.current(errorMsg);
+        toast({ title: 'Connection Failed', description: errorMsg, variant: 'destructive' });
+      }
+    } catch (error) {
       dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
-      loggerRef.current(`Failed to connect to ${state.selectedPort}.`);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown connection error';
+      dispatch({ type: 'SET_CONNECTION_ERROR', error: errorMsg });
+      loggerRef.current(`Connection error: ${errorMsg}`);
+      toast({ title: 'Connection Error', description: errorMsg, variant: 'destructive' });
     }
   }, [state.connectionStatus, state.selectedPort, toast, reset]);
 
@@ -227,6 +313,8 @@ export function useSerialManager(): SerialManagerApi {
     setLogger,
     setSequenceHandler,
     resetEmergency,
+    connectionRetryCount: state.connectionRetryCount,
+    lastConnectionError: state.lastConnectionError,
   };
 }
 

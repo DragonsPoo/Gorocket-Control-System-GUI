@@ -13,8 +13,8 @@
 
 // =========================== 서보 ===========================
 #define NUM_SERVOS 7
-const int initialOpenAngles[NUM_SERVOS]   = {42,44,45,47,46,38,45};
-const int initialClosedAngles[NUM_SERVOS] = {135,135,138,135,134,127,135};
+const int initialOpenAngles[NUM_SERVOS]   = {7,25,12,13,27,39,45};
+const int initialClosedAngles[NUM_SERVOS] = {103,121,105,117,129,135,135};
 const int servoPins[NUM_SERVOS]           = {13,12,11,10,9,8,7};
 Servo servos[NUM_SERVOS];
 
@@ -300,7 +300,6 @@ void readAndSendAllSensorData(const unsigned long now) {
     Serial.print(F("pt")); Serial.print(i+1); Serial.print(':'); Serial.print(psi,2); Serial.print(',');
   }
 
-<<<<<<< Updated upstream
   // TC1 - 저장된 온도값 사용
   Serial.print(F("tc1:"));
   if (isnan(tempCelsius1)) {
@@ -319,26 +318,6 @@ void readAndSendAllSensorData(const unsigned long now) {
     float k = tempCelsius2 + 273.15f;
     Serial.print(k,2);
   }
-=======
-  // TC1 - 저장된 온도값 사용
-  Serial.print(F("tc1:"));
-  if (isnan(tempCelsius1)) {
-    Serial.print(F("ERR"));
-  } else {
-    float k = tempCelsius1 + 273.15f;
-    Serial.print(k,2);
-  }
-  Serial.print(',');
-
-  // TC2 - 저장된 온도값 사용
-  Serial.print(F("tc2:"));
-  if (isnan(tempCelsius2)) {
-    Serial.print(F("ERR"));
-  } else {
-    float k = tempCelsius2 + 273.15f;
-    Serial.print(k,2);
-  }
->>>>>>> Stashed changes
 
   // 유량 (m3/h, L/h)
   for (int i=0;i<NUM_FLOW_SENSORS;i++){
