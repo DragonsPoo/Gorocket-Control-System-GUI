@@ -1,25 +1,65 @@
 // =================================================================
-// Gorocket-Control-System-GUI (MEGA) - ADC Free-Run Optimized
-// - ADC: Timer1 오토 트리거 + ISR 순환 샘플링(A0~A3), OSR 평균, 채널 전환 안정화
-// - Flow: Timer3 기반 글리치 필터(기존 유지)
-// - 시리얼: PACKED_SERIAL + write()
+// Gorocket-Control-System-GUI (MEGA) - 최종 통합 버전 (Emergency 강제 오버라이드 반영)
+// - 안전 기능: HEARTBEAT 타임아웃, 압력 한계/상승률 트립
+// - 통신 안정성: CRC-8(0x07) 프레이밍 및 NACK 응답 (재시도는 상위 시스템 담당)
+// - 기존 최적화 유지: ADC 프리런, 패키지 전송 등
+// - 변경점: 비상 시퀀스에서 진행 중 서보도 강제로 목표 각도로 이동하도록 오버라이드 구현
 // =================================================================
 #include <SPI.h>
 #include <Servo.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
 #include "max6675.h"
 
-// =========================== 옵션 ===========================
+// =========================== 옵션 및 설정 ===========================
 #ifndef SERIAL_BAUD
 #define SERIAL_BAUD 115200
 #endif
 
-#define FAST_LIMIT_IO       1   // 포트 직접 읽기
-#define PACKED_SERIAL       1   // 1: 버퍼 조립 후 1회 전송
-#define FAST_FLOW_ISR       1   // 1: INT0/1 직접 ISR 사용
-#define FLOW_TIMER3_TICK    1   // 1: Timer3 2MHz 프리런 타임베이스 사용
-#define ADC_BG_FREERUN      1   // 1: Timer1 오토 트리거 + ISR 순환 샘플링 사용
+#define FAST_LIMIT_IO       1
+#define PACKED_SERIAL       1
+#define FAST_FLOW_ISR       1
+#define FLOW_TIMER3_TICK    1
+#define ADC_BG_FREERUN      1
+
+// =========================== 안전 파라미터 ===========================
+#define HEARTBEAT_TIMEOUT_MS 3000UL   // 하트비트 타임아웃 (ms)
+// 압력 임계(0이면 비활성). 단위: psi*100
+#define PRESSURE_MAX_PSIx100             120000UL // 예: 1200.00 psi
+// 압력 상승률 임계(0이면 비활성). 단위: (psi*100)/s
+#define PRESSURE_ROC_MAX_PSIx100_PER_S   5000UL   // 예: 50.00 psi/s
+
+// =========================== CRC-8 (0x07, LUT) ===========================
+static const uint8_t CRC8_TABLE[256] PROGMEM = {
+  0x00,0x07,0x0E,0x09,0x1C,0x1B,0x12,0x15,0x38,0x3F,0x36,0x31,0x24,0x23,0x2A,0x2D,
+  0x70,0x77,0x7E,0x79,0x6C,0x6B,0x62,0x65,0x48,0x4F,0x46,0x41,0x54,0x53,0x5A,0x5D,
+  0xE0,0xE7,0xEE,0xE9,0xFC,0xFB,0xF2,0xF5,0xD8,0xDF,0xD6,0xD1,0xC4,0xC3,0xCA,0xCD,
+  0x90,0x97,0x9E,0x99,0x8C,0x8B,0x82,0x85,0xA8,0xAF,0xA6,0xA1,0xB4,0xB3,0xBA,0xBD,
+  0xC7,0xC0,0xC9,0xCE,0xDB,0xDC,0xD5,0xD2,0xFF,0xF8,0xF1,0xF6,0xE3,0xE4,0xED,0xEA,
+  0xB7,0xB0,0xB9,0xBE,0xAB,0xAC,0xA5,0xA2,0x8F,0x88,0x81,0x86,0x93,0x94,0x9D,0x9A,
+  0x27,0x20,0x29,0x2E,0x3B,0x3C,0x35,0x32,0x1F,0x18,0x11,0x16,0x03,0x04,0x0D,0x0A,
+  0x57,0x50,0x59,0x5E,0x4B,0x4C,0x45,0x42,0x6F,0x68,0x61,0x66,0x73,0x74,0x7D,0x7A,
+  0x89,0x8E,0x87,0x80,0x95,0x92,0x9B,0x9C,0xB1,0xB6,0xBF,0xB8,0xAD,0xAA,0xA3,0xA4,
+  0xF9,0xFE,0xF7,0xF0,0xE5,0xE2,0xEB,0xEC,0xC1,0xC6,0xCF,0xC8,0xDD,0xDA,0xD3,0xD4,
+  0x69,0x6E,0x67,0x60,0x75,0x72,0x7B,0x7C,0x51,0x56,0x5F,0x58,0x4D,0x4A,0x43,0x44,
+  0x19,0x1E,0x17,0x10,0x05,0x02,0x0B,0x0C,0x21,0x26,0x2F,0x28,0x3D,0x3A,0x33,0x34,
+  0x4E,0x49,0x40,0x47,0x52,0x55,0x5C,0x5B,0x76,0x71,0x78,0x7F,0x6A,0x6D,0x64,0x63,
+  0x3E,0x39,0x30,0x37,0x22,0x25,0x2C,0x2B,0x06,0x01,0x08,0x0F,0x1A,0x1D,0x14,0x13,
+  0xAE,0xA9,0xA0,0xA7,0xB2,0xB5,0xBC,0xBB,0x96,0x91,0x98,0x9F,0x8A,0x8D,0x84,0x83,
+  0xDE,0xD9,0xD0,0xD7,0xC2,0xC5,0xCC,0xCB,0xE6,0xE1,0xE8,0xEF,0xFA,0xFD,0xF4,0xF3
+};
+static uint8_t crc8(const uint8_t *data, size_t len) {
+  uint8_t crc = 0;
+  for (size_t i = 0; i < len; i++) {
+    crc = pgm_read_byte(&CRC8_TABLE[crc ^ data[i]]);
+  }
+  return crc;
+}
 
 // =========================== 서보/상수 ===========================
 #define NUM_SERVOS 7
@@ -34,6 +74,14 @@ uint8_t targetAngles[NUM_SERVOS];
 unsigned long lastMoveTime[NUM_SERVOS];
 int8_t servoDir[NUM_SERVOS] = {0}; // -1: opening, +1: closing
 
+// 밸브 역할 매핑 (비상 시퀀스용)
+enum ServoRole : uint8_t { ROLE_MAIN=0, ROLE_VENT=1, ROLE_PURGE=2 };
+const uint8_t servoRoles[NUM_SERVOS] = {
+  ROLE_MAIN, ROLE_MAIN, ROLE_MAIN, ROLE_MAIN, ROLE_MAIN, // V0-V4
+  ROLE_VENT,  // V5
+  ROLE_PURGE  // V6
+};
+
 #define SERVO_SETTLE_TIME   500UL
 #define INCHING_INTERVAL      50UL
 #define STALL_RELIEF_ANGLE      3
@@ -41,12 +89,9 @@ int8_t servoDir[NUM_SERVOS] = {0}; // -1: opening, +1: closing
 
 // =========================== 압력(ADC) ===========================
 #define NUM_PRESSURE_SENSORS 4
-// A0..A3 사용(ADC0..ADC3)
 const uint8_t pressurePins[NUM_PRESSURE_SENSORS] = {A0, A1, A2, A3};
-
 #define MAX_PRESSURE_BAR 100.0f
 #define BAR_TO_PSI       14.50377f
-// psi*100 = (adc * PSI_PER_ADC_X1000) / 10 (반올림)
 static constexpr uint32_t PSI_PER_ADC_X1000 =
   (uint32_t)((MAX_PRESSURE_BAR * BAR_TO_PSI * 1000.0) / 1023.0 + 0.5f);
 
@@ -64,7 +109,7 @@ const uint8_t limitSwitchPins[NUM_SERVOS][2] = {
 };
 uint8_t currentLimitSwitchStates[NUM_SERVOS][2] = {0};
 
-// =========================== 유량(분압 입력) ===========================
+// =========================== 유량 ===========================
 #define NUM_FLOW_SENSORS 2
 const uint8_t flowSensorPins[NUM_FLOW_SENSORS] = {2, 3}; // D2(INT0), D3(INT1)
 #define K_PULSE_PER_L_FLOW1 1484.11f
@@ -93,6 +138,15 @@ unsigned long lastTempReadTime   = 0;
 unsigned long lastFlowCalcMs     = 0;
 #define FLOW_EWMA_TAU_MS 300UL
 
+// =========================== Safety 상태 ===========================
+static volatile bool emergencyActive = false;
+static bool heartbeatArmed = false;
+static unsigned long lastHeartbeatMs = 0;
+
+// 압력 임계 체크 상태
+static uint32_t lastPsi100[NUM_PRESSURE_SENSORS] = {0,0,0,0};
+static unsigned long lastPressureCheckMs = 0;
+
 // =========================== 시리얼 파서 ===========================
 static char   cmdBuf[96];
 static size_t cmdLen = 0;
@@ -117,14 +171,13 @@ static inline void bufEndlineAndSend(size_t &pos){ outBuf[pos++]='\n'; Serial.wr
 #endif
 
 // 프로토타입
-static void processCommandLine(char* line);
 static void readSerialCommands();
 static void updateTemperatureReadings();
 static void updateLimitSwitchStates();
 static void manageAllServoMovements(const unsigned long now);
 static void readAndSendAllSensorData(const unsigned long now);
 
-// =========================== 유틸 ===========================
+// Utils
 static inline uint16_t alphaQ15_from_dt(uint16_t dtMs){
   uint32_t denom=(uint32_t)FLOW_EWMA_TAU_MS + (uint32_t)dtMs;
   if(denom==0) return 0;
@@ -153,81 +206,84 @@ void countPulse2(){ handleFlowPulse(1); }
 
 // =========================== ADC 백그라운드 샘플러 ===========================
 #if ADC_BG_FREERUN
-// 설정값: 각 채널 출력 100 Hz, OSR=4 → 총 RAW 샘플 속도 1600 SPS
-static constexpr uint8_t  ADC_OSR_LOG2      = 2;      // 2^n 샘플 평균
+static constexpr uint8_t  ADC_OSR_LOG2      = 2;
 static constexpr uint8_t  ADC_OSR           = (1 << ADC_OSR_LOG2);
-static constexpr uint16_t ADC_PER_CH_HZ     = 100;    // 채널당 평균값 갱신율
+static constexpr uint16_t ADC_PER_CH_HZ     = 100;
 static constexpr uint16_t ADC_NUM_CH        = NUM_PRESSURE_SENSORS;
-static constexpr uint32_t ADC_RAW_SPS       = (uint32_t)ADC_NUM_CH * ADC_OSR * ADC_PER_CH_HZ; // 1600
-// Timer1: 16MHz/8 = 2MHz tick, RAW_SPS=1600 → 주기 1250tick
+static constexpr uint32_t ADC_RAW_SPS       = (uint32_t)ADC_NUM_CH * ADC_OSR * ADC_PER_CH_HZ;
 static constexpr uint32_t T1CLK_HZ          = 16000000UL / 8UL;
 static constexpr uint16_t T1_TOP            = (uint16_t)((T1CLK_HZ + (ADC_RAW_SPS/2)) / ADC_RAW_SPS) - 1;
 
-// 결과 버퍼(평균된 10비트 값)
 volatile uint16_t adcAvg[ADC_NUM_CH] = {0,0,0,0};
 
-// 내부 상태
 volatile uint8_t  adcCh = 0;
 volatile uint8_t  adcOsrCnt = 0;
 volatile uint8_t  adcDiscard = 1;
 volatile uint16_t adcAcc = 0;
 
-static inline void adcSetMux(uint8_t ch){
-  // AVcc(REFS0=1), Right adjust, MUX[3:0]=ch (A0..A3)
-  ADMUX = _BV(REFS0) | (ch & 0x0F);
-  // A8~A15 안쓰므로 MUX5=0 (ADCSRB)
-}
+static inline void adcSetMux(uint8_t ch){ ADMUX = _BV(REFS0) | (ch & 0x0F); }
 
 static void adcInitFreeRun(){
-  // A0..A3 디지털 입력 비활성화(노이즈↓)
   DIDR0 = _BV(ADC0D) | _BV(ADC1D) | _BV(ADC2D) | _BV(ADC3D);
-
-  // Timer1 CTC, prescaler=8, TOP=OCR1A
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1  = 0;
-  OCR1A  = T1_TOP;  // TOP
-  OCR1B  = T1_TOP;  // Compare B에서 트리거
-  TCCR1B = _BV(WGM12) | _BV(CS11); // CTC, clk/8
-
-  // ADC: Auto Trigger=Timer1 CompB, Interrupt Enable, prescaler=64(250kHz)
+  TCCR1A = 0; TCCR1B = 0; TCNT1  = 0;
+  OCR1A  = T1_TOP; OCR1B  = T1_TOP;
+  TCCR1B = _BV(WGM12) | _BV(CS11);
   adcSetMux(0);
-  ADCSRA = _BV(ADEN) | _BV(ADIE) | _BV(ADATE) | _BV(ADPS2) | _BV(ADPS1); // PS=64
-  ADCSRB = (ADCSRB & ~0x07) | _BV(ADTS2) | _BV(ADTS0); // ADTS=101: Timer1 Compare Match B
-  ADCSRA |= _BV(ADSC); // 첫 변환 시작
+  ADCSRA = _BV(ADEN) | _BV(ADIE) | _BV(ADATE) | _BV(ADPS2) | _BV(ADPS1);
+  ADCSRB = (ADCSRB & ~0x07) | _BV(ADTS2) | _BV(ADTS0);
+  ADCSRA |= _BV(ADSC);
 }
 
 ISR(ADC_vect){
-  uint16_t v = ADC; // ADCL -> ADCH 읽기
-
-  if(adcDiscard){
-    // 채널 전환 직후 1샘플 폐기(샘플/홀드 안정화)
-    adcDiscard = 0;
-    return;
-  }
-
+  uint16_t v = ADC;
+  if(adcDiscard){ adcDiscard = 0; return; }
   adcAcc += v;
   if(++adcOsrCnt >= ADC_OSR){
-    // 평균(반올림) → 저장
-    uint16_t avg = (adcAcc + (1U << (ADC_OSR_LOG2-1))) >> ADC_OSR_LOG2;
-    adcAvg[adcCh] = avg;
-    adcAcc = 0;
-    adcOsrCnt = 0;
-
-    // 다음 채널로
-    adcCh++;
-    if(adcCh >= ADC_NUM_CH) adcCh = 0;
+    adcAvg[adcCh] = (adcAcc + (1U << (ADC_OSR_LOG2-1))) >> ADC_OSR_LOG2;
+    adcAcc = 0; adcOsrCnt = 0;
+    adcCh = (adcCh + 1) % ADC_NUM_CH;
     adcSetMux(adcCh);
-    adcDiscard = 1; // 전환 직후 1샘플 폐기
+    adcDiscard = 1;
   }
 }
-
 static inline uint16_t adcReadAvg(uint8_t ch){
-  uint16_t v;
-  uint8_t s = SREG; cli(); v = adcAvg[ch]; SREG = s;
-  return v;
+  uint16_t v; uint8_t s=SREG; cli(); v=adcAvg[ch]; SREG=s; return v;
 }
-#endif // ADC_BG_FREERUN
+#endif
+
+// =========================== 공용 유틸/안전 ===========================
+static inline void uppercaseInPlace(char* s){ for(; *s; ++s){ if(*s>='a' && *s<='z') *s = char(*s - ('a'-'A')); } }
+static inline void sendAck(uint32_t msgId){ Serial.print(F("ACK,")); Serial.println(msgId); }
+static inline void sendNack(uint32_t msgId, const __FlashStringHelper* reason){ Serial.print(F("NACK,")); Serial.print(msgId); Serial.print(F(",")); Serial.println(reason); }
+
+// --- 이동 로직: 일반/강제 공통 구현 ---
+static bool startValveMoveImpl(uint8_t idx, bool open, bool force){
+  if (idx >= NUM_SERVOS) return false;
+  if (!force && servoStates[idx] != IDLE) return false;
+  servos[idx].attach(servoPins[idx], 500, 2500);
+  targetAngles[idx] = open ? initialOpenAngles[idx] : initialClosedAngles[idx];
+  servos[idx].write(targetAngles[idx]);
+  servoStates[idx] = MOVING;
+  servoDir[idx] = open ? -1 : +1;
+  lastMoveTime[idx] = millis();
+  return true;
+}
+static bool startValveMove(uint8_t idx, bool open){ return startValveMoveImpl(idx, open, false); }
+static bool startValveMoveForce(uint8_t idx, bool open){ return startValveMoveImpl(idx, open, true); }
+
+// --- 비상 시퀀스(강제 오버라이드) ---
+static void triggerEmergency(const __FlashStringHelper* reason){
+  if (emergencyActive) return;
+  emergencyActive = true;
+
+  for (uint8_t i=0; i<NUM_SERVOS; i++){
+    bool open = (servoRoles[i] != ROLE_MAIN); // VENT/PURGE만 OPEN, MAIN은 CLOSE
+    // 진행 중 여부와 무관하게 강제 오버라이드
+    servos[i].detach();
+    startValveMoveForce(i, open);
+  }
+  Serial.print(F("EMERG,")); Serial.println(reason);
+}
 
 // =================================================================
 void setup() {
@@ -235,8 +291,7 @@ void setup() {
   while (Serial.available()) { Serial.read(); }
   delay(50);
   Serial.println(F("BOOT"));
-
-  delay(500); // MAX6675 안정화 대기
+  delay(500);
 
   for (uint8_t i=0; i<NUM_SERVOS; i++) {
     pinMode(limitSwitchPins[i][0], INPUT_PULLUP);
@@ -248,56 +303,133 @@ void setup() {
     servoDir[i] = 0;
   }
 
-  pinMode(flowSensorPins[0], INPUT);
-  pinMode(flowSensorPins[1], INPUT);
-
+  pinMode(flowSensorPins[0], INPUT); pinMode(flowSensorPins[1], INPUT);
 #if FLOW_TIMER3_TICK
-  // Timer3: 프리런, 2MHz(0.5us)
-  TCCR3A = 0;
-  TCCR3B = 0;
-  TCNT3  = 0;
-  TCCR3B = _BV(CS31); // prescaler 8 -> 2 MHz
+  TCCR3A = 0; TCCR3B = 0; TCNT3  = 0; TCCR3B = _BV(CS31);
 #endif
-
 #if FAST_FLOW_ISR
-  // 외부 인터럽트 직접 설정: Rising edge
-  EICRA = (1 << ISC01) | (1 << ISC00)   // INT0 rising
-        | (1 << ISC11) | (1 << ISC10);  // INT1 rising
-  EIFR  = (1 << INTF0) | (1 << INTF1);  // clear pending
-  EIMSK = (1 << INT0) | (1 << INT1);    // enable INT0/1
+  EICRA = (1 << ISC01) | (1 << ISC00) | (1 << ISC11) | (1 << ISC10);
+  EIFR  = (1 << INTF0) | (1 << INTF1);
+  EIMSK = (1 << INT0) | (1 << INT1);
 #else
   attachInterrupt(digitalPinToInterrupt(flowSensorPins[0]), countPulse1, RISING);
   attachInterrupt(digitalPinToInterrupt(flowSensorPins[1]), countPulse2, RISING);
 #endif
-
 #if ADC_BG_FREERUN
   adcInitFreeRun();
 #endif
 
   lastFlowCalcMs = millis();
+  lastHeartbeatMs = millis();
+  heartbeatArmed = false;
   Serial.println(F("READY"));
 }
 
 void loop() {
   const unsigned long now = millis();
 
+  if (heartbeatArmed && !emergencyActive && (now - lastHeartbeatMs >= HEARTBEAT_TIMEOUT_MS)) {
+    triggerEmergency(F("HB_TIMEOUT"));
+  }
+
   readSerialCommands();
   updateLimitSwitchStates();
   manageAllServoMovements(now);
 
-  if ((unsigned long)(now - lastTempReadTime) >= TEMP_READ_INTERVAL) {
+  if (now - lastTempReadTime >= TEMP_READ_INTERVAL) {
     lastTempReadTime = now;
     updateTemperatureReadings();
   }
-
-  if ((unsigned long)(now - lastSensorReadTime) >= SENSOR_READ_INTERVAL) {
+  if (now - lastSensorReadTime >= SENSOR_READ_INTERVAL) {
     lastSensorReadTime = now;
     readAndSendAllSensorData(now);
   }
 }
 
-// ========================= 시리얼 처리 =========================
-static inline void uppercaseInPlace(char* s){ for(; *s; ++s){ if(*s>='a' && *s<='z') *s = char(*s - ('a'-'A')); } }
+// ========================= 시리얼 처리 (개선된 파서) =========================
+static void processCommandFrame(char* line) {
+    char* lastComma = strrchr(line, ',');
+    if (!lastComma) { sendNack(0, F("FRAME_ERR")); return; }
+    *lastComma = '\0'; // CRC 분리
+
+    char* crcHexStr = lastComma + 1;
+    char* msgIdComma = strrchr(line, ',');
+    if (!msgIdComma) { sendNack(0, F("FRAME_ERR")); return; }
+    *msgIdComma = '\0'; // msgId 분리
+
+    char* msgIdStr = msgIdComma + 1;
+    char* payload = line;
+
+    // 송신측과 동일하게 "payload,msgId"로 CRC 계산
+    char crcData[96];
+    snprintf(crcData, sizeof(crcData), "%s,%s", payload, msgIdStr);
+
+    uint8_t calculated_crc = crc8((const uint8_t*)crcData, strlen(crcData));
+    uint8_t received_crc   = (uint8_t)strtoul(crcHexStr, NULL, 16);
+    uint32_t msgId         = strtoul(msgIdStr, NULL, 10);
+
+    if (calculated_crc != received_crc) {
+        sendNack(msgId, F("CRC_FAIL"));
+        // CRC 오류는 비상 아님: 상위에서 재시도
+        return;
+    }
+
+    // --- Command Processing ---
+    uppercaseInPlace(payload);
+
+    if (strcmp(payload, "HB") == 0) {
+        lastHeartbeatMs = millis();
+        if (!heartbeatArmed) heartbeatArmed = true;
+        sendAck(msgId);
+        return;
+    }
+
+    if (strcmp(payload, "HELLO") == 0 || strcmp(payload, "H") == 0) {
+        Serial.println(F("READY"));
+        sendAck(msgId);
+        return;
+    }
+
+    if (strcmp(payload, "PING") == 0) {
+        Serial.println(F("PONG"));
+        sendAck(msgId);
+        return;
+    }
+
+    // 비상 중에는 SAFE_CLEAR만 허용
+    if (emergencyActive && strcmp(payload, "SAFE_CLEAR") != 0) {
+        sendNack(msgId, F("EMERG_ACTIVE"));
+        return;
+    }
+
+    if (strcmp(payload, "SAFE_CLEAR") == 0) {
+        emergencyActive = false;
+        heartbeatArmed = false; // 재무장 위해 새 HB 요구
+        lastHeartbeatMs = millis();
+        sendAck(msgId);
+        Serial.println(F("EMERG_CLEARED"));
+        return;
+    }
+
+    // V,<idx>,O|C
+    if (payload[0] == 'V' && payload[1] == ',') {
+        int servoIndex = -1; char stateCmd = 0;
+        sscanf(payload, "V,%d,%c", &servoIndex, &stateCmd);
+
+        if (servoIndex >= 0 && servoIndex < NUM_SERVOS && (stateCmd == 'O' || stateCmd == 'C')) {
+            if (startValveMove((uint8_t)servoIndex, stateCmd == 'O')) {
+                sendAck(msgId);
+            } else {
+                sendNack(msgId, F("BUSY"));
+            }
+        } else {
+            sendNack(msgId, F("CMD_INVALID"));
+        }
+        return;
+    }
+
+    sendNack(msgId, F("CMD_UNKNOWN"));
+}
 
 static void readSerialCommands() {
   while (Serial.available() > 0) {
@@ -305,66 +437,20 @@ static void readSerialCommands() {
     lastByteMs = millis();
 
     if (ch == '\r') continue;
-    else if (ch == '\n') {
-      cmdBuf[cmdLen] = '\0';
-      if (cmdLen > 0) processCommandLine(cmdBuf);
+    if (ch == '\n' || ch == ';') { // 개행 또는 세미콜론으로 프레임 종료
+      if (cmdLen > 0) { cmdBuf[cmdLen] = '\0'; processCommandFrame(cmdBuf); }
       cmdLen = 0;
+    } else if (cmdLen < sizeof(cmdBuf) - 1) {
+      cmdBuf[cmdLen++] = ch;
     } else {
-      if (cmdLen < sizeof(cmdBuf) - 1) cmdBuf[cmdLen++] = ch;
-      else cmdLen = 0; // overflow → drop line
+      cmdLen = 0; // overflow → drop
     }
   }
   if (cmdLen > 0 && (millis() - lastByteMs) > LINE_IDLE_COMMIT_MS) {
     cmdBuf[cmdLen] = '\0';
-    processCommandLine(cmdBuf);
+    processCommandFrame(cmdBuf);
     cmdLen = 0;
   }
-}
-
-static void processCommandLine(char* line) {
-  while (*line==' ' || *line=='\t') ++line;
-  char* end = line + strlen(line);
-  while (end>line && (end[-1]==' ' || end[-1]=='\t')) --end;
-  *end = '\0';
-  if (*line == '\0') return;
-
-  uppercaseInPlace(line);
-
-  if (!strcmp(line, "HELLO") || !strcmp(line, "H")) {
-    Serial.println(F("READY"));
-    return;
-  }
-
-  if (line[0]=='V' && line[1]==',') {
-    char* p = line + 2;
-    char* comma = strchr(p, ',');
-    if (!comma) { Serial.println(F("VERR")); return; }
-    *comma = '\0';
-    int servoIndex = atoi(p);
-    char stateCmd = (comma[1] != '\0') ? comma[1] : 0;
-
-    if (servoIndex >= 0 && servoIndex < NUM_SERVOS && (stateCmd=='O' || stateCmd=='C')) {
-      if (servoStates[servoIndex] == IDLE) {
-        servos[servoIndex].attach(servoPins[servoIndex], 500, 2500);
-        targetAngles[servoIndex] = (stateCmd=='O') ? initialOpenAngles[servoIndex] : initialClosedAngles[servoIndex];
-        servos[servoIndex].write(targetAngles[servoIndex]);
-        servoStates[servoIndex] = MOVING;
-        servoDir[servoIndex] = (stateCmd=='O') ? -1 : +1;
-        lastMoveTime[servoIndex] = millis();
-        Serial.print(F("VACK,")); Serial.print(servoIndex); Serial.print(',');
-        Serial.println((stateCmd=='O') ? F("O") : F("C"));
-      } else {
-        Serial.println(F("VERR"));
-      }
-    } else {
-      Serial.println(F("VERR"));
-    }
-    return;
-  }
-
-  if (!strcmp(line, "PING")) { Serial.println(F("PONG")); return; }
-
-  Serial.println(F("ERR_CMD"));
 }
 
 // ========================= 서보 상태 머신 =========================
@@ -429,19 +515,19 @@ static void manageAllServoMovements(const unsigned long now) {
 // ========================= 스위치 스냅샷 =========================
 static void updateLimitSwitchStates() {
 #if FAST_LIMIT_IO
-  uint8_t a = ~PINA; // D22..D29 → PA0..PA7
-  uint8_t c = ~PINC; // D30..D37 → PC7..PC0
+  uint8_t a = ~PINA;
+  uint8_t c = ~PINC;
   for (uint8_t i = 0; i < 4; ++i) {
     uint8_t bits = (a >> (i * 2));
     currentLimitSwitchStates[i][0] = bits & 0x01;
     currentLimitSwitchStates[i][1] = (bits >> 1) & 0x01;
   }
-  currentLimitSwitchStates[4][0] = (c >> 7) & 1; // D30
-  currentLimitSwitchStates[4][1] = (c >> 6) & 1; // D31
-  currentLimitSwitchStates[5][0] = (c >> 5) & 1; // D32
-  currentLimitSwitchStates[5][1] = (c >> 4) & 1; // D33
-  currentLimitSwitchStates[6][0] = (c >> 3) & 1; // D34
-  currentLimitSwitchStates[6][1] = (c >> 2) & 1; // D35
+  currentLimitSwitchStates[4][0] = (c >> 7) & 1;
+  currentLimitSwitchStates[4][1] = (c >> 6) & 1;
+  currentLimitSwitchStates[5][0] = (c >> 5) & 1;
+  currentLimitSwitchStates[5][1] = (c >> 4) & 1;
+  currentLimitSwitchStates[6][0] = (c >> 3) & 1;
+  currentLimitSwitchStates[6][1] = (c >> 2) & 1;
 #else
   for (uint8_t i=0; i<NUM_SERVOS; i++) {
     currentLimitSwitchStates[i][0] = (uint8_t)!digitalRead(limitSwitchPins[i][0]);
@@ -450,11 +536,10 @@ static void updateLimitSwitchStates() {
 #endif
 }
 
-// ========================= 센서 전송 =========================
+// ========================= 센서 전송(+압력 안전체크) =========================
 static void readAndSendAllSensorData(const unsigned long now) {
-  // --- 유량: 실제 dt + EWMA(Q15) ---
   const unsigned long dtMs_ul = now - lastFlowCalcMs; lastFlowCalcMs = now;
-  const uint16_t dtMs = (dtMs_ul > 0) ? (uint16_t)min(dtMs_ul, (unsigned long)65535UL) : (uint16_t)SENSOR_READ_INTERVAL;
+  const uint16_t dtMs = (dtMs_ul > 0) ? (uint16_t)min(dtMs_ul, 65535UL) : (uint16_t)SENSOR_READ_INTERVAL;
   const uint16_t aQ15 = alphaQ15_from_dt(dtMs);
 
   unsigned long counts[NUM_FLOW_SENSORS];
@@ -466,7 +551,7 @@ static void readAndSendAllSensorData(const unsigned long now) {
     int32_t inst_m3h_1e4 = 0;
     if (counts[i] > 0) {
       uint64_t num = (uint64_t)counts[i] * (uint64_t)FLOW_A_1e4[i];
-      inst_m3h_1e4 = (int32_t)((num + (dtMs/2)) / dtMs); // 반올림
+      inst_m3h_1e4 = (int32_t)((num + (dtMs/2)) / dtMs);
     }
     int32_t err = inst_m3h_1e4 - flowRates_m3h_1e4[i];
     int32_t delta = (int32_t)(((int64_t)err * aQ15 + 16384) >> 15);
@@ -475,22 +560,42 @@ static void readAndSendAllSensorData(const unsigned long now) {
 
 #if PACKED_SERIAL
   size_t p = 0;
-
-  // 압력(psi, 2dec): 백그라운드 평균값 사용
-  for (uint8_t i=0; i<NUM_PRESSURE_SENSORS; i++) {
-    uint16_t adc;
-#if ADC_BG_FREERUN
-    adc = adcReadAvg(i);
-#else
-    adc = analogRead(pressurePins[i]); // 폴백
 #endif
+
+  bool pressureTrip = false;
+  unsigned long dtPressMs = (lastPressureCheckMs == 0) ? 0 : (now - lastPressureCheckMs);
+  uint32_t psi100_now[NUM_PRESSURE_SENSORS];
+
+  for (uint8_t i=0; i<NUM_PRESSURE_SENSORS; i++) {
+    uint16_t adc = adcReadAvg(i);
     const uint32_t psi100 = ((uint32_t)adc * PSI_PER_ADC_X1000 + 5) / 10;
+    psi100_now[i] = psi100;
+
+#if PACKED_SERIAL
     bufPutChar(p, 'p'); bufPutChar(p, 't'); bufPutUInt(p, i+1); bufPutChar(p, ':');
     bufPutFixed(p, (int32_t)psi100, 2);
     bufPutChar(p, ',');
-  }
+#endif
 
-  // TC1, TC2(K, 2dec)
+    if (!emergencyActive) {
+      if (PRESSURE_MAX_PSIx100 > 0 && psi100 >= PRESSURE_MAX_PSIx100) {
+        pressureTrip = true;
+      }
+      if (!pressureTrip && PRESSURE_ROC_MAX_PSIx100_PER_S > 0 && dtPressMs > 0 && lastPressureCheckMs != 0) {
+        int32_t dpsi = (int32_t)psi100 - (int32_t)lastPsi100[i];
+        if (dpsi > 0) {
+          uint32_t roc = (uint32_t)(( (uint64_t)dpsi * 1000UL + (dtPressMs/2) ) / dtPressMs);
+          if (roc >= PRESSURE_ROC_MAX_PSIx100_PER_S) pressureTrip = true;
+        }
+      }
+    }
+  }
+  lastPressureCheckMs = now;
+  for (uint8_t i=0; i<NUM_PRESSURE_SENSORS; i++) lastPsi100[i] = psi100_now[i];
+
+  if (pressureTrip) triggerEmergency(F("PRESSURE"));
+
+#if PACKED_SERIAL
   bufPutStr(p, "tc1:");
   if (tempCelsius_mC_1 == INT32_MIN) bufPutStr(p, "ERR");
   else { const int32_t k100 = (tempCelsius_mC_1 + 273150) / 10; bufPutFixed(p, k100, 2); }
@@ -499,7 +604,6 @@ static void readAndSendAllSensorData(const unsigned long now) {
   if (tempCelsius_mC_2 == INT32_MIN) bufPutStr(p, "ERR");
   else { const int32_t k100 = (tempCelsius_mC_2 + 273150) / 10; bufPutFixed(p, k100, 2); }
 
-  // 유량 (m3/h 4dec, L/h 1dec)
   for (uint8_t i=0; i<NUM_FLOW_SENSORS; i++) {
     bufPutStr(p, ",fm"); bufPutUInt(p, i+1); bufPutStr(p, "_m3h:");
     bufPutFixed(p, flowRates_m3h_1e4[i], 4);
@@ -507,15 +611,11 @@ static void readAndSendAllSensorData(const unsigned long now) {
     bufPutFixed(p, flowRates_m3h_1e4[i], 1);
   }
 
-  // 리미트 스위치
   for (uint8_t i=0; i<NUM_SERVOS; i++) {
     bufPutStr(p, ",V"); bufPutUInt(p, i); bufPutStr(p, "_LS_OPEN:");   bufPutUInt(p, currentLimitSwitchStates[i][0]);
     bufPutStr(p, ",V"); bufPutUInt(p, i); bufPutStr(p, "_LS_CLOSED:"); bufPutUInt(p, currentLimitSwitchStates[i][1]);
   }
-
   bufEndlineAndSend(p);
-#else
-  // 필요 시 PACKED_SERIAL=0 폴백 경로(생략 가능)
 #endif
 }
 
@@ -524,11 +624,11 @@ static void updateTemperatureReadings() {
   static bool toggle = false;
   if (toggle) {
     float c1 = (float)thermocouple1.readCelsius();
-    if (!isnan(c1)) { long v = (long)(c1 * 1000.0f + (c1>=0 ? 0.5f : -0.5f)); tempCelsius_mC_1 = (int32_t)v; }
+    if (!isnan(c1)) { tempCelsius_mC_1 = (int32_t)(c1 * 1000.0f + (c1>=0 ? 0.5f : -0.5f)); }
     else { tempCelsius_mC_1 = INT32_MIN; }
   } else {
     float c2 = (float)thermocouple2.readCelsius();
-    if (!isnan(c2)) { long v = (long)(c2 * 1000.0f + (c2>=0 ? 0.5f : -0.5f)); tempCelsius_mC_2 = (int32_t)v; }
+    if (!isnan(c2)) { tempCelsius_mC_2 = (int32_t)(c2 * 1000.0f + (c2>=0 ? 0.5f : -0.5f)); }
     else { tempCelsius_mC_2 = INT32_MIN; }
   }
   toggle = !toggle;
