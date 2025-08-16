@@ -2,6 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Rocket Ground System Sequences",
   "type": "object",
+  "required": ["Emergency Shutdown"],
   "additionalProperties": {
     "type": "array",
     "items": {
@@ -34,7 +35,27 @@
           "additionalProperties": false
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "not": {
+            "allOf": [
+              {
+                "properties": {
+                  "commands": { "contains": { "const": "CMD,Ethanol Main,Open" } }
+                },
+                "required": ["commands"]
+              },
+              {
+                "properties": {
+                  "commands": { "contains": { "const": "CMD,N2O Main,Open" } }
+                },
+                "required": ["commands"]
+              }
+            ]
+          }
+        }
+      ]
     }
   }
 }
