@@ -60,6 +60,13 @@ class MainApp {
     this.createWindow();
     this.setupIpc();
 
+    // <<< 여기에 추가된 코드
+    // SerialManager의 상태 변경(연결, 끊김, 재연결) 이벤트를 UI로 전달합니다.
+    this.serialManager.on('status' as any, (s) => {
+      this.mainWindow?.webContents.send('serial-status', s);
+    });
+    // >>> 추가된 코드 끝
+
     this.sequenceManager.watch((sequences, result) => {
       this.mainWindow?.webContents.send('sequences-updated', { sequences, result });
     });
