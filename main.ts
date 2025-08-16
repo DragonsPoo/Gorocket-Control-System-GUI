@@ -60,12 +60,9 @@ class MainApp {
     this.createWindow();
     this.setupIpc();
 
-    // <<< 여기에 추가된 코드
-    // SerialManager의 상태 변경(연결, 끊김, 재연결) 이벤트를 UI로 전달합니다.
     this.serialManager.on('status' as any, (s) => {
-      this.mainWindow?.webContents.send('serial-status', s);
+        this.mainWindow?.webContents.send('serial-status', s);
     });
-    // >>> 추가된 코드 끝
 
     this.sequenceManager.watch((sequences, result) => {
       this.mainWindow?.webContents.send('sequences-updated', { sequences, result });
@@ -169,6 +166,41 @@ class MainApp {
       this.sequenceEngine?.cancel();
       return true;
     });
+
+    // <<< 여기에 추가된 코드
+    // 렌더러(UI)로부터 압력 초과 비상 신호를 수신하는 리스너
+    ipcMain.on('safety:pressureExceeded', async (_e, snapshot) => {
+      console.warn(`SAFETY TRIGGER from renderer: ${snapshot?.reason ?? 'unknown'}`);
+      
+      // 1. 진행 중인 시퀀스가 있다면 즉시 취소
+      this.sequenceEngine?.cancel();
+      
+      // 2. 즉시 호스트(메인 프로세스) 측 페일세이프 명령을 실행
+      // (펌웨어의 하트비트 타임아웃을 기다리지 않고 선제적으로 조치)
+      const mains = [0, 1, 2, 3, 4], vent = 5, purge = 6;
+      const cmds = [
+        ...mains.map(i => ({ type: 'RAW', payload: `V,${i},C` })),
+        { type: 'RAW', payload: `V,${vent},O` },
+        { type: 'RAW', payload: `V,${purge},O` },
+      ];
+
+      for (const c of cmds) {
+        try {
+          // send는 ACK를 기다리므로, 비상 상황에서는 타임아웃을 짧게 주거나
+          // fire-and-forget 방식의 low-level write를 사용하는 것이 더 좋을 수 있습니다.
+          // 여기서는 일단 send를 사용하되, 실패는 무시하고 다음 명령을 시도합니다.
+          await this.serialManager.send(c as any);
+        } catch {}
+      }
+      
+      // 3. UI에도 비상 상황이 발생했음을 명확히 알림
+      this.mainWindow?.webContents.send('sequence-error', {
+        name: 'safety-trigger',
+        stepIndex: -1,
+        error: `Pressure safety triggered by UI (${snapshot?.reason ?? 'unknown'})`
+      });
+    });
+    // >>> 추가된 코드 끝
   }
 
   cleanup() {
