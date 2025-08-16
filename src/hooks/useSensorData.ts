@@ -13,102 +13,130 @@ export interface SensorDataApi {
   getLatestSensorData: () => SensorData | null;
 }
 
+/**
+ * pressureLimit: psi (예: 150)
+ * pressureRateLimit: psi/s (예: 50) - 양의 상승률 기준(상승만 감지)
+ */
 export function useSensorData(
   maxPoints: number,
   pressureLimit: number | null,
-  onEmergency: () => void,
+  pressureRateLimit: number | null,
   updateValves: (updates: Partial<Record<number, Partial<Valve>>>) => void
 ): SensorDataApi {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const sensorRef = useRef<SensorData | null>(null);
   const [chartData, setChartData] = useState<SensorData[]>([]);
-  const overCnt = useRef(0);
-  const emergencyTriggeredRef = useRef(false);
-  const lastPressureWarning = useRef(0);
+
+  // 라우팅/로깅 보조 상태
   const pressureHistory = useRef<number[]>([]);
+  const lastWarnLimitMs = useRef(0);
+  const lastWarnRateMs = useRef(0);
+  const lastSafetyEmitMs = useRef(0);
+  const SAFETY_EMIT_COOLDOWN_MS = 1000;
+
+  const emitSafetyPressureExceeded = useCallback((snapshot: any) => {
+    try {
+      // 메인 라우팅: preload에서 ipcRenderer.send('safety:pressureExceeded', snapshot)를 노출해야 함
+      (window as any).electronAPI?.safetyPressureExceeded?.(snapshot);
+    } catch (e) {
+      console.warn('safetyPressureExceeded emit failed (no bridge?):', e);
+    }
+  }, []);
 
   const handleSerialMessage = useCallback(
     (data: string) => {
       const { sensor, valves } = parseSensorData(data);
       if (Object.keys(sensor).length > 0) {
+        const now = Date.now();
+        const prev = sensorRef.current ?? null;
+
         const updated = {
           ...sensorRef.current,
           ...sensor,
-          timestamp: Date.now(),
+          timestamp: now,
         } as SensorData;
+
+        // 도표/상태 반영
         setSensorData(updated);
         sensorRef.current = updated;
-        setChartData((prev) => {
-          const next = [...prev, updated];
+        setChartData((prevChart) => {
+          const next = [...prevChart, updated];
           if (next.length > maxPoints) next.splice(0, next.length - maxPoints);
           return next;
         });
-        // 압력 한계 검사 및 안정화된 처리
-        if (pressureLimit !== null && typeof updated.pressure === 'number') {
-          const currentPressure = updated.pressure;
-          const now = Date.now();
-          
-          // 압력 히스토리 유지 (최근 10개 값)
-          pressureHistory.current.push(currentPressure);
-          if (pressureHistory.current.length > 10) {
-            pressureHistory.current.shift();
+
+        // 압력/상승률 모니터링
+        if (typeof updated.pressure === 'number') {
+          const pNow = updated.pressure as number;
+          pressureHistory.current.push(pNow);
+          if (pressureHistory.current.length > 10) pressureHistory.current.shift();
+
+          // 한계 초과
+          const overLimit = pressureLimit !== null
+            ? exceedsPressureLimit(updated, pressureLimit)
+            : false;
+
+          if (overLimit) {
+            if (now - lastWarnLimitMs.current > 1000) {
+              console.warn(`Pressure limit exceeded: ${pNow} > ${pressureLimit}`);
+              lastWarnLimitMs.current = now;
+            }
           }
-          
-          const exceedsLimit = exceedsPressureLimit(updated, pressureLimit);
-          
-          if (exceedsLimit) {
-            overCnt.current++;
-            
-            // 경고 로깅 (주기적으로 방지)
-            if (now - lastPressureWarning.current > 1000) {
-              console.warn(`Pressure warning ${overCnt.current}/3: ${currentPressure} > ${pressureLimit}`);
-              lastPressureWarning.current = now;
+
+          // 상승률(속도) 계산: 이전 샘플 기준, 상승만 감지
+          let ratePsiPerSec: number | null = null;
+          let overRate = false;
+          if (pressureRateLimit !== null && prev && typeof prev.pressure === 'number' && typeof prev.timestamp === 'number') {
+            const dtMs = now - prev.timestamp;
+            if (dtMs > 0) {
+              const dp = pNow - (prev.pressure as number);
+              const dtSec = dtMs / 1000;
+              ratePsiPerSec = dp / dtSec;
+              if (ratePsiPerSec > pressureRateLimit) {
+                overRate = true;
+                if (now - lastWarnRateMs.current > 1000) {
+                  console.warn(`Pressure rate exceeded: +${ratePsiPerSec.toFixed(2)} psi/s > ${pressureRateLimit} psi/s`);
+                  lastWarnRateMs.current = now;
+                }
+              }
             }
-            
-            // 3회 연속 초과 시 비상 상황
-            if (overCnt.current >= 3 && !emergencyTriggeredRef.current) {
-              emergencyTriggeredRef.current = true;
-              
-              // 압력 히스토리 분석
-              const avgPressure = pressureHistory.current.reduce((a, b) => a + b, 0) / pressureHistory.current.length;
-              const maxPressure = Math.max(...pressureHistory.current);
-              
-              console.error(`EMERGENCY TRIGGERED: Pressure limit exceeded 3 times`);
-              console.error(`Current: ${currentPressure}, Limit: ${pressureLimit}`);
-              console.error(`Recent average: ${avgPressure.toFixed(2)}, Max: ${maxPressure.toFixed(2)}`);
-              
-              onEmergency();
-              overCnt.current = 0;
-              
-              // 5초 후 비상 상황 리셋 (안정화 후 재감지 가능)
-              setTimeout(() => {
-                emergencyTriggeredRef.current = false;
-                console.log('Emergency state reset - pressure monitoring resumed');
-              }, 5000);
-            }
-          } else {
-            // 압력이 정상 범위로 돌아온 경우
-            if (overCnt.current > 0) {
-              console.log(`Pressure normalized: ${currentPressure} <= ${pressureLimit} (warning count reset)`);
-            }
-            overCnt.current = 0;
+          }
+
+          // 라우팅: 한계/상승률 중 하나라도 초과 시 메인으로 스냅샷 송신(쿨다운 적용)
+          const shouldEmit = (overLimit || overRate) && (now - lastSafetyEmitMs.current >= SAFETY_EMIT_COOLDOWN_MS);
+          if (shouldEmit) {
+            lastSafetyEmitMs.current = now;
+            const reason = overLimit && overRate ? 'limit+rate' : (overLimit ? 'limit' : 'rate');
+
+            const snapshot = {
+              timestamp: now,
+              reason,
+              pressure: pNow,                 // psi
+              pressureLimit: pressureLimit,   // psi
+              rate: ratePsiPerSec,            // psi/s (null 가능)
+              rateLimit: pressureRateLimit,   // psi/s (null 가능)
+              history: [...pressureHistory.current], // 최근 값
+            };
+            emitSafetyPressureExceeded(snapshot);
           }
         }
       }
+
       if (Object.keys(valves).length > 0) {
         updateValves(valves);
       }
     },
-    [maxPoints, onEmergency, pressureLimit, updateValves]
+    [emitSafetyPressureExceeded, maxPoints, pressureLimit, pressureRateLimit, updateValves]
   );
 
   const reset = useCallback(() => {
     setSensorData(null);
     sensorRef.current = null;
     setChartData([]);
-    overCnt.current = 0;
-    emergencyTriggeredRef.current = false;
     pressureHistory.current = [];
+    lastWarnLimitMs.current = 0;
+    lastWarnRateMs.current = 0;
+    lastSafetyEmitMs.current = 0;
     console.log('Sensor data and pressure monitoring reset');
   }, []);
 
