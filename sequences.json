@@ -1,73 +1,148 @@
 {
-  "Random Test A": [
-    { "message": "Open System Vent", "delay": 800, "commands": ["CMD,System Vent,Open"] },
-    { "message": "Open Ethanol Main", "delay": 1200, "commands": ["CMD,Ethanol Main,Open"] },
-    { "message": "Open Pressurant Fill", "delay": 1500, "commands": ["CMD,Pressurant Fill,Open"] },
-    { "message": "Close System Vent", "delay": 900, "commands": ["CMD,System Vent,Close"] },
-    { "message": "Open N2O Main", "delay": 1300, "commands": ["CMD,N2O Main,Open"] },
-    { "message": "Close Ethanol Main", "delay": 1100, "commands": ["CMD,Ethanol Main,Close"] },
-    { "message": "Close N2O Main", "delay": 1400, "commands": ["CMD,N2O Main,Close"] },
-    { "message": "Open Ethanol Purge", "delay": 600, "commands": ["CMD,Ethanol Purge,Open"] },
-    { "message": "Close Pressurant Fill", "delay": 1000, "commands": ["CMD,Pressurant Fill,Close"] }
-  ],
-  "Random Test B": [
-    { "message": "Open N2O Purge", "delay": 500, "commands": ["CMD,N2O Purge,Open"] },
-    { "message": "Open System Vent", "delay": 1400, "commands": ["CMD,System Vent,Open"] },
-    { "message": "Open Ethanol Main", "delay": 800, "commands": ["CMD,Ethanol Main,Open"] },
-    { "message": "Close N2O Purge", "delay": 1200, "commands": ["CMD,N2O Purge,Close"] },
-    { "message": "Open Pressurant Fill", "delay": 900, "commands": ["CMD,Pressurant Fill,Open"] },
-    { "message": "Close System Vent", "delay": 1300, "commands": ["CMD,System Vent,Close"] },
-    { "message": "Open N2O Main", "delay": 700, "commands": ["CMD,N2O Main,Open"] },
-    { "message": "Close Ethanol Main", "delay": 1500, "commands": ["CMD,Ethanol Main,Close"] },
-    { "message": "Close N2O Purge", "delay": 1000, "commands": ["CMD,N2O Purge,Close"] }
-  ],
-  "Random Test C": [
-    { "message": "Open Ethanol Purge", "delay": 1000, "commands": ["CMD,Ethanol Purge,Open"] },
-    { "message": "Open Pressurant Fill", "delay": 600, "commands": ["CMD,Pressurant Fill,Open"] },
-    { "message": "Open N2O Main", "delay": 1300, "commands": ["CMD,N2O Main,Open"] },
-    { "message": "Open System Vent", "delay": 900, "commands": ["CMD,System Vent,Open"] },
-    { "message": "Close Ethanol Purge", "delay": 1200, "commands": ["CMD,Ethanol Purge,Close"] },
-    { "message": "Open Ethanol Main", "delay": 800, "commands": ["CMD,Ethanol Main,Open"] },
-    { "message": "Open N2O Purge", "delay": 1100, "commands": ["CMD,N2O Purge,Open"] },
-    { "message": "Close Pressurant Fill", "delay": 1400, "commands": ["CMD,Pressurant Fill,Close"] },
-    { "message": "Close N2O Main", "delay": 700, "commands": ["CMD,N2O Main,Close"] },
-    { "message": "Close N2O Main", "delay": 1000, "commands": ["CMD,N2O Main,Close"] }
-  ],
-  "Multi-Open Test": [
-    { "message": "Open System Vent & Ethanol Main", "delay": 1000, "commands": ["CMD,System Vent,Open", "CMD,Ethanol Main,Open"] },
-    { "message": "Open N2O Main & Pressurant Fill", "delay": 1500, "commands": ["CMD,N2O Main,Open", "CMD,Pressurant Fill,Open"] },
-    { "message": "Close System Vent", "delay": 800, "commands": ["CMD,System Vent,Close"] },
-    { "message": "Open Ethanol Purge & N2O Purge", "delay": 1200, "commands": ["CMD,Ethanol Purge,Open", "CMD,N2O Purge,Open"] },
-    { "message": "Close Ethanol Main & N2O Main", "delay": 1100, "commands": ["CMD,Ethanol Main,Close", "CMD,N2O Main,Close"] },
-    { "message": "Close All Purges", "delay": 1300, "commands": ["CMD,Ethanol Purge,Close", "CMD,N2O Purge,Close"] },
-    { "message": "Close Remaining Valves", "delay": 700, "commands": ["CMD,Pressurant Fill,Close"] }
-  ],
-  "Chaos Test": [
-    { "message": "Open Everything", "delay": 500, "commands": ["CMD,System Vent,Open", "CMD,Ethanol Main,Open", "CMD,N2O Main,Open"] },
-    { "message": "Add More Opens", "delay": 800, "commands": ["CMD,Pressurant Fill,Open", "CMD,Ethanol Purge,Open"] },
-    { "message": "Random Close", "delay": 600, "commands": ["CMD,Ethanol Main,Close"] },
-    { "message": "More Opens", "delay": 1000, "commands": ["CMD,N2O Purge,Open"] },
-    { "message": "Random Close 2", "delay": 700, "commands": ["CMD,System Vent,Close"] },
-    { "message": "Random Close 3", "delay": 900, "commands": ["CMD,N2O Main,Close", "CMD,Ethanol Purge,Close"] },
-    { "message": "Final Random", "delay": 1200, "commands": ["CMD,Pressurant Fill,Close"] },
-    { "message": "Close All Remaining", "delay": 1500, "commands": ["CMD,N2O Purge,Close"] }
-  ],
-  "Sequential Mix": [
-    { "message": "Start with Purges", "delay": 1000, "commands": ["CMD,Ethanol Purge,Open"] },
-    { "message": "Add N2O Purge", "delay": 800, "commands": ["CMD,N2O Purge,Open"] },
-    { "message": "Switch to Mains", "delay": 1200, "commands": ["CMD,Ethanol Main,Open", "CMD,Ethanol Purge,Close"] },
-    { "message": "Add N2O Main", "delay": 900, "commands": ["CMD,N2O Main,Open"] },
-    { "message": "System Control", "delay": 1100, "commands": ["CMD,System Vent,Open", "CMD,N2O Purge,Close"] },
-    { "message": "Pressurization", "delay": 1300, "commands": ["CMD,Pressurant Fill,Open"] },
-    { "message": "System Vent Close", "delay": 700, "commands": ["CMD,System Vent,Close"] },
-    { "message": "Shutdown", "delay": 1400, "commands": ["CMD,Ethanol Main,Close", "CMD,N2O Main,Close"] },
-    { "message": "Final Close", "delay": 1000, "commands": ["CMD,Pressurant Fill,Close"] }
-  ],
   "Emergency Shutdown": [
-    { "message": "Emergency: Close All Main Valves", "delay": 100, "commands": ["CMD,Ethanol Main,Close", "CMD,N2O Main,Close"] },
-    { "message": "Emergency: Open System Vent", "delay": 200, "commands": ["CMD,System Vent,Open"] },
-    { "message": "Emergency: Close Pressurant Fill", "delay": 100, "commands": ["CMD,Pressurant Fill,Close"] },
-    { "message": "Emergency: Open All Purges", "delay": 200, "commands": ["CMD,Ethanol Purge,Open", "CMD,N2O Purge,Open"] },
-    { "message": "System Safe", "delay": 500, "commands": [] }
+    {
+      "message": "Immediate safe state (close mains, open vent/purges, stop fills/igniter)",
+      "delay": 0,
+      "commands": [
+        "CMD,Ethanol Main,Close",
+        "CMD,N2O Main,Close",
+        "CMD,Pressurant Fill,Close",
+        "CMD,Igniter Fuel,Close",
+        "CMD,System Vent,Open",
+        "CMD,Ethanol Purge,Open",
+        "CMD,N2O Purge,Open"
+      ]
+    }
+  ],
+
+  "Random Test (6 valves, no #7)": [
+    { "message": "V0 Open", "delay": 0,   "commands": ["V,0,O"] },
+    { "message": "V1 Open", "delay": 800, "commands": ["V,1,O"] },
+    { "message": "V0 Close","delay": 700, "commands": ["V,0,C"] },
+    { "message": "V2 Open", "delay": 500, "commands": ["V,2,O"] },
+    { "message": "V5 Open", "delay": 900, "commands": ["V,5,O"] },
+    { "message": "V2 Close","delay": 600, "commands": ["V,2,C"] },
+    { "message": "V4 Open", "delay": 700, "commands": ["V,4,O"] },
+    { "message": "V1 Close","delay": 400, "commands": ["V,1,C"] },
+    { "message": "V3 Open", "delay": 900, "commands": ["V,3,O"] },
+    { "message": "V3 Close","delay": 600, "commands": ["V,3,C"] },
+    { "message": "V4 Close","delay": 500, "commands": ["V,4,C"] },
+    { "message": "V5 Close","delay": 800, "commands": ["V,5,C"] }
+  ],
+
+  "Random Test (7 valves, all)": [
+    { "message": "V6 Open", "delay": 0,   "commands": ["V,6,O"] },
+    { "message": "V0 Open", "delay": 700, "commands": ["V,0,O"] },
+    { "message": "V6 Close","delay": 600, "commands": ["V,6,C"] },
+    { "message": "V4 Open", "delay": 500, "commands": ["V,4,O"] },
+    { "message": "V1 Open", "delay": 900, "commands": ["V,1,O"] },
+    { "message": "V0 Close","delay": 700, "commands": ["V,0,C"] },
+    { "message": "V5 Open", "delay": 600, "commands": ["V,5,O"] },
+    { "message": "V1 Close","delay": 500, "commands": ["V,1,C"] },
+    { "message": "V3 Open", "delay": 800, "commands": ["V,3,O"] },
+    { "message": "V4 Close","delay": 600, "commands": ["V,4,C"] },
+    { "message": "V2 Open", "delay": 500, "commands": ["V,2,O"] },
+    { "message": "V2 Close","delay": 700, "commands": ["V,2,C"] },
+    { "message": "V5 Close","delay": 600, "commands": ["V,5,C"] },
+    { "message": "V3 Close","delay": 500, "commands": ["V,3,C"] }
+  ],
+
+  "Pre-Operation Safe Init": [
+    {
+      "message": "Ensure all valves closed (baseline safe state)",
+      "delay": 0,
+      "commands": [
+        "CMD,Ethanol Main,Close",
+        "CMD,N2O Main,Close",
+        "CMD,Ethanol Purge,Close",
+        "CMD,N2O Purge,Close",
+        "CMD,Pressurant Fill,Close",
+        "CMD,System Vent,Close",
+        "CMD,Igniter Fuel,Close"
+      ]
+    }
+  ],
+
+  "Pre-Chill & Purge": [
+    { "message": "Ethanol purge OPEN", "delay": 0,    "commands": ["CMD,Ethanol Purge,Open"] },
+    { "message": "Hold purge",         "delay": 5000, "commands": [] },
+    { "message": "Ethanol purge CLOSE","delay": 0,    "commands": ["CMD,Ethanol Purge,Close"] },
+
+    { "message": "N2O purge OPEN",     "delay": 0,    "commands": ["CMD,N2O Purge,Open"] },
+    { "message": "Hold purge",         "delay": 5000, "commands": [] },
+    { "message": "N2O purge CLOSE",    "delay": 0,    "commands": ["CMD,N2O Purge,Close"] }
+  ],
+
+  "Pressurize Ethanol Tank": [
+    { "message": "Pressurant Fill OPEN", "delay": 0, "commands": ["CMD,Pressurant Fill,Open"] },
+    {
+      "message": "Wait pt1 >= 250 psi",
+      "delay": 0,
+      "commands": [],
+      "condition": { "sensor": "pt1", "min": 250, "op": "gte", "timeoutMs": 120000 }
+    },
+    { "message": "Pressurant Fill CLOSE", "delay": 0, "commands": ["CMD,Pressurant Fill,Close"] }
+  ],
+
+  "Pressurize N2O Tank": [
+    { "message": "Pressurant Fill OPEN", "delay": 0, "commands": ["CMD,Pressurant Fill,Open"] },
+    {
+      "message": "Wait pt2 >= 450 psi",
+      "delay": 0,
+      "commands": [],
+      "condition": { "sensor": "pt2", "min": 450, "op": "gte", "timeoutMs": 120000 }
+    },
+    { "message": "Pressurant Fill CLOSE", "delay": 0, "commands": ["CMD,Pressurant Fill,Close"] }
+  ],
+
+  "Ethanol Flow Check": [
+    { "message": "Ensure N2O main CLOSED",    "delay": 0,    "commands": ["CMD,N2O Main,Close"] },
+    { "message": "Ethanol Main OPEN",         "delay": 0,    "commands": ["CMD,Ethanol Main,Open"] },
+    { "message": "Stabilize flow (timed)",    "delay": 3000, "commands": [] },
+    { "message": "Ethanol Main CLOSE",        "delay": 0,    "commands": ["CMD,Ethanol Main,Close"] }
+  ],
+
+  "N2O Flow Check": [
+    { "message": "Ensure Ethanol main CLOSED", "delay": 0,    "commands": ["CMD,Ethanol Main,Close"] },
+    { "message": "N2O Main OPEN",              "delay": 0,    "commands": ["CMD,N2O Main,Open"] },
+    { "message": "Stabilize flow (timed)",     "delay": 3000, "commands": [] },
+    { "message": "N2O Main CLOSE",             "delay": 0,    "commands": ["CMD,N2O Main,Close"] }
+  ],
+
+  "Igniter Solo Test": [
+    { "message": "Igniter OPEN (fuel only)", "delay": 0,    "commands": ["CMD,Igniter Fuel,Open"] },
+    { "message": "Hold 1s",                  "delay": 1000, "commands": [] },
+    { "message": "Igniter CLOSE",            "delay": 0,    "commands": ["CMD,Igniter Fuel,Close"] }
+  ],
+
+  "Vent Down / Safe End": [
+    { "message": "Open VENT & PURGEs", "delay": 0, "commands": [
+      "CMD,System Vent,Open",
+      "CMD,Ethanol Purge,Open",
+      "CMD,N2O Purge,Open"
+    ]},
+    {
+      "message": "Wait pt1 <= 15 psi",
+      "delay": 0,
+      "commands": [],
+      "condition": { "sensor": "pt1", "min": 0, "max": 15, "op": "lte", "timeoutMs": 60000 }
+    },
+    {
+      "message": "Wait pt2 <= 15 psi",
+      "delay": 0,
+      "commands": [],
+      "condition": { "sensor": "pt2", "min": 0, "max": 15, "op": "lte", "timeoutMs": 60000 }
+    },
+    { "message": "Close VENT & PURGEs", "delay": 0, "commands": [
+      "CMD,System Vent,Close",
+      "CMD,Ethanol Purge,Close",
+      "CMD,N2O Purge,Close"
+    ]},
+    { "message": "Confirm mains closed", "delay": 0, "commands": [
+      "CMD,Ethanol Main,Close",
+      "CMD,N2O Main,Close",
+      "CMD,Pressurant Fill,Close",
+      "CMD,Igniter Fuel,Close"
+    ]}
   ]
 }
