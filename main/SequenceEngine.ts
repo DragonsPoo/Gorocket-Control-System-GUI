@@ -111,6 +111,15 @@ export class SequenceEngine extends EventEmitter {
     const seq = this.getSequence(name);
     if (!seq || seq.length === 0) throw new Error(`Sequence not found or empty: ${name}`);
 
+    // <<< 여기에 추가된 코드
+    // Dry-run을 실행하여 동적 위험을 사전에 차단합니다.
+    const dryRunResult = this.seqMgr.dryRunSequence(name);
+    if (!dryRunResult.ok) {
+      // 드라이런 실패 시, 에러를 발생시켜 시퀀스 실행을 막습니다.
+      throw new Error(`Dry-run failed: ${dryRunResult.errors.join(' | ')}`);
+    }
+    // >>> 추가된 코드 끝
+
     this.running = true;
     this.cancelled = false;
     this.currentName = name;
