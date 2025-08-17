@@ -3,6 +3,7 @@
     "baudRate": 115200
   },
   "maxChartDataPoints": 100,
+  "pressureLimitPsi": 850,
   "pressureLimitAlarmPsi": 850,
   "pressureLimitTripPsi": 1000,
   "pressureRateLimitPsiPerSec": 50,
