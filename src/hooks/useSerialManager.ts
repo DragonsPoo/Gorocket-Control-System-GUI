@@ -5,7 +5,7 @@ import type { SerialCommand } from '@shared/types/ipc';
 import { useValveControl } from './useValveControl';
 import { useSensorData } from './useSensorData';
 
-export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
+export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'reconnecting';
 
 interface SerialState {
   connectionStatus: ConnectionStatus;
@@ -114,7 +114,7 @@ export function useSerialManager(): SerialManagerApi {
           loggerRef.current(`Command send failed: ${JSON.stringify(cmd)}`);
           
           // 명령 전송 실패 시 연결 상태 재확인
-          const ports = await window.electronAPI.getSerialPorts();
+          const ports = await window.electronAPI.listSerialPorts();
           if (!ports.includes(state.selectedPort)) {
             dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
             loggerRef.current('Connection lost - port no longer available');
@@ -259,7 +259,7 @@ export function useSerialManager(): SerialManagerApi {
   }, []);
 
   const clearMcuEmergency = useCallback(async () => {
-    await window.electronAPI.safety.clearEmergency();
+    await window.electronAPI.safetyClear();
   }, []);
 
   return {

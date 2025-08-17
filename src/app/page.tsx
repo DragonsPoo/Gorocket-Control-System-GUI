@@ -21,6 +21,7 @@ export default function Home() {
     getLatestSensorData,
     valves,
     connectionStatus,
+    isEmergency,
     serialPorts,
     selectedPort,
     setSelectedPort,
@@ -31,6 +32,7 @@ export default function Home() {
     setLogger,
     setSequenceHandler,
     resetEmergency,
+    clearMcuEmergency,
   } = useSerialManager();
 
   const {
@@ -125,6 +127,9 @@ export default function Home() {
         onConnect={handleConnect}
         isLogging={isLogging}
         onToggleLogging={handleLoggingToggle}
+        appConfig={appConfig}
+        isEmergency={isEmergency}
+        onClearEmergency={clearMcuEmergency}
       />
       <main className="flex-grow p-4 md:p-6 lg:p-8">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-full">

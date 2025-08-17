@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron';
 import type { SerialManager } from './SerialManager';
 import type { SequenceDataManager } from './SequenceDataManager';
 import type { ConfigManager } from './ConfigManager';
+import { getSleepMs, sleep } from '../shared/utils/sleep';
 
 // 시퀀스/스텝 타입(시퀀스 JSON 구조에 맞춰 확장 가능)
 type Condition =
@@ -184,6 +185,14 @@ export class SequenceEngine extends EventEmitter {
   // =========== 시퀀스 스텝 실행 ===========
   private async execCmdStep(step: StepCmd) {
     const payload = step.payload;
+    
+    // Check if this is a sleep command
+    const sleepMs = getSleepMs(payload);
+    if (sleepMs !== null) {
+      await sleep(sleepMs);
+      return;
+    }
+    
     const ackMs = step.ackTimeoutMs ?? this.defaultAckTimeoutMs;
     await this.sendWithAck(payload, ackMs);
 

@@ -17,7 +17,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 
 interface HeaderProps {
-  connectionStatus: 'connected' | 'disconnected' | 'connecting';
+  connectionStatus: 'connected' | 'disconnected' | 'connecting' | 'reconnecting';
   ports: string[];
   selectedPort: string;
   onPortChange: (port: string) => void;
@@ -44,12 +44,12 @@ const Header: React.FC<HeaderProps> = ({
   onClearEmergency,
 }) => {
   const isConnected = connectionStatus === 'connected';
-  const isConnecting = connectionStatus === 'connecting';
+  const isConnecting = connectionStatus === 'connecting' || connectionStatus === 'reconnecting';
 
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [holdProgress, setHoldProgress] = useState(0);
-  const holdTimer = useRef<NodeJS.Timeout | null>(null);
-  const holdInterval = useRef<NodeJS.Timeout | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const HOLD_DURATION = 3000; // 3 seconds
 
@@ -60,7 +60,7 @@ const Header: React.FC<HeaderProps> = ({
     }, HOLD_DURATION);
 
     holdInterval.current = setInterval(() => {
-      setHoldProgress(p => p + (100 / (HOLD_DURATION / 100))));
+      setHoldProgress(p => p + (100 / (HOLD_DURATION / 100)));
     }, 100);
   };
 

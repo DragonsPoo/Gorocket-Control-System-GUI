@@ -63,7 +63,12 @@ GoRocket-Control-System-GUI/
 │   └── HeartbeatDaemon.ts      # 하트비트 데몬
 ├── shared/                      # 공유 타입 및 유틸리티
 │   ├── types/                  # TypeScript 타입 정의
+│   │   ├── index.ts           # 메인 타입 정의
+│   │   ├── ipc.ts             # IPC 통신 타입
+│   │   └── global.d.ts        # 전역 타입 선언
 │   └── utils/                  # 공유 유틸리티
+│       ├── sensorParser.ts    # 센서 데이터 파싱
+│       └── sleep.ts           # Sleep 토큰 파서
 ├── arduino_mega_code/          # Arduino 펌웨어
 │   └── arduino_mega_code.ino   # Arduino 메가 코드
 ├── main.ts                     # Electron 메인 프로세스
@@ -215,23 +220,29 @@ npm run validate:seq
 
 ## 🔧 시스템 기능
 
-### 🆕 새로 추가된 주요 기능
+### 🆕 최신 업데이트 (2025년)
 
-#### Safety Clear 기능
-- **Clear Emergency 버튼**: 상시 접근 가능한 비상 해제 버튼
-- **SAFE_CLEAR 명령**: Arduino로 안전 해제 신호 전송
-- **IPC 통신**: 메인 프로세스와 렌더러 간 안전한 통신
+#### 이중 압력 안전 시스템
+- **ALARM 레벨 (850 psi)**: GUI에서 감지, 자동 페일세이프 시퀀스 실행
+- **TRIP 레벨 (1000 psi)**: MCU 펌웨어 레벨 하드웨어 차단
+- **압력 상승률 모니터링**: 50 psi/s 초과 시 자동 트리거
+- **실시간 압력 표시**: Header에 ALARM/TRIP 임계값 표시
 
-#### 고급 시퀀스 엔진
-- **SequenceEngine**: CRC 체크섬 기반 안전한 명령 전송
-- **HeartbeatDaemon**: 250ms 간격 실시간 하트비트 모니터링
-- **자동 재연결**: 통신 중단 시 자동 복구 시도
-- **페일세이프**: 오류 발생 시 자동 안전 상태 전환
+#### 강화된 비상 안전 시스템
+- **3초 홀드 Clear Emergency**: 오작동 방지를 위한 홀드 버튼
+- **MCU 비상 상태 추적**: 실시간 EMERG/CLEARED 상태 표시
+- **다층 안전 통신**: UI → Main → MCU 다단계 안전 신호
+- **강제 오버라이드**: 비상 시 진행중 서보 강제 제어
 
-#### 개선된 로깅 시스템
-- **세션 기반 로깅**: 연결 시 자동 로그 세션 시작
-- **실시간 CSV 저장**: 2초 간격 자동 플러시
-- **설정 스냅샷**: config.json, sequences.json 자동 백업
+#### Sleep 토큰 시스템
+- **유연한 Sleep 구문**: `sleep 5`, `delay 500ms`, `wait 3s` 지원
+- **시퀀스 엔진 통합**: SequenceEngine에서 자동 파싱 및 실행
+- **정규화 파서**: 다양한 형식을 표준화하여 처리
+
+#### 개선된 IPC 통신
+- **멀티채널 이벤트**: Progress, Error, Complete 별도 채널
+- **타입 안전 API**: 모든 electronAPI 메서드 타입 정의
+- **Zoom 컨트롤**: Ctrl+마우스휠, Ctrl+0/+/- 단축키 지원
 
 ### 1. 실시간 데이터 모니터링
 
@@ -333,20 +344,31 @@ Documents/rocket-logs/
 ```json
 {
   "serial": {
-    "baudRate": 115200           // 시리얼 통신 속도
+    "baudRate": 115200             // 시리얼 통신 속도
   },
-  "pressureLimit": 850,          // 압력 한계값 (PSI)
-  "valveFeedbackTimeout": 2000,  // 밸브 피드백 타임아웃 (2초 활성화)
-  "maxChartDataPoints": 100,     // 차트 최대 데이터 포인트
-  "initialValves": [             // 밸브 초기 상태 정의 (7개)
-    { "id": 1, "name": "Ethanol Main", "state": "CLOSED" },
-    { "id": 2, "name": "N2O Main", "state": "CLOSED" },
-    // ... 5개 밸브 더
+  "maxChartDataPoints": 100,       // 차트 최대 데이터 포인트
+  "pressureLimit": 850,            // 기본 압력 한계값 (하위 호환성)
+  "pressureLimitAlarm": 850,       // GUI 알람 레벨 (psi)
+  "pressureLimitTrip": 1000,       // MCU 트립 레벨 (psi)
+  "pressureRateLimit": 50,         // 압력 상승률 한계 (psi/s)
+  "valveFeedbackTimeout": 2000,    // 밸브 피드백 타임아웃 (ms)
+  "initialValves": [               // 밸브 초기 상태 정의 (7개)
+    { "id": 1, "name": "Ethanol Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 2, "name": "N2O Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 3, "name": "Ethanol Purge", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 4, "name": "N2O Purge", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 5, "name": "Pressurant Fill", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 6, "name": "System Vent", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 7, "name": "Igniter Fuel", "state": "CLOSED", "lsOpen": false, "lsClosed": false }
   ],
-  "valveMappings": {             // 밸브 이름 → 서보 인덱스 매핑
+  "valveMappings": {               // 밸브 이름 → 서보 인덱스 매핑
     "Ethanol Main": { "servoIndex": 0 },
     "N2O Main": { "servoIndex": 1 },
-    // ... 나머지 5개
+    "Ethanol Purge": { "servoIndex": 2 },
+    "N2O Purge": { "servoIndex": 3 },
+    "Pressurant Fill": { "servoIndex": 4 },
+    "System Vent": { "servoIndex": 5 },
+    "Igniter Fuel": { "servoIndex": 6 }
   }
 }
 ```
@@ -951,7 +973,26 @@ Documents/rocket-logs/
 - ❌ 응급 셧다운 무시하고 작업 진행
 - ❌ 밸브 피드백 없이 고압 작업
 
-## 📈 최신 업데이트 (2025년)
+## 📈 최신 업데이트 (2025-01-17)
+
+### 🔥 핵심 변경사항
+- **API 표준화**: `getSerialPorts` → `listSerialPorts`로 명명 통일
+- **Emergency 시스템 강화**: `clearMcuEmergency` → `safetyClear()` 함수로 변경
+- **연결 상태 개선**: `ConnectionStatus`에 'reconnecting' 상태 추가
+- **타입 안전성**: AppConfig에 pressureLimitAlarm, pressureLimitTrip, pressureRateLimit 필드 추가
+- **IPC 통신 완성**: 모든 electronAPI 메서드 타입 정의 및 노출
+- **Sleep 토큰 파서**: shared/utils/sleep.ts로 유연한 지연시간 처리
+- **빌드 시스템**: 누락된 configuration 필드 수정 및 시퀀스 로딩 문제 해결
+
+### 🛠️ 구체적 변경 내용
+1. **Header 컴포넌트**: props에 appConfig, isEmergency, onClearEmergency 추가
+2. **useSerialManager**: API 호출 표준화 및 비상 상태 추적 개선  
+3. **타입 정의**: SensorData에 선택적 pressure 필드 추가 (하위 호환성)
+4. **IPC 핸들러**: zoom, logging, safety 관련 핸들러 추가
+5. **Sequence 로딩**: useSequenceManager에서 getSequences() 호출 추가
+6. **설정 파일**: config.json에 pressureLimit 필드 추가
+
+## 📈 이전 업데이트 (2025년)
 
 ### 🔧 주요 개선사항
 - **Safety Clear 기능 추가**: 상시 접근 가능한 비상 해제 버튼

@@ -268,6 +268,33 @@ class MainApp {
       }
     });
 
+    // Zoom controls
+    ipcMain.on('zoom-in', () => {
+      if (this.mainWindow) {
+        const current = this.mainWindow.webContents.getZoomLevel();
+        this.mainWindow.webContents.setZoomLevel(Math.min(current + 0.5, 3));
+      }
+    });
+    ipcMain.on('zoom-out', () => {
+      if (this.mainWindow) {
+        const current = this.mainWindow.webContents.getZoomLevel();
+        this.mainWindow.webContents.setZoomLevel(Math.max(current - 0.5, -3));
+      }
+    });
+    ipcMain.on('zoom-reset', () => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.setZoomLevel(0);
+      }
+    });
+
+    // Logging controls
+    ipcMain.on('start-logging', () => {
+      this.logManager.start(this.mainWindow);
+    });
+    ipcMain.on('stop-logging', () => {
+      this.logManager.stop();
+    });
+
     // P0-1: UI에서 보낸 압력 초과 신호 처리
     ipcMain.on('safety:pressureExceeded', async (_evt, snap) => {
       console.warn('[SAFETY] UI pressure limit exceeded, triggering failsafe.', snap);

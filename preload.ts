@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import type { AppConfig, SerialStatus } from '@shared/types';
-import { PressureSnapshot } from 'shared/types/global';
+import { PressureSnapshot } from './shared/types/global';
 
 // Applying user feedback to restore multi-channel events
 const api = {
@@ -18,6 +18,12 @@ const api = {
     ipcRenderer.on('serial-data', listener);
     return () => ipcRenderer.removeListener('serial-data', listener);
   },
+  onSerialError: (callback: (err: string) => void) => {
+    const listener = (_e: IpcRendererEvent, value: string) => callback(value);
+    ipcRenderer.on('serial-error', listener);
+    return () => ipcRenderer.removeListener('serial-error', listener);
+  },
+  sendToSerial: (data: any): Promise<boolean> => ipcRenderer.invoke('serial-send', data),
 
   // Sequence Control (User Snippet)
   sequenceStart: (name: string) => ipcRenderer.invoke('sequence-start', name),
@@ -47,6 +53,20 @@ const api = {
   // Config and Utilities
   getConfig: (): Promise<AppConfig> => ipcRenderer.invoke('config-get'),
   getSequences: () => ipcRenderer.invoke('get-sequences'),
+
+  // Zoom Controls
+  zoomIn: () => ipcRenderer.send('zoom-in'),
+  zoomOut: () => ipcRenderer.send('zoom-out'),
+  zoomReset: () => ipcRenderer.send('zoom-reset'),
+
+  // Logging
+  startLogging: () => ipcRenderer.send('start-logging'),
+  stopLogging: () => ipcRenderer.send('stop-logging'),
+  onLogCreationFailed: (callback: (error: string) => void) => {
+    const listener = (_e: IpcRendererEvent, value: string) => callback(value);
+    ipcRenderer.on('log-creation-failed', listener);
+    return () => ipcRenderer.removeListener('log-creation-failed', listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

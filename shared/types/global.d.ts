@@ -26,6 +26,8 @@ declare global {
       disconnectSerial: () => Promise<boolean>;
       onSerialStatus: (cb: (s: SerialStatus) => void) => () => void;
       onSerialData: (cb: (data: string) => void) => () => void;
+      onSerialError: (cb: (err: string) => void) => () => void;
+      sendToSerial: (data: any) => Promise<boolean>;
 
       // Sequence Control (multi-channel)
       sequenceStart: (name: string) => Promise<boolean>;
@@ -42,6 +44,16 @@ declare global {
 
       // Config and Utilities
       getConfig: () => Promise<AppConfig>;
+      
+      // Zoom Controls
+      zoomIn: () => void;
+      zoomOut: () => void;
+      zoomReset: () => void;
+      
+      // Logging
+      startLogging: () => void;
+      stopLogging: () => void;
+      onLogCreationFailed: (cb: (err: string) => void) => () => void;
     };
   }
 }

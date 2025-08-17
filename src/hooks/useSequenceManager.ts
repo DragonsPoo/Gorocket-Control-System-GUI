@@ -8,6 +8,7 @@ import type {
   SensorData,
 } from '@shared/types';
 import type { SerialCommand } from '@shared/types/ipc';
+import { getSleepMs, sleep } from '@shared/utils/sleep';
 
 interface SequenceStep {
   message: string;
@@ -108,6 +109,22 @@ export function useSequenceManager({
     }
     return raw;
   }
+
+  // Load sequences on mount
+  useEffect(() => {
+    const loadSequences = async () => {
+      try {
+        const result = await window.electronAPI.getSequences();
+        setSequences(result.sequences || {});
+        setSequencesValid(result.result?.valid ?? false);
+        addLog(`Loaded ${Object.keys(result.sequences || {}).length} sequences`);
+      } catch (err) {
+        addLog(`Failed to load sequences: ${err instanceof Error ? err.message : String(err)}`);
+        setSequencesValid(false);
+      }
+    };
+    loadSequences();
+  }, [addLog]);
 
   useEffect(() => {
     const offP = window.electronAPI.onSequenceProgress(e => addLog(`Progress: Step #${e.stepIndex + 1} - ${e.note ?? ''}`));
