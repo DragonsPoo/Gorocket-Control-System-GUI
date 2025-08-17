@@ -50,6 +50,7 @@ export function useValveControl(
             : v
         )
       );
+      const timeoutMs = config?.valveFeedbackTimeout ?? 5000;
       timeoutRefs.current[valveId] = setTimeout(() => {
         setValves((prev) =>
           prev.map((v) =>
@@ -63,7 +64,7 @@ export function useValveControl(
           description: `${valve.name} did not reach ${targetState} position.`,
           variant: 'destructive',
         });
-      }, 5000);
+      }, timeoutMs);
     },
     [config, sendCommand, valves, toast]
   );

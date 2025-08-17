@@ -40,7 +40,7 @@ type EngineOptions = {
   defaultPollMs?: number;
   autoCancelOnRendererGone?: boolean;
   failSafeOnError?: boolean;
-  valveRoles?: { mains: number[]; vent: number; purge: number }; // 페일세이프용
+  valveRoles?: { mains: number[]; vents: number[]; purges: number[] }; // 페일세이프용
 };
 
 type ProgressEvt = { name: string; stepIndex: number; step: SequenceStep; note?: string };
@@ -64,7 +64,8 @@ export class SequenceEngine extends EventEmitter {
   private defaultPollMs: number;
   private autoCancelOnRendererGone: boolean;
   private failSafeOnError: boolean;
-  private roles: { mains: number[]; vent: number; purge: number };
+  private roles: { mains: number[]; vents: number[]; purges: number[] };
+  private inFailsafe = false;
 
   private psi100: number[] = [0, 0, 0, 0];
   private lsOpen: number[] = [0, 0, 0, 0, 0, 0, 0];
@@ -93,7 +94,7 @@ export class SequenceEngine extends EventEmitter {
     this.defaultPollMs = opt.defaultPollMs ?? 50;
     this.autoCancelOnRendererGone = opt.autoCancelOnRendererGone ?? true;
     this.failSafeOnError = opt.failSafeOnError ?? true;
-    this.roles = opt.valveRoles ?? { mains: [0, 1, 2, 3, 4], vent: 5, purge: 6 };
+    this.roles = opt.valveRoles ?? { mains: [0, 1, 2, 3, 4], vents: [5], purges: [6] };
 
     // 시리얼 이벤트 구독
     this.serial.on('data', (d: any) => this.onSerialData(d));
@@ -103,8 +104,9 @@ export class SequenceEngine extends EventEmitter {
   // =========== 외부 API ===========
   async start(name: string): Promise<void> {
     if (this.running) throw new Error('Sequence already running');
-    const seq = this.getSequence(name);
-    if (!seq || seq.length === 0) throw new Error(`Sequence not found or empty: ${name}`);
+    const raw = this.getSequence(name);
+    const seq = Array.isArray(raw) ? this.toSteps(raw) : [];
+    if (seq.length === 0) throw new Error(`Sequence not found or empty: ${name}`);
 
     this.running = true;
     this.cancelled = false;
@@ -133,7 +135,7 @@ export class SequenceEngine extends EventEmitter {
       // 완료
       this.emit('complete', { name });
     } catch (err: any) {
-      this.emitError({ name, stepIndex: this.currentIndex, step: this.getSequence(name)[this.currentIndex], error: err?.message ?? String(err) });
+      this.emitError({ name, stepIndex: this.currentIndex, step: seq[this.currentIndex], error: err?.message ?? String(err) });
       if (this.failSafeOnError) {
         await this.tryFailSafe('ENGINE_ERROR');
       }
@@ -160,25 +162,28 @@ export class SequenceEngine extends EventEmitter {
     }
   }
 
+  private uniq(arr: number[]) { return Array.from(new Set(arr)); }
+
   async tryFailSafe(tag = 'FAILSAFE') {
+    if (this.inFailsafe) return;
+    this.inFailsafe = true;
     try {
+      const mains = this.uniq(this.roles.mains);
+      const vents = this.uniq(this.roles.vents);
+      const purges = this.uniq(this.roles.purges);
+
       const cmds: string[] = [];
+      for (const m of mains) cmds.push(`V,${m},C`);
+      for (const v of vents) cmds.push(`V,${v},O`);
+      for (const p of purges) cmds.push(`V,${p},O`);
 
-      // 메인 닫기
-      for (const m of this.roles.mains) cmds.push(`V,${m},C`);
-      // 벤트/퍼지 열기
-      cmds.push(`V,${this.roles.vent},O`);
-      cmds.push(`V,${this.roles.purge},O`);
-
-      for (const c of cmds) {
-        // 페일세이프에서는 ACK 타임아웃을 짧게 사용(연쇄 실패를 빠르게 판단)
-        await this.sendWithAck(c, 700).catch(() => {/* ignore to continue attempts */});
-      }
+      for (const c of cmds) this.serial.writeNow(c);
+      void Promise.allSettled(cmds.map((c) => this.sendWithAck(c, 500)));
       this.emitProgress({ name: this.currentName || 'failsafe', stepIndex: -1, step: { type: 'cmd', payload: 'FAILSAFE' } as any, note: tag });
-    } catch {
-      // ignore
+      await sleep(0);
     } finally {
       this.stopHeartbeat();
+      this.inFailsafe = false;
     }
   }
 
@@ -211,11 +216,17 @@ export class SequenceEngine extends EventEmitter {
   }
 
   private async execWaitStep(step: StepWait) {
-    const deadline = Date.now() + step.timeoutMs;
+    const { condition, timeoutMs, pollMs = this.defaultPollMs } = step;
+    if ((condition as any).kind === 'time') {
+      await sleep(timeoutMs);
+      return;
+    }
+
+    const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (this.cancelled) throw new Error('Cancelled');
-      if (this.evalCondition(step.condition)) return;
-      await this.delay(step.pollMs ?? this.defaultPollMs);
+      if (this.evalCondition(condition)) return;
+      await this.delay(pollMs);
     }
     throw new Error('Wait timeout');
   }
@@ -308,9 +319,14 @@ export class SequenceEngine extends EventEmitter {
 
     if (!line) return;
 
+    const s = String(line);
+    if (s.startsWith('EMERG')) {
+      (this.serial as any).clearQueue?.();
+    }
+
     // ACK/NACK 처리
-    if (line.startsWith('ACK,')) {
-      const parts = line.trim().split(',');
+    if (s.startsWith('ACK,')) {
+      const parts = s.trim().split(',');
       if (parts.length >= 2) {
         const id = Number(parts[1]);
         const p = this.pending.get(id);
@@ -322,8 +338,8 @@ export class SequenceEngine extends EventEmitter {
       }
       return;
     }
-    if (line.startsWith('NACK,')) {
-      const parts = line.trim().split(',');
+    if (s.startsWith('NACK,')) {
+      const parts = s.trim().split(',');
       if (parts.length >= 3) {
         const id = Number(parts[1]);
         const reason = parts[2];
@@ -355,6 +371,42 @@ export class SequenceEngine extends EventEmitter {
   private getSequence(name: string): SequenceStep[] | any[] {
     const all = (this.seqMgr.getSequences?.() ?? {}) as SequenceMap;
     return all[name] ?? [];
+  }
+
+  private toSteps(rawSteps: any[]): SequenceStep[] {
+    const steps: SequenceStep[] = [];
+    for (const s of rawSteps) {
+      if (typeof s === 'string') { steps.push({ type: 'cmd', payload: s }); continue; }
+      if (s && s.type) { steps.push(s as SequenceStep); continue; }
+      if (s.delay && s.delay > 0) steps.push({ type: 'wait', timeoutMs: s.delay, condition: { kind: 'time' } as any });
+      for (const c of (s.commands ?? [])) steps.push({ type: 'cmd', payload: this.mapCmd(c) });
+      if (s.condition) steps.push({ type: 'wait', timeoutMs: s.condition.timeoutMs ?? 30000, condition: this.mapCond(s.condition) });
+    }
+    return steps;
+  }
+
+  private mapCmd(cmd: string): string {
+    const mV = /^V,(\d+),(O|C)$/i.exec(cmd); if (mV) return `V,${mV[1]},${mV[2].toUpperCase()}`;
+    const mN = /^CMD,([^,]{1,64}),(Open|Close)$/i.exec(cmd);
+    if (mN) {
+      const name = mN[1]; const act = mN[2].toUpperCase().startsWith('OPEN') ? 'O' : 'C';
+      const map = this.cfg?.get()?.valveMappings ?? {}; const idx = map[name]?.servoIndex;
+      if (typeof idx !== 'number') throw new Error(`Unknown valve: ${name}`);
+      return `V,${idx},${act}`;
+    }
+    throw new Error(`Unsupported command: ${cmd}`);
+  }
+
+  private mapCond(c: any): Condition {
+    if (c.sensor && /^pt[1-4]$/i.test(c.sensor)) {
+      const i = Number(c.sensor.slice(2));
+      const op = String(c.op ?? 'gte').toLowerCase();
+      const sign = op === 'lte' ? '<=' : op === 'lt' ? '<' : op === 'gt' ? '>' : '>=';
+      const threshold = op === 'lte' || op === 'lt' ? c.max : c.min;
+      if (threshold == null) throw new Error(`Missing threshold for ${op} on ${c.sensor}`);
+      return { kind: 'pressure', sensor: i, op: sign, valuePsi100: Math.round(threshold * 100) } as any;
+    }
+    throw new Error(`Unsupported condition: ${JSON.stringify(c)}`);
   }
 
   private normalizeStep(raw: any): SequenceStep {

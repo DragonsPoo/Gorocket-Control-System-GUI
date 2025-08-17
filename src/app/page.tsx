@@ -129,6 +129,11 @@ export default function Home() {
         isEmergency={isEmergency}
         onClearEmergency={clearMcuEmergency}
       />
+      {isEmergency && (
+        <div className="bg-destructive text-destructive-foreground text-center py-2 font-bold">
+          EMERGENCY—Controls locked. Clear on MCU.
+        </div>
+      )}
       <main className="flex-grow p-4 md:p-6 lg:p-8">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-full">
           <div className="md:col-span-12">
@@ -143,12 +148,17 @@ export default function Home() {
               <CardContent className="p-4 pt-0">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                   {valves.map((valve) => (
-                    <ValveDisplay key={valve.id} valve={valve} onValveChange={handleValveChange} />
+                    <ValveDisplay
+                      key={valve.id}
+                      valve={valve}
+                      onValveChange={handleValveChange}
+                      disabled={isEmergency}
+                    />
                   ))}
                 </div>
               </CardContent>
             </Card>
-            <DataChartPanel data={chartData} />
+            <DataChartPanel data={chartData} appConfig={appConfig} />
           </div>
 
           <div className="md:col-span-5 lg:col-span-4 grid grid-cols-1 gap-6 auto-rows-min">
@@ -157,7 +167,7 @@ export default function Home() {
               onCancel={cancelSequence}
               activeSequence={activeSequence}
               sequences={sequences}
-              disabled={!sequencesValid}
+              disabled={!sequencesValid || isEmergency}
             />
             <TerminalPanel logs={sequenceLogs} activeSequence={activeSequence} />
           </div>

@@ -155,6 +155,13 @@ export class SerialManager extends EventEmitter {
     });
   }
 
+  writeNow(line: string) {
+    if (!this.port?.isOpen) return;
+    this.port.write(line.endsWith('\n') ? line : line + '\n', () => {});
+  }
+
+  clearQueue() { this.queue.length = 0; }
+
   // ====================== 내부 구현 ======================
   private processQueue() {
     if (!this.port || !this.port.isOpen) return;
