@@ -80,7 +80,7 @@ describe('SequenceDataManager', () => {
     });
 
     it('should fail when sequences.json does not exist', () => {
-      mockExistsSync.mockImplementation((filePath) => 
+      mockExistsSync.mockImplementation((filePath: any) => 
         !filePath.toString().includes('sequences.json')
       );
 
@@ -91,7 +91,7 @@ describe('SequenceDataManager', () => {
     });
 
     it('should fail when schema file does not exist', () => {
-      mockExistsSync.mockImplementation((filePath) => 
+      mockExistsSync.mockImplementation((filePath: any) => 
         !filePath.toString().includes('sequences.schema.json')
       );
 

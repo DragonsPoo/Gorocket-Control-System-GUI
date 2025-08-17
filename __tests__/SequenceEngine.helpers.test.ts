@@ -94,7 +94,8 @@ describe('SequenceEngine failsafe', () => {
 
     await engine.tryFailSafe();
     await new Promise((r) => setTimeout(r, 600));
-    expect(serial.writeNow).toHaveBeenCalledTimes(5);
+    // New sequence: CLOSE-OPEN-OPEN (2 mains + 3 vents/purges + 3 vents/purges) = 8 calls
+    expect(serial.writeNow).toHaveBeenCalledTimes(8);
   });
 
 
@@ -102,7 +103,8 @@ describe('SequenceEngine failsafe', () => {
     const { engine, serial } = createEngineWithRoles({ mains: [0], vents: [1], purges: [2] });
     await Promise.all([engine.tryFailSafe(), engine.tryFailSafe()]);
     await new Promise(r => setTimeout(r, 300));
-    expect(serial.writeNow).toHaveBeenCalledTimes(3);
+    // New sequence: CLOSE-OPEN-OPEN (1 main + 2 vents/purges + 2 vents/purges) = 5 calls, only once due to cooldown
+    expect(serial.writeNow).toHaveBeenCalledTimes(5);
   });
 });
 

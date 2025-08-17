@@ -126,7 +126,7 @@ describe('SerialManager', () => {
     });
 
     it('should reject messages with invalid CRC', async () => {
-      const sendPromise = serialManager.send({ type: 'valve', index: 0, action: 'open' });
+      const sendPromise = serialManager.send({ type: 'V', servoIndex: 0, action: 'O' } as any);
       
       // Simulate invalid CRC response
       setImmediate(() => {
@@ -146,7 +146,7 @@ describe('SerialManager', () => {
     it('should handle ACK correctly', async () => {
       jest.useFakeTimers();
       
-      const sendPromise = serialManager.send({ type: 'valve', index: 0, action: 'open' });
+      const sendPromise = serialManager.send({ type: 'V', servoIndex: 0, action: 'O' } as any);
       
       // Get the message ID from inflight
       const inflight = (serialManager as any).inflight;
@@ -168,7 +168,7 @@ describe('SerialManager', () => {
     it('should handle NACK and retry', async () => {
       jest.useFakeTimers();
       
-      const sendPromise = serialManager.send({ type: 'valve', index: 0, action: 'open' });
+      const sendPromise = serialManager.send({ type: 'V', servoIndex: 0, action: 'O' } as any);
       
       // Get the message ID from inflight
       const inflight = (serialManager as any).inflight;
@@ -201,7 +201,7 @@ describe('SerialManager', () => {
     it('should fail after max retries', async () => {
       jest.useFakeTimers();
       
-      const sendPromise = serialManager.send({ type: 'valve', index: 0, action: 'open' });
+      const sendPromise = serialManager.send({ type: 'V', servoIndex: 0, action: 'O' } as any);
       
       // Simulate multiple NACKs
       let attemptCount = 0;
@@ -238,9 +238,9 @@ describe('SerialManager', () => {
       jest.useFakeTimers();
       
       // Send multiple commands
-      const promise1 = serialManager.send({ type: 'valve', index: 0, action: 'open' });
-      const promise2 = serialManager.send({ type: 'valve', index: 1, action: 'open' });
-      const promise3 = serialManager.send({ type: 'valve', index: 2, action: 'open' });
+      const promise1 = serialManager.send({ type: 'V', servoIndex: 0, action: 'O' } as any);
+      const promise2 = serialManager.send({ type: 'V', servoIndex: 1, action: 'O' } as any);
+      const promise3 = serialManager.send({ type: 'V', servoIndex: 2, action: 'O' } as any);
       
       // Only first should be inflight initially
       expect((serialManager as any).inflight).toBeTruthy();
@@ -293,7 +293,7 @@ describe('SerialManager', () => {
     it('should implement exponential backoff for retries', async () => {
       jest.useFakeTimers();
       
-      const sendPromise = serialManager.send({ type: 'valve', index: 0, action: 'open' });
+      const sendPromise = serialManager.send({ type: 'V', servoIndex: 0, action: 'O' } as any);
       
       let attemptCount = 0;
       const delays: number[] = [];

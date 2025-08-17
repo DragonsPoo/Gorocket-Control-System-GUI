@@ -67,6 +67,8 @@ export class SequenceEngine extends EventEmitter {
   private roles: { mains: number[]; vents: number[]; purges: number[] };
 
   private inFailsafe = false;
+  private emergencyActive = false;
+  private lastFailsafeAt = 0;
 
 
   private psi100: number[] = [0, 0, 0, 0];
@@ -167,27 +169,27 @@ export class SequenceEngine extends EventEmitter {
   private uniq(arr: number[]) { return Array.from(new Set(arr)); }
 
   async tryFailSafe(tag = 'FAILSAFE') {
-    if (this.inFailsafe) return;
+    const now = Date.now();
+    if (this.inFailsafe || (now - this.lastFailsafeAt) < 400) return;
     this.inFailsafe = true;
     try {
-      const mains = this.uniq(this.roles.mains);
-      const vents = this.uniq(this.roles.vents);
-      const purges = this.uniq(this.roles.purges);
+      const mains = Array.from(new Set(this.roles.mains));
+      const vents = Array.from(new Set(this.roles.vents));
+      const purges = Array.from(new Set(this.roles.purges));
 
-
-      const cmds: string[] = [];
-      for (const m of mains) cmds.push(`V,${m},C`);
-      for (const v of vents) cmds.push(`V,${v},O`);
-      for (const p of purges) cmds.push(`V,${p},O`);
-
-      for (const c of cmds) this.serial.writeNow(c);
-      void Promise.allSettled(cmds.map((c) => this.sendWithAck(c, 500)));
+      const closePass = mains.map(m => `V,${m},C`);
+      const openPass = [...vents.map(v => `V,${v},O`), ...purges.map(p => `V,${p},O`)];
+      
+      for (const pass of [closePass, openPass, openPass]) {
+        for (const c of pass) (this.serial as any).writeNow?.(c);
+        await Promise.allSettled(pass.map(c => this.sendWithAck(c, 500)));
+      }
 
       this.emitProgress({ name: this.currentName || 'failsafe', stepIndex: -1, step: { type: 'cmd', payload: 'FAILSAFE' } as any, note: tag });
       await sleep(0);
     } finally {
-      this.stopHeartbeat();
-      this.inFailsafe = false;
+      this.lastFailsafeAt = Date.now();
+      this.inFailsafe = this.emergencyActive ? true : false;
     }
   }
 
@@ -326,6 +328,12 @@ export class SequenceEngine extends EventEmitter {
     const s = String(line);
     if (s.startsWith('EMERG')) {
       (this.serial as any).clearQueue?.();
+      (this.serial as any).abortInflight?.('emergency');
+      (this.serial as any).abortAllPendings?.('emergency');
+      this.emergencyActive = true;
+    }
+    if (s.startsWith('EMERG_CLEARED')) {
+      this.emergencyActive = false;
     }
 
     // ACK/NACK 처리
@@ -383,9 +391,17 @@ export class SequenceEngine extends EventEmitter {
       if (typeof s === 'string') { steps.push({ type: 'cmd', payload: s }); continue; }
       if (s && s.type) { steps.push(s as SequenceStep); continue; }
 
-      if (s.delay && s.delay > 0) steps.push({ type: 'wait', timeoutMs: s.delay, condition: { kind: 'time' } as any });
+      if (s.delay && s.delay > 0) {
+        steps.push({ type: 'wait', timeoutMs: s.delay, condition: { kind: 'time' } as any });
+      }
 
-      for (const c of (s.commands ?? [])) steps.push({ type: 'cmd', payload: this.mapCmd(c) });
+      for (const c of (s.commands ?? [])) {
+        try {
+          steps.push({ type: 'cmd', payload: this.mapCmd(c) });
+        } catch (err) {
+          console.warn('Unknown command key:', c, 'Error:', err);
+        }
+      }
       if (s.condition) steps.push({ type: 'wait', timeoutMs: s.condition.timeoutMs ?? 30000, condition: this.mapCond(s.condition) });
     }
     return steps;

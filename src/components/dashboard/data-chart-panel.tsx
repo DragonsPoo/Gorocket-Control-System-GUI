@@ -26,7 +26,8 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data, appConfig }) => {
     const alarm = appConfig?.pressureLimitAlarmPsi;
     const trip = appConfig?.pressureLimitTripPsi;
     const maxObserved = Math.max(0, ...data.map(d => Math.max(d.pt1 ?? 0, d.pt2 ?? 0, d.pt3 ?? 0, d.pt4 ?? 0)));
-    const yMax = Math.max(maxObserved, (trip ?? 900) * 1.1);
+    const calculatedMax = Math.max(maxObserved, (trip ?? 900) * 1.1);
+    const yMax = Number.isFinite(calculatedMax) && calculatedMax > 0 ? calculatedMax : 900 * 1.1;
 
     return (
         <Card className="bg-card/50 border-border/60">
@@ -46,8 +47,12 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data, appConfig }) => {
                             <XAxis dataKey="timestamp" tickFormatter={timeFormatter} fontSize={12} tickMargin={10} />
                             <YAxis domain={[0, yMax]} fontSize={12} tickMargin={5}/>
                             <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" labelClassName="font-bold" />} />
-                            {typeof alarm === 'number' && <ReferenceLine y={alarm} strokeDasharray="3 3" />}
-                            {typeof trip === 'number' && <ReferenceLine y={trip} strokeDasharray="3 3" />}
+                            {typeof alarm === 'number' && (
+                                <ReferenceLine y={alarm} strokeDasharray="4 2" stroke="hsl(var(--chart-2))" label="Alarm" />
+                            )}
+                            {typeof trip === 'number' && (
+                                <ReferenceLine y={trip} strokeDasharray="4 2" stroke="hsl(var(--destructive))" label="Trip" />
+                            )}
                             <Line type="monotone" dataKey="pt1" stroke={chartConfig.pt1.color} strokeWidth={2} dot={false} />
                             <Line type="monotone" dataKey="pt2" stroke={chartConfig.pt2.color} strokeWidth={2} dot={false} />
                             <Line type="monotone" dataKey="pt3" stroke={chartConfig.pt3.color} strokeWidth={2} dot={false} />

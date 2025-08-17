@@ -96,6 +96,15 @@ class MainApp {
     this.serialManager.on('data', (line: string) => {
       // MCU에서 온 텔레메트리/로그 라인 → 렌더러로 브로드캐스트
       this.mainWindow?.webContents.send('serial-data', line);
+      
+      // EMERG/EMERG_CLEARED 이벤트 시 HeartbeatDaemon 제어
+      if (line.startsWith('EMERG')) {
+        this.hbDaemon?.stop();
+      }
+      if (line.startsWith('EMERG_CLEARED')) {
+        this.hbDaemon?.start();
+      }
+      
       // 로그 파일에도 저장
       if (this.logManager.isLogging()) {
         const formattedLine = this.logManager.formatLogLine(line);

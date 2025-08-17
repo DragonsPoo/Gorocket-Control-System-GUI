@@ -163,6 +163,23 @@ export class SerialManager extends EventEmitter {
 
   clearQueue() { this.queue.length = 0; }
 
+  abortInflight(reason = 'aborted') {
+    const m = this.inflight;
+    if (!m) return;
+    clearTimeout(m.timer);
+    this.pendingById.delete(m.msgId);
+    this.inflight = null;
+    m.reject(new Error(reason));
+  }
+
+  abortAllPendings(reason = 'aborted') {
+    for (const [, m] of this.pendingById) {
+      clearTimeout(m.timer);
+      m.reject(new Error(reason));
+    }
+    this.pendingById.clear();
+  }
+
 
   // ====================== 내부 구현 ======================
   private processQueue() {
