@@ -66,6 +66,7 @@ export class LogManager {
   }
 
   formatLogLine(raw: string): string {
+    if (raw.startsWith('ACK') || raw.startsWith('NACK')) return '';
     const { sensor, valves, errors } = parseSensorData(raw);
     if (errors.length) {
       errors.forEach((e) => this.write(`# ${e}\n`));
