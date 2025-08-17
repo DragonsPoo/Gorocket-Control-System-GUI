@@ -48,6 +48,7 @@ const api = {
   safetyPressureExceeded: (snapshot: PressureSnapshot) => {
     ipcRenderer.send('safety:pressureExceeded', snapshot);
   },
+  safetyTrigger: (snapshot?: { reason?: string }) => ipcRenderer.invoke('safety-trigger', snapshot),
   safetyClear: () => ipcRenderer.invoke('safety-clear'),
 
   // Config and Utilities

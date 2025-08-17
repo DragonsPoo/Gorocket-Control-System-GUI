@@ -40,6 +40,7 @@ declare global {
 
       // Safety Controls
       safetyPressureExceeded: (snapshot: PressureSnapshot) => void;
+      safetyTrigger: (snapshot?: { reason?: string }) => Promise<boolean>;
       safetyClear: () => Promise<void>;
 
       // Config and Utilities

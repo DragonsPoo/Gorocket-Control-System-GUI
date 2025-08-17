@@ -118,9 +118,11 @@ class MainApp {
 
     if (isDev) {
       this.mainWindow.loadURL('http://localhost:9002');
+      // DevTools는 개발 모드에서만 자동으로 열림
       this.mainWindow.webContents.openDevTools({ mode: 'detach' });
     } else if (loadURL) {
       loadURL(this.mainWindow);
+      // 프로덕션 모드에서는 DevTools 자동으로 열지 않음
     }
     this.mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     this.mainWindow.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -220,11 +222,18 @@ class MainApp {
       try { await this.sequenceEngine?.tryFailSafe('UI_SAFETY'); } catch {}
 
       // 2. 저수준으로도 보강 (ACK 실패 무시하고 시도)
-      const cmds = [
+      const config = this.configManager.get();
+      const { valveMappings } = config;
+      const systemVentIndex = valveMappings['System Vent']?.servoIndex;
+      const ethanolPurgeIndex = valveMappings['Ethanol Purge']?.servoIndex;
+      const n2oPurgeIndex = valveMappings['N2O Purge']?.servoIndex;
+      
+      const cmds: Array<{ raw: string }> = [
         { raw: 'HB' }, // MCU가 EMERG 중이면 HB는 NACK될 수 있으나 부담 없음
-        { raw: 'V,5,O' }, // 예: vent
-        { raw: 'V,6,O' }, // 예: purge
-      ] as const;
+      ];
+      if (systemVentIndex !== undefined) cmds.push({ raw: `V,${systemVentIndex},O` });
+      if (ethanolPurgeIndex !== undefined) cmds.push({ raw: `V,${ethanolPurgeIndex},O` });
+      if (n2oPurgeIndex !== undefined) cmds.push({ raw: `V,${n2oPurgeIndex},O` });
       for (const c of cmds) {
         try {
           await this.serialManager.send(c as any);
@@ -308,7 +317,16 @@ class MainApp {
 
       // 2. 저수준으로 비상 밸브(벤트/퍼지) 개방 명령을 직접 전송 (이중 안전)
       // ACK 여부나 성공 여부를 기다리지 않고 즉시 전송 시도
-      const emergencyRawCmds = ['V,5,O', 'V,6,O']; // 벤트, 퍼지 밸브 개방
+      const config = this.configManager.get();
+      const { valveMappings } = config;
+      const systemVentIndex = valveMappings['System Vent']?.servoIndex;
+      const ethanolPurgeIndex = valveMappings['Ethanol Purge']?.servoIndex;
+      const n2oPurgeIndex = valveMappings['N2O Purge']?.servoIndex;
+      
+      const emergencyRawCmds = [];
+      if (systemVentIndex !== undefined) emergencyRawCmds.push(`V,${systemVentIndex},O`);
+      if (ethanolPurgeIndex !== undefined) emergencyRawCmds.push(`V,${ethanolPurgeIndex},O`);
+      if (n2oPurgeIndex !== undefined) emergencyRawCmds.push(`V,${n2oPurgeIndex},O`);
       for (const raw of emergencyRawCmds) {
         try {
           await this.serialManager.send({ raw } as any);

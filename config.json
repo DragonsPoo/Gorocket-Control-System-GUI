@@ -3,10 +3,10 @@
     "baudRate": 115200
   },
   "maxChartDataPoints": 100,
-  "pressureLimit": 850,
-  "pressureLimitAlarm": 850,
-  "pressureLimitTrip": 1000,
-  "pressureRateLimit": 50,
+  "pressureLimitPsi": 850,
+  "pressureLimitAlarmPsi": 850,
+  "pressureLimitTripPsi": 1000,
+  "pressureRateLimitPsiPerSec": 50,
   "valveFeedbackTimeout": 2000,
   "initialValves": [
     { "id": 1, "name": "Ethanol Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false },

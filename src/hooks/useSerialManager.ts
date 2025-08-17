@@ -77,6 +77,7 @@ export interface SerialManagerApi {
   handleValveChange: (valveId: number, targetState: 'OPEN' | 'CLOSED') => Promise<void>;
   setLogger: (logger: (msg: string) => void) => void;
   setSequenceHandler: (handler: (name: string) => void) => void;
+  handleEmergency: (reason?: string) => Promise<void>;
   resetEmergency: () => void;
   clearMcuEmergency: () => Promise<void>;
   connectionRetryCount: number;
@@ -90,13 +91,32 @@ export function useSerialManager(): SerialManagerApi {
   const sequenceHandlerRef = useRef<(name: string) => void>(() => {});
   const emergencyTriggered = useRef(false);
 
-  // Emergency handler removed as it's not currently used in the UI
-  // UI에서 수동 비상 시퀀스 버튼 등을 쓸 수 있도록 유지(자동 보호는 메인/펌웨어가 담당)
-  // const handleEmergency = useCallback(() => {
-  //   if (emergencyTriggered.current) return;
-  //   emergencyTriggered.current = true;
-  //   sequenceHandlerRef.current?.('Emergency Shutdown');
-  // }, []);
+  // UI 비상 핸들러 - 수동 비상 시퀀스 버튼에서 사용
+  const handleEmergency = useCallback(async (reason?: string) => {
+    if (emergencyTriggered.current) return;
+    emergencyTriggered.current = true;
+    
+    try {
+      // 메인 프로세스의 safety-trigger 호출
+      await window.electronAPI.safetyTrigger({ reason: reason || 'UI Manual Emergency' });
+      dispatch({ type: 'SET_EMERGENCY', status: true });
+      toast({ 
+        title: 'EMERGENCY TRIGGERED', 
+        description: `Emergency shutdown initiated: ${reason || 'Manual trigger'}`, 
+        variant: 'destructive' 
+      });
+      loggerRef.current(`Emergency triggered: ${reason || 'Manual trigger'}`);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      toast({ 
+        title: 'Emergency Trigger Failed', 
+        description: `Failed to trigger emergency: ${errorMsg}`, 
+        variant: 'destructive' 
+      });
+      loggerRef.current(`Emergency trigger failed: ${errorMsg}`);
+      emergencyTriggered.current = false; // 실패 시 재시도 가능하도록
+    }
+  }, [toast]);
 
   const sendCommand = useCallback(
     async (cmd: SerialCommand) => {
@@ -164,8 +184,8 @@ export function useSerialManager(): SerialManagerApi {
     getLatestSensorData,
   } = useSensorData(
     state.appConfig?.maxChartDataPoints ?? 100,
-    state.appConfig?.pressureLimitAlarm ?? null, // psi
-    state.appConfig?.pressureRateLimit ?? null, // psi/s (옵션)
+    state.appConfig?.pressureLimitAlarmPsi ?? null, // psi
+    state.appConfig?.pressureRateLimitPsiPerSec ?? null, // psi/s (옵션)
     updateValves
   );
 
@@ -280,6 +300,7 @@ export function useSerialManager(): SerialManagerApi {
     handleValveChange,
     setLogger,
     setSequenceHandler,
+    handleEmergency,
     resetEmergency,
     clearMcuEmergency,
     connectionRetryCount: state.connectionRetryCount,

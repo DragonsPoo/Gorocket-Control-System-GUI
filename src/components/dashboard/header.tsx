@@ -98,11 +98,11 @@ const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-1" title="GUI-level Failsafe Trigger">
               <AlertTriangle className="w-4 h-4 text-amber-500" />
-              <span>ALARM: <strong>{appConfig?.pressureLimitAlarm ?? 'N/A'} psi</strong></span>
+              <span>ALARM: <strong>{appConfig?.pressureLimitAlarmPsi ?? 'N/A'} psi</strong></span>
             </div>
             <div className="flex items-center gap-1" title="MCU-level Hardware Trip">
               <ShieldAlert className="w-4 h-4 text-red-600" />
-              <span>TRIP: <strong>{appConfig?.pressureLimitTrip ?? 'N/A'} psi</strong></span>
+              <span>TRIP: <strong>{appConfig?.pressureLimitTripPsi ?? 'N/A'} psi</strong></span>
             </div>
           </div>
           <Separator orientation="vertical" className="h-6" />
