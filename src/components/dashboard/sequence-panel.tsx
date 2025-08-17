@@ -113,13 +113,6 @@ const SequencePanel: React.FC<SequencePanelProps> = ({
         >
           Cancel Sequence
         </Button>
-        <Button
-          variant="secondary"
-          className="w-full justify-start text-base py-6"
-          onClick={() => window.electronAPI.safetyClear()}
-        >
-          Clear Emergency
-        </Button>
       </CardContent>
     </Card>
   );

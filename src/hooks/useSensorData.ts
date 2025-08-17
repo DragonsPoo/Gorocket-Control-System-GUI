@@ -2,13 +2,12 @@ import { useState, useRef, useCallback } from 'react';
 import type { SensorData, Valve } from '@shared/types';
 import {
   parseSensorData,
-  exceedsPressureLimit,
 } from '@shared/utils/sensorParser';
 
 export interface SensorDataApi {
   sensorData: SensorData | null;
   chartData: SensorData[];
-  handleSerialMessage: (data: string) => void;
+  handleSerialMessage: (data: string) => 'EMERG' | 'CLEARED' | null;
   reset: () => void;
   getLatestSensorData: () => SensorData | null;
 }
@@ -44,7 +43,10 @@ export function useSensorData(
   }, []);
 
   const handleSerialMessage = useCallback(
-    (data: string) => {
+    (data: string): 'EMERG' | 'CLEARED' | null => {
+      if (data.startsWith('EMERG,')) return 'EMERG';
+      if (data.startsWith('EMERG_CLEARED')) return 'CLEARED';
+
       const { sensor, valves } = parseSensorData(data);
       if (Object.keys(sensor).length > 0) {
         const now = Date.now();
@@ -65,15 +67,15 @@ export function useSensorData(
           return next;
         });
 
-        // 압력/상승률 모니터링
-        if (typeof updated.pressure === 'number') {
-          const pNow = updated.pressure as number;
+        // 압력/상승률 모니터링 (pt1을 대표 압력으로 사용)
+        if (typeof updated.pt1 === 'number') {
+          const pNow = updated.pt1 as number;
           pressureHistory.current.push(pNow);
           if (pressureHistory.current.length > 10) pressureHistory.current.shift();
 
           // 한계 초과
           const overLimit = pressureLimit !== null
-            ? exceedsPressureLimit(updated, pressureLimit)
+            ? (pNow > pressureLimit)
             : false;
 
           if (overLimit) {
@@ -86,10 +88,10 @@ export function useSensorData(
           // 상승률(속도) 계산: 이전 샘플 기준, 상승만 감지
           let ratePsiPerSec: number | null = null;
           let overRate = false;
-          if (pressureRateLimit !== null && prev && typeof prev.pressure === 'number' && typeof prev.timestamp === 'number') {
+          if (pressureRateLimit !== null && prev && typeof prev.pt1 === 'number' && typeof prev.timestamp === 'number') {
             const dtMs = now - prev.timestamp;
             if (dtMs > 0) {
-              const dp = pNow - (prev.pressure as number);
+              const dp = pNow - (prev.pt1 as number);
               const dtSec = dtMs / 1000;
               ratePsiPerSec = dp / dtSec;
               if (ratePsiPerSec > pressureRateLimit) {
@@ -111,9 +113,9 @@ export function useSensorData(
             const snapshot = {
               timestamp: now,
               reason,
-              pressure: pNow,                 // psi
-              pressureLimit: pressureLimit,   // psi
-              rate: ratePsiPerSec,            // psi/s (null 가능)
+              pressure: pNow,
+              pressureLimit: pressureLimit,
+              rate: ratePsiPerSec,
               rateLimit: pressureRateLimit,   // psi/s (null 가능)
               history: [...pressureHistory.current], // 최근 값
             };
@@ -125,6 +127,8 @@ export function useSensorData(
       if (Object.keys(valves).length > 0) {
         updateValves(valves);
       }
+
+      return null;
     },
     [emitSafetyPressureExceeded, maxPoints, pressureLimit, pressureRateLimit, updateValves]
   );
