@@ -1,6 +1,4 @@
-// P0-2: User Feedback - Standardize API surface and provide global types
-import type { AppConfig, SerialStatus } from './index';
-import type { SequenceEvent, SequencesPayload } from './ipc';
+import type { AppConfig, SerialStatus, SequencesPayload } from './index';
 
 // A snapshot of the pressure state when a safety limit is exceeded
 export interface PressureSnapshot {
@@ -13,6 +11,12 @@ export interface PressureSnapshot {
   history: number[];
 }
 
+// Types for multi-channel sequence events (from user feedback)
+export interface SequenceProgressEvent { name: string; stepIndex: number; note?: string; }
+export interface SequenceErrorEvent { name: string; stepIndex: number; error: string; }
+export interface SequenceCompleteEvent { name: string; }
+
+
 declare global {
   interface Window {
     electronAPI: {
@@ -23,18 +27,18 @@ declare global {
       onSerialStatus: (cb: (s: SerialStatus) => void) => () => void;
       onSerialData: (cb: (data: string) => void) => () => void;
 
-      // Sequence Control
-      startSequence: (name: string) => Promise<boolean>;
-      cancelSequence: () => Promise<boolean>;
-      onSequenceEvent: (cb: (e: SequenceEvent) => void) => () => void;
+      // Sequence Control (multi-channel)
+      sequenceStart: (name: string) => Promise<boolean>;
+      sequenceCancel: () => Promise<boolean>;
+      onSequenceProgress: (cb: (e: SequenceProgressEvent) => void) => () => void;
+      onSequenceError: (cb: (e: SequenceErrorEvent) => void) => () => void;
+      onSequenceComplete: (cb: (e: SequenceCompleteEvent) => void) => () => void;
+
       getSequences: () => Promise<SequencesPayload>;
 
       // Safety Controls
-      safety: {
-        notifyPressureExceeded: (s: PressureSnapshot) => void;
-        triggerFailsafe: (reason?: string) => Promise<boolean>;
-        clearEmergency: () => Promise<boolean>;
-      };
+      safetyPressureExceeded: (snapshot: PressureSnapshot) => void;
+      safetyClear: () => Promise<void>;
 
       // Config and Utilities
       getConfig: () => Promise<AppConfig>;

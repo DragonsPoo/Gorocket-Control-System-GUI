@@ -1,5 +1,3 @@
-import React from 'react';
-import React from 'react';
 import React, { useState, useRef, useEffect } from 'react';
 import { Rocket, Wifi, WifiOff, Plug, AlertTriangle, ShieldAlert, Siren } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

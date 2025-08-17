@@ -9,12 +9,14 @@ export interface AppConfig {
   valveMappings: Record<string, ValveMappingEntry>;
   maxChartDataPoints: number;
   pressureLimit: number;
+  pressureRateLimit?: number; // From user feedback
   valveFeedbackTimeout: number;
   initialValves: Valve[];
 }
 
 // Sensor and valve related types
 export interface SensorData {
+  pressure?: number; // From user feedback, for legacy/compatibility
   pt1: number;
   pt2: number;
   pt3: number;
@@ -58,3 +60,11 @@ export interface SequenceConfigStep {
 }
 
 export type SequenceConfig = Record<string, SequenceConfigStep[]>;
+
+// Re-export types from ipc.ts to make them available under @shared/types
+export type {
+  SerialCommand,
+  SerialStatus,
+  SequencesPayload,
+  SequenceEvent,
+} from './ipc';
