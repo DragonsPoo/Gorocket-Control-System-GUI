@@ -51,7 +51,7 @@ class MainApp {
     // SequenceEngine 생성 및 설정
     this.sequenceEngine = new SequenceEngine({
       serialManager: this.serialManager,
-      sequenceManager: this.sequenceManager,
+      sequenceDataManager: this.sequenceManager,
       configManager: this.configManager,
       getWindow: () => this.mainWindow,
       options: {

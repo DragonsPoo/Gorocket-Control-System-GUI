@@ -1,3 +1,4 @@
+
 import { SequenceDataManager } from '../main/SequenceDataManager';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -21,7 +22,6 @@ const mockAjvInstance = {
 
 jest.mock('ajv', () => jest.fn(() => mockAjvInstance));
 
-const mockFs = fs as jest.Mocked<typeof fs>;
 const mockExistsSync = require('fs').existsSync as jest.MockedFunction<any>;
 const mockReadFileSync = require('fs').readFileSync as jest.MockedFunction<any>;
 
@@ -144,7 +144,7 @@ describe('SequenceDataManager', () => {
       required: ['Emergency Shutdown']
     };
 
-    it('should reject sequences with forbidden valve combinations in same step', async () => {
+    it('should reject sequences with forbidden valve combinations in same step', () => {
       const forbiddenSequences = {
         'Emergency Shutdown': [
           {
@@ -165,9 +165,9 @@ describe('SequenceDataManager', () => {
         ]
       };
 
-      mockFs.readFile
-        .mockResolvedValueOnce(JSON.stringify(forbiddenSequences))
-        .mockResolvedValueOnce(JSON.stringify(validSchema));
+      mockReadFileSync
+        .mockReturnValueOnce(JSON.stringify(forbiddenSequences))
+        .mockReturnValueOnce(JSON.stringify(validSchema));
 
       const result = sequenceDataManager.loadAndValidate();
 
@@ -177,7 +177,7 @@ describe('SequenceDataManager', () => {
       expect(result.errors).toContain('N2O Main');
     });
 
-    it('should reject ethanol main + system vent combination', async () => {
+    it('should reject ethanol main + system vent combination', () => {
       const forbiddenSequences = {
         'Emergency Shutdown': [
           {
@@ -198,9 +198,9 @@ describe('SequenceDataManager', () => {
         ]
       };
 
-      mockFs.readFile
-        .mockResolvedValueOnce(JSON.stringify(forbiddenSequences))
-        .mockResolvedValueOnce(JSON.stringify(validSchema));
+      mockReadFileSync
+        .mockReturnValueOnce(JSON.stringify(forbiddenSequences))
+        .mockReturnValueOnce(JSON.stringify(validSchema));
 
       const result = sequenceDataManager.loadAndValidate();
 
@@ -210,7 +210,7 @@ describe('SequenceDataManager', () => {
       expect(result.errors).toContain('System Vent');
     });
 
-    it('should reject pressurant fill + system vent combination', async () => {
+    it('should reject pressurant fill + system vent combination', () => {
       const forbiddenSequences = {
         'Emergency Shutdown': [
           {
@@ -231,9 +231,9 @@ describe('SequenceDataManager', () => {
         ]
       };
 
-      mockFs.readFile
-        .mockResolvedValueOnce(JSON.stringify(forbiddenSequences))
-        .mockResolvedValueOnce(JSON.stringify(validSchema));
+      mockReadFileSync
+        .mockReturnValueOnce(JSON.stringify(forbiddenSequences))
+        .mockReturnValueOnce(JSON.stringify(validSchema));
 
       const result = sequenceDataManager.loadAndValidate();
 
@@ -243,7 +243,7 @@ describe('SequenceDataManager', () => {
       expect(result.errors).toContain('System Vent');
     });
 
-    it('should allow valid sequences without forbidden combinations', async () => {
+    it('should allow valid sequences without forbidden combinations', () => {
       const validSequences = {
         'Emergency Shutdown': [
           {
@@ -266,9 +266,9 @@ describe('SequenceDataManager', () => {
         ]
       };
 
-      mockFs.readFile
-        .mockResolvedValueOnce(JSON.stringify(validSequences))
-        .mockResolvedValueOnce(JSON.stringify(validSchema));
+      mockReadFileSync
+        .mockReturnValueOnce(JSON.stringify(validSequences))
+        .mockReturnValueOnce(JSON.stringify(validSchema));
 
       const result = sequenceDataManager.loadAndValidate();
 
@@ -278,7 +278,7 @@ describe('SequenceDataManager', () => {
   });
 
   describe('Dynamic dry run validation', () => {
-    beforeEach(async () => {
+    beforeEach(() => {
       const validSequences = {
         'Emergency Shutdown': [
           {
@@ -303,9 +303,9 @@ describe('SequenceDataManager', () => {
 
       const validSchema = { type: 'object', required: ['Emergency Shutdown'] };
 
-      mockFs.readFile
-        .mockResolvedValueOnce(JSON.stringify(validSequences))
-        .mockResolvedValueOnce(JSON.stringify(validSchema));
+      mockReadFileSync
+        .mockReturnValueOnce(JSON.stringify(validSequences))
+        .mockReturnValueOnce(JSON.stringify(validSchema));
 
       sequenceDataManager.loadAndValidate();
     });
@@ -314,7 +314,7 @@ describe('SequenceDataManager', () => {
       const result = sequenceDataManager.dryRunSequence('Test Sequence');
 
       expect(result.ok).toBe(false);
-      expect(result.errors).toContain('Dynamic forbidden combo');
+      expect(result.errors[0]).toContain('Dynamic forbidden combo');
       expect(result.errors[0]).toContain('Ethanol Main');
       expect(result.errors[0]).toContain('N2O Main');
       expect(result.errors[0]).toContain('both OPEN');
@@ -350,9 +350,9 @@ describe('SequenceDataManager', () => {
 
       const validSchema = { type: 'object', required: ['Emergency Shutdown'] };
 
-      mockFs.readFile
-        .mockResolvedValueOnce(JSON.stringify(safeSequences))
-        .mockResolvedValueOnce(JSON.stringify(validSchema));
+      mockReadFileSync
+        .mockReturnValueOnce(JSON.stringify(safeSequences))
+        .mockReturnValueOnce(JSON.stringify(validSchema));
 
       const manager = new SequenceDataManager(mockBasePath);
       manager.loadAndValidate();
@@ -367,7 +367,7 @@ describe('SequenceDataManager', () => {
       const result = sequenceDataManager.dryRunSequence('Non-existent Sequence');
 
       expect(result.ok).toBe(false);
-      expect(result.errors).toContain('Sequence not found or empty');
+      expect(result.errors[0]).toContain('Sequence not found or empty');
     });
 
     it('should skip Emergency Shutdown in dryRunAll', () => {
@@ -410,9 +410,9 @@ describe('SequenceDataManager', () => {
 
       const validSchema = { type: 'object', required: ['Emergency Shutdown'] };
 
-      mockFs.readFile
-        .mockResolvedValueOnce(JSON.stringify(sequenceWithTiming))
-        .mockResolvedValueOnce(JSON.stringify(validSchema));
+      mockReadFileSync
+        .mockReturnValueOnce(JSON.stringify(sequenceWithTiming))
+        .mockReturnValueOnce(JSON.stringify(validSchema));
 
       const manager = new SequenceDataManager(mockBasePath);
       manager.loadAndValidate();
@@ -426,7 +426,9 @@ describe('SequenceDataManager', () => {
 
   describe('Error handling', () => {
     it('should handle file read errors gracefully', () => {
-      mockFs.readFile.mockRejectedValue(new Error('File read error'));
+      mockReadFileSync.mockImplementation(() => { 
+        throw new Error('File read error'); 
+      });
 
       const result = sequenceDataManager.loadAndValidate();
 
@@ -436,7 +438,7 @@ describe('SequenceDataManager', () => {
     });
 
     it('should handle malformed JSON', () => {
-      mockFs.readFile.mockResolvedValue('invalid json {');
+      mockReadFileSync.mockReturnValue('invalid json {');
 
       const result = sequenceDataManager.loadAndValidate();
 

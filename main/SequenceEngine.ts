@@ -75,14 +75,14 @@ export class SequenceEngine extends EventEmitter {
 
   constructor(params: {
     serialManager: SerialManager;
-    sequenceManager: SequenceDataManager;
+    sequenceDataManager: SequenceDataManager;
     configManager?: ConfigManager | null;
     getWindow: () => BrowserWindow | null;
     options?: EngineOptions;
   }) {
     super();
     this.serial = params.serialManager;
-    this.seqMgr = params.sequenceManager;
+    this.seqMgr = params.sequenceDataManager;
     this.cfg = params.configManager ?? null;
     this.getWindow = params.getWindow;
 
