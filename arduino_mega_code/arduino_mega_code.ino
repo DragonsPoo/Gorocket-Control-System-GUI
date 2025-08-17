@@ -81,7 +81,6 @@ const uint8_t servoRoles[NUM_SERVOS] = {
   ROLE_VENT,  // V5
   ROLE_PURGE  // V6
 };
-
 #define SERVO_SETTLE_TIME   500UL
 #define INCHING_INTERVAL      50UL
 #define STALL_RELIEF_ANGLE      3
@@ -163,7 +162,8 @@ static inline void bufPutStr(size_t &pos, const char* s){ while(*s && pos<OUTBUF
 static inline void bufPutUInt(size_t &pos, uint32_t v){ char tmp[11]; ultoa(v,tmp,10); bufPutStr(pos,tmp); }
 static inline void bufPutFixed(size_t &pos, int32_t scaled, uint8_t decimals){
   if(scaled<0){ bufPutChar(pos,'-'); scaled=-scaled; }
-  uint32_t den=POW10[decimals], ip=scaled/den, fp=scaled%den; bufPutUInt(pos, ip);
+  uint32_t den=POW10[decimals], ip=scaled/den, fp=scaled%den;
+  bufPutUInt(pos, ip);
   if(decimals==0) return; bufPutChar(pos,'.');
   for(int8_t d=decimals-1; d>=0; --d){ uint32_t div=POW10[d]; uint8_t digit=(fp/div)%10; bufPutChar(pos, char('0'+digit)); }
 }
@@ -181,7 +181,8 @@ static void readAndSendAllSensorData(const unsigned long now);
 static inline uint16_t alphaQ15_from_dt(uint16_t dtMs){
   uint32_t denom=(uint32_t)FLOW_EWMA_TAU_MS + (uint32_t)dtMs;
   if(denom==0) return 0;
-  uint32_t a=((uint32_t)dtMs << 15)/denom; if(a>32767U) a=32767U; return (uint16_t)a;
+  uint32_t a=((uint32_t)dtMs << 15)/denom; if(a>32767U) a=32767U;
+  return (uint16_t)a;
 }
 
 // =========================== FLOW ISR ===========================
@@ -213,7 +214,6 @@ static constexpr uint16_t ADC_NUM_CH        = NUM_PRESSURE_SENSORS;
 static constexpr uint32_t ADC_RAW_SPS       = (uint32_t)ADC_NUM_CH * ADC_OSR * ADC_PER_CH_HZ;
 static constexpr uint32_t T1CLK_HZ          = 16000000UL / 8UL;
 static constexpr uint16_t T1_TOP            = (uint16_t)((T1CLK_HZ + (ADC_RAW_SPS/2)) / ADC_RAW_SPS) - 1;
-
 volatile uint16_t adcAvg[ADC_NUM_CH] = {0,0,0,0};
 
 volatile uint8_t  adcCh = 0;
@@ -240,7 +240,8 @@ ISR(ADC_vect){
   adcAcc += v;
   if(++adcOsrCnt >= ADC_OSR){
     adcAvg[adcCh] = (adcAcc + (1U << (ADC_OSR_LOG2-1))) >> ADC_OSR_LOG2;
-    adcAcc = 0; adcOsrCnt = 0;
+    adcAcc = 0;
+    adcOsrCnt = 0;
     adcCh = (adcCh + 1) % ADC_NUM_CH;
     adcSetMux(adcCh);
     adcDiscard = 1;
@@ -275,7 +276,6 @@ static bool startValveMoveForce(uint8_t idx, bool open){ return startValveMoveIm
 static void triggerEmergency(const __FlashStringHelper* reason){
   if (emergencyActive) return;
   emergencyActive = true;
-
   for (uint8_t i=0; i<NUM_SERVOS; i++){
     bool open = (servoRoles[i] != ROLE_MAIN); // VENT/PURGE만 OPEN, MAIN은 CLOSE
     // 진행 중 여부와 무관하게 강제 오버라이드
@@ -327,7 +327,6 @@ void setup() {
 
 void loop() {
   const unsigned long now = millis();
-
   if (heartbeatArmed && !emergencyActive && (now - lastHeartbeatMs >= HEARTBEAT_TIMEOUT_MS)) {
     triggerEmergency(F("HB_TIMEOUT"));
   }
@@ -335,7 +334,6 @@ void loop() {
   readSerialCommands();
   updateLimitSwitchStates();
   manageAllServoMovements(now);
-
   if (now - lastTempReadTime >= TEMP_READ_INTERVAL) {
     lastTempReadTime = now;
     updateTemperatureReadings();
@@ -350,24 +348,23 @@ void loop() {
 static void processCommandFrame(char* line) {
     char* lastComma = strrchr(line, ',');
     if (!lastComma) { sendNack(0, F("FRAME_ERR")); return; }
-    *lastComma = '\0'; // CRC 분리
+    *lastComma = '\0';
+    // CRC 분리
 
     char* crcHexStr = lastComma + 1;
     char* msgIdComma = strrchr(line, ',');
     if (!msgIdComma) { sendNack(0, F("FRAME_ERR")); return; }
-    *msgIdComma = '\0'; // msgId 분리
+    *msgIdComma = '\0';
+    // msgId 분리
 
     char* msgIdStr = msgIdComma + 1;
     char* payload = line;
-
     // 송신측과 동일하게 "payload,msgId"로 CRC 계산
     char crcData[96];
     snprintf(crcData, sizeof(crcData), "%s,%s", payload, msgIdStr);
-
     uint8_t calculated_crc = crc8((const uint8_t*)crcData, strlen(crcData));
     uint8_t received_crc   = (uint8_t)strtoul(crcHexStr, NULL, 16);
     uint32_t msgId         = strtoul(msgIdStr, NULL, 10);
-
     if (calculated_crc != received_crc) {
         sendNack(msgId, F("CRC_FAIL"));
         // CRC 오류는 비상 아님: 상위에서 재시도
@@ -376,7 +373,6 @@ static void processCommandFrame(char* line) {
 
     // --- Command Processing ---
     uppercaseInPlace(payload);
-
     if (strcmp(payload, "HB") == 0) {
         lastHeartbeatMs = millis();
         if (!heartbeatArmed) heartbeatArmed = true;
@@ -413,7 +409,8 @@ static void processCommandFrame(char* line) {
 
     // V,<idx>,O|C
     if (payload[0] == 'V' && payload[1] == ',') {
-        int servoIndex = -1; char stateCmd = 0;
+        int servoIndex = -1;
+        char stateCmd = 0;
         sscanf(payload, "V,%d,%c", &servoIndex, &stateCmd);
 
         if (servoIndex >= 0 && servoIndex < NUM_SERVOS && (stateCmd == 'O' || stateCmd == 'C')) {
@@ -435,15 +432,16 @@ static void readSerialCommands() {
   while (Serial.available() > 0) {
     char ch = (char)Serial.read();
     lastByteMs = millis();
-
     if (ch == '\r') continue;
     if (ch == '\n' || ch == ';') { // 개행 또는 세미콜론으로 프레임 종료
-      if (cmdLen > 0) { cmdBuf[cmdLen] = '\0'; processCommandFrame(cmdBuf); }
+      if (cmdLen > 0) { cmdBuf[cmdLen] = '\0';
+      processCommandFrame(cmdBuf); }
       cmdLen = 0;
     } else if (cmdLen < sizeof(cmdBuf) - 1) {
       cmdBuf[cmdLen++] = ch;
     } else {
-      cmdLen = 0; // overflow → drop
+      cmdLen = 0;
+      // overflow → drop
     }
   }
   if (cmdLen > 0 && (millis() - lastByteMs) > LINE_IDLE_COMMIT_MS) {
@@ -472,11 +470,11 @@ static void manageAllServoMovements(const unsigned long now) {
             int relief = targetAngles[i] + (goingOpen ? STALL_RELIEF_ANGLE : -STALL_RELIEF_ANGLE);
             enterStallRelief(i, relief, now);
           } else {
-            servoStates[i] = goingOpen ? INCHING_OPEN : INCHING_CLOSED;
+            servoStates[i] = goingOpen ?
+            INCHING_OPEN : INCHING_CLOSED;
           }
         }
         break;
-
       case INCHING_OPEN:
         if (currentLimitSwitchStates[i][0] == 1) {
           int relief = targetAngles[i] + STALL_RELIEF_ANGLE;
@@ -487,7 +485,6 @@ static void manageAllServoMovements(const unsigned long now) {
           lastMoveTime[i] = now;
         }
         break;
-
       case INCHING_CLOSED:
         if (currentLimitSwitchStates[i][1] == 1) {
           int relief = targetAngles[i] - STALL_RELIEF_ANGLE;
@@ -498,7 +495,6 @@ static void manageAllServoMovements(const unsigned long now) {
           lastMoveTime[i] = now;
         }
         break;
-
       case STALL_RELIEF:
         if ((unsigned long)(now - lastMoveTime[i]) > STALL_RELIEF_TIME) {
           servoStates[i] = IDLE;
@@ -538,15 +534,14 @@ static void updateLimitSwitchStates() {
 
 // ========================= 센서 전송(+압력 안전체크) =========================
 static void readAndSendAllSensorData(const unsigned long now) {
-  const unsigned long dtMs_ul = now - lastFlowCalcMs; lastFlowCalcMs = now;
+  const unsigned long dtMs_ul = now - lastFlowCalcMs;
+  lastFlowCalcMs = now;
   const uint16_t dtMs = (dtMs_ul > 0) ? (uint16_t)min(dtMs_ul, 65535UL) : (uint16_t)SENSOR_READ_INTERVAL;
   const uint16_t aQ15 = alphaQ15_from_dt(dtMs);
-
   unsigned long counts[NUM_FLOW_SENSORS];
   noInterrupts();
   for (uint8_t i=0; i<NUM_FLOW_SENSORS; i++) { counts[i] = pulseCounts[i]; pulseCounts[i] = 0; }
   interrupts();
-
   for (uint8_t i=0; i<NUM_FLOW_SENSORS; i++) {
     int32_t inst_m3h_1e4 = 0;
     if (counts[i] > 0) {
@@ -570,7 +565,6 @@ static void readAndSendAllSensorData(const unsigned long now) {
     uint16_t adc = adcReadAvg(i);
     const uint32_t psi100 = ((uint32_t)adc * PSI_PER_ADC_X1000 + 5) / 10;
     psi100_now[i] = psi100;
-
 #if PACKED_SERIAL
     bufPutChar(p, 'p'); bufPutChar(p, 't'); bufPutUInt(p, i+1); bufPutChar(p, ':');
     bufPutFixed(p, (int32_t)psi100, 2);
@@ -598,11 +592,13 @@ static void readAndSendAllSensorData(const unsigned long now) {
 #if PACKED_SERIAL
   bufPutStr(p, "tc1:");
   if (tempCelsius_mC_1 == INT32_MIN) bufPutStr(p, "ERR");
-  else { const int32_t k100 = (tempCelsius_mC_1 + 273150) / 10; bufPutFixed(p, k100, 2); }
+  else { const int32_t k100 = (tempCelsius_mC_1 + 273150) / 10; bufPutFixed(p, k100, 2);
+  }
   bufPutChar(p, ',');
   bufPutStr(p, "tc2:");
   if (tempCelsius_mC_2 == INT32_MIN) bufPutStr(p, "ERR");
-  else { const int32_t k100 = (tempCelsius_mC_2 + 273150) / 10; bufPutFixed(p, k100, 2); }
+  else { const int32_t k100 = (tempCelsius_mC_2 + 273150) / 10; bufPutFixed(p, k100, 2);
+  }
 
   for (uint8_t i=0; i<NUM_FLOW_SENSORS; i++) {
     bufPutStr(p, ",fm"); bufPutUInt(p, i+1); bufPutStr(p, "_m3h:");
@@ -612,9 +608,21 @@ static void readAndSendAllSensorData(const unsigned long now) {
   }
 
   for (uint8_t i=0; i<NUM_SERVOS; i++) {
-    bufPutStr(p, ",V"); bufPutUInt(p, i); bufPutStr(p, "_LS_OPEN:");   bufPutUInt(p, currentLimitSwitchStates[i][0]);
+    bufPutStr(p, ",V");
+    bufPutUInt(p, i); bufPutStr(p, "_LS_OPEN:");   bufPutUInt(p, currentLimitSwitchStates[i][0]);
     bufPutStr(p, ",V"); bufPutUInt(p, i); bufPutStr(p, "_LS_CLOSED:"); bufPutUInt(p, currentLimitSwitchStates[i][1]);
   }
+  
+  // --- 수정된 부분 (경량/안전 버전) ---
+  if (p > 0 && p + 3 < OUTBUF_SZ) {
+    uint8_t crc = crc8((const uint8_t*)outBuf, p);
+    static const char HEX[] = "0123456789ABCDEF";
+    bufPutChar(p, ',');
+    bufPutChar(p, HEX[(crc >> 4) & 0x0F]);
+    bufPutChar(p, HEX[crc & 0x0F]);
+  }
+  // --- 여기까지 ---
+
   bufEndlineAndSend(p);
 #endif
 }
@@ -624,11 +632,13 @@ static void updateTemperatureReadings() {
   static bool toggle = false;
   if (toggle) {
     float c1 = (float)thermocouple1.readCelsius();
-    if (!isnan(c1)) { tempCelsius_mC_1 = (int32_t)(c1 * 1000.0f + (c1>=0 ? 0.5f : -0.5f)); }
+    if (!isnan(c1)) { tempCelsius_mC_1 = (int32_t)(c1 * 1000.0f + (c1>=0 ? 0.5f : -0.5f));
+    }
     else { tempCelsius_mC_1 = INT32_MIN; }
   } else {
     float c2 = (float)thermocouple2.readCelsius();
-    if (!isnan(c2)) { tempCelsius_mC_2 = (int32_t)(c2 * 1000.0f + (c2>=0 ? 0.5f : -0.5f)); }
+    if (!isnan(c2)) { tempCelsius_mC_2 = (int32_t)(c2 * 1000.0f + (c2>=0 ? 0.5f : -0.5f));
+    }
     else { tempCelsius_mC_2 = INT32_MIN; }
   }
   toggle = !toggle;
