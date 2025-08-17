@@ -1,7 +1,10 @@
 import React from 'react';
-import { Rocket, Wifi, WifiOff, Plug } from 'lucide-react';
+import React from 'react';
+import { Rocket, Wifi, WifiOff, Plug, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { AppConfig } from '@shared/types';
+import { Separator } from '@/components/ui/separator';
 
 interface HeaderProps {
   connectionStatus: 'connected' | 'disconnected' | 'connecting';
@@ -12,6 +15,7 @@ interface HeaderProps {
   onConnect: () => void;
   isLogging: boolean;
   onToggleLogging: () => void;
+  appConfig: AppConfig | null;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -22,7 +26,8 @@ const Header: React.FC<HeaderProps> = ({
   onRefreshPorts,
   onConnect,
   isLogging,
-  onToggleLogging
+  onToggleLogging,
+  appConfig
 }) => {
   const isConnected = connectionStatus === 'connected';
   const isConnecting = connectionStatus === 'connecting';
@@ -36,6 +41,17 @@ const Header: React.FC<HeaderProps> = ({
         </h1>
       </div>
       <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1" title="GUI-level Failsafe Trigger">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            <span>ALARM: <strong>{appConfig?.pressureLimitAlarm ?? 'N/A'} psi</strong></span>
+          </div>
+          <div className="flex items-center gap-1" title="MCU-level Hardware Trip">
+            <ShieldAlert className="w-4 h-4 text-red-600" />
+            <span>TRIP: <strong>{appConfig?.pressureLimitTrip ?? 'N/A'} psi</strong></span>
+          </div>
+        </div>
+        <Separator orientation="vertical" className="h-6" />
         <div className="flex items-center gap-2">
             <Plug className="w-5 h-5 text-muted-foreground" />
             <Select onValueChange={onPortChange} value={selectedPort} disabled={isConnected || isConnecting}>

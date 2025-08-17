@@ -10,12 +10,11 @@
     "next:dev": "next dev --turbopack -p 9002",
     "electron:dev": "wait-on http://localhost:9002 && electron .",
     "build:electron": "rimraf dist && tsc -p tsconfig.electron.json && tsc-alias -p tsconfig.electron.json && node -e \"require('fs').copyFileSync('config.json','dist/config.json')\"",
-
     "build:web": "next build --no-lint",
-
     "build": "npm run build:electron && npm run build:web",
     "start": "next start",
     "lint": "next lint",
+    "test": "jest",
     "typecheck": "tsc --noEmit",
     "rebuild": "electron-rebuild -f -w serialport",
     "predev": "npm run build:electron",
@@ -28,11 +27,22 @@
     "productName": "GoRocket Control System GUI",
     "npmRebuild": false,
     "asar": true,
-    "asarUnpack": ["**/serialport/**"],
+    "asarUnpack": [
+      "**/serialport/**"
+    ],
     "extraResources": [
-      { "from": "sequences.json", "to": "sequences.json" },
-      { "from": "sequences.schema.json", "to": "sequences.schema.json" },
-      { "from": "config.json", "to": "config.json" }
+      {
+        "from": "sequences.json",
+        "to": "sequences.json"
+      },
+      {
+        "from": "sequences.schema.json",
+        "to": "sequences.schema.json"
+      },
+      {
+        "from": "config.json",
+        "to": "config.json"
+      }
     ],
     "directories": {
       "output": "release"
@@ -99,6 +109,7 @@
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "^15.4.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
@@ -111,9 +122,11 @@
     "eslint": "^8.57.0",
     "eslint-config-airbnb-typescript": "^18.0.0",
     "eslint-config-next": "^15.4.6",
+    "jest": "^30.0.5",
     "postcss": "^8",
     "rimraf": "^5.0.0",
     "tailwindcss": "^3.4.1",
+    "ts-jest": "^29.4.1",
     "tsc-alias": "^1.8.8",
     "typescript": "^5",
     "wait-on": "^8.0.3"

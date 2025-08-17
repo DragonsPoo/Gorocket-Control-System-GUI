@@ -10,7 +10,7 @@ import DataChartPanel from '@/components/dashboard/data-chart-panel';
 import TerminalPanel from '@/components/dashboard/terminal-panel';
 import { useToast } from '@/hooks/use-toast';
 import { useSerialManager } from '@/hooks/useSerialManager';
-import { useSequenceManager } from '@/hooks/useSequenceManager';
+import { useSequenceRemote } from '@/hooks/useSequenceRemote';
 
 export default function Home() {
   const { toast } = useToast();
@@ -18,7 +18,6 @@ export default function Home() {
     appConfig,
     sensorData,
     chartData,
-    getLatestSensorData,
     valves,
     connectionStatus,
     serialPorts,
@@ -27,36 +26,42 @@ export default function Home() {
     refreshPorts,
     handleConnect,
     handleValveChange,
-    sendCommand,
-    setLogger,
-    setSequenceHandler,
-    resetEmergency,
   } = useSerialManager();
 
   const {
-    sequenceLogs,
+    start: startSequence,
+    cancel: cancelSequence,
+    logs: sequenceLogs,
     activeSequence,
-    handleSequence,
-    addLog,
-    cancelSequence,
-    sequences,
-    sequencesValid,
-  } = useSequenceManager({
-    valves,
-    appConfig,
-    sendCommand,
-    getSensorData: getLatestSensorData,
-    onSequenceComplete: (name) => {
-      if (name === 'Emergency Shutdown') resetEmergency();
-    },
-  });
+    isBusy: isSequenceBusy,
+  } = useSequenceRemote();
 
-  const [isLogging, setIsLogging] = useState(false);
+  const [sequences, setSequences] = useState<string[]>([]);
+  const [sequencesValid, setSequencesValid] = useState(false);
 
   useEffect(() => {
-    setLogger(addLog);
-    setSequenceHandler(handleSequence);
-  }, [addLog, handleSequence, setLogger, setSequenceHandler]);
+    window.electronAPI.getSequences()
+      .then(({ sequences: seqs, result }) => {
+        setSequences(Object.keys(seqs));
+        setSequencesValid(result.valid);
+        if (!result.valid) {
+          toast({
+            title: 'Sequence Validation Error',
+            description: result.errors || 'Unknown validation error',
+            variant: 'destructive'
+          });
+        }
+      })
+      .catch(err => {
+        toast({
+          title: 'Failed to load sequences',
+          description: err.message,
+          variant: 'destructive'
+        });
+      });
+  }, [toast]);
+
+  const [isLogging, setIsLogging] = useState(false);
 
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
@@ -125,6 +130,7 @@ export default function Home() {
         onConnect={handleConnect}
         isLogging={isLogging}
         onToggleLogging={handleLoggingToggle}
+        appConfig={appConfig}
       />
       <main className="flex-grow p-4 md:p-6 lg:p-8">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-full">
@@ -150,11 +156,11 @@ export default function Home() {
 
           <div className="md:col-span-5 lg:col-span-4 grid grid-cols-1 gap-6 auto-rows-min">
             <SequencePanel
-              onSequence={handleSequence}
+              onSequence={startSequence}
               onCancel={cancelSequence}
               activeSequence={activeSequence}
               sequences={sequences}
-              disabled={!sequencesValid}
+              disabled={!sequencesValid || isSequenceBusy}
             />
             <TerminalPanel logs={sequenceLogs} activeSequence={activeSequence} />
           </div>
