@@ -795,14 +795,6 @@ npm run session-replay
 | System Vent | **System Vent 1** | Phase 5-6 압력 해제 |
 | Igniter Fuel | **System Vent 2** | Phase 5-6 압력 해제 |
 
-### 이전 업데이트 (2024년 말)
-| 분야 | 변경사항 | 영향 |
-|------|----------|------|
-| **API** | `getSerialPorts` → `listSerialPorts` | 명명 표준화 |
-| **안전** | `clearMcuEmergency` → `safetyClear()` | 더 명확한 기능명 |
-| **상태** | ConnectionStatus에 'reconnecting' 추가 | 더 세밀한 상태 추적 |
-| **타입** | AppConfig 압력 한계값 필드 추가 | 완전한 타입 안전성 |
-| **유틸** | Sleep 토큰 파서 (`shared/utils/sleep.ts`) | 유연한 지연 처리 |
 
 ### 해결된 주요 이슈
 - ✅ **실제 운용 전환**: Fill & Fire 절차에 완전 부합하는 밸브 매핑 및 시퀀스
@@ -877,16 +869,6 @@ MIT License - 자세한 내용은 LICENSE 파일 참조
 
 <div align="center">
 
-#### 🏆 **주요 기여자들**
-
-| 👤 **기여자** | 🎯 **분야** | 💝 **기여도** |
-|:---:|:---:|:---:|
-| **@jungho1902** | 🏗️ 프로젝트 리더 | 핵심 아키텍처 설계 |
-| **@safety-team** | 🛡️ 안전 시스템 | 페일세이프 메커니즘 |
-| **@ui-team** | 🎨 사용자 인터페이스 | 직관적 UI/UX 설계 |
-| **@test-team** | 🧪 품질 보증 | 안전 임계 테스트 |
-
-*그리고 수많은 오픈소스 기여자들에게 감사드립니다!* 🙏
 
 </div>
 
