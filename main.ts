@@ -267,6 +267,36 @@ class MainApp {
         return false;
       }
     });
+
+    // P0-1: UI에서 보낸 압력 초과 신호 처리
+    ipcMain.on('safety:pressureExceeded', async (_evt, snap) => {
+      console.warn('[SAFETY] UI pressure limit exceeded, triggering failsafe.', snap);
+
+      // 1. 엔진의 공식 페일세이프 절차 시도
+      try {
+        await this.sequenceEngine?.tryFailSafe('UI_PRESSURE_EXCEEDED');
+      } catch (e) {
+        console.error('[SAFETY] Failsafe sequence failed', e);
+      }
+
+      // 2. 저수준으로 비상 밸브(벤트/퍼지) 개방 명령을 직접 전송 (이중 안전)
+      // ACK 여부나 성공 여부를 기다리지 않고 즉시 전송 시도
+      const emergencyRawCmds = ['V,5,O', 'V,6,O']; // 벤트, 퍼지 밸브 개방
+      for (const raw of emergencyRawCmds) {
+        try {
+          await this.serialManager.send({ raw } as any);
+        } catch (e) {
+          console.error(`[SAFETY] Low-level command '${raw}' failed`, e);
+        }
+      }
+
+      // 3. UI에 비상 상황 전파
+      this.mainWindow?.webContents.send('sequence-error', {
+        name: 'safety-trigger-pressure',
+        stepIndex: -1,
+        error: `UI pressure safety exceeded (${snap?.reason ?? 'unknown'})`,
+      });
+    });
   }
 }
 

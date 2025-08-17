@@ -1,78 +1,57 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import type { SerialCommand } from '@shared/types/ipc';
-import type { AppConfig } from '@shared/types';
+import type { AppConfig, SerialStatus } from '@shared/types';
+import type { SequenceEvent } from '@shared/types/ipc';
 
-const PORT_RE = /^[\w\-:/\\.]{1,128}$/;
-
+// P0-2: API 표면을 '리모컨' 역할에 맞게 재정의
 const api = {
-  getSerialPorts: (): Promise<string[]> => ipcRenderer.invoke('get-serial-ports'),
-  connectSerial: (portName: string): Promise<boolean> => {
-    if (!PORT_RE.test(portName)) return Promise.reject(new Error('invalid port'));
-    return ipcRenderer.invoke('connect-serial', portName);
+  // 시리얼 연결/상태 관련 API (기존 유지)
+  listSerialPorts: (): Promise<string[]> => ipcRenderer.invoke('serial-list'),
+  connectSerial: (path: string, baud: number): Promise<boolean> => ipcRenderer.invoke('serial-connect', { path, baud }),
+  disconnectSerial: (): Promise<boolean> => ipcRenderer.invoke('serial-disconnect'),
+  onSerialStatus: (cb: (s: SerialStatus) => void) => {
+    const listener = (_e: IpcRendererEvent, s: SerialStatus) => cb(s);
+    ipcRenderer.on('serial-status', listener);
+    return () => ipcRenderer.removeListener('serial-status', listener);
   },
-  disconnectSerial: (): Promise<boolean> =>
-    ipcRenderer.invoke('disconnect-serial'),
-
-  // ACK 완료 시 resolve(true). 재시도/타임아웃은 메인 SerialManager가 처리.
-  sendToSerial: (data: SerialCommand): Promise<boolean> => {
-    if (typeof data !== 'object' || data === null) return Promise.reject(new Error('invalid command'));
-    if (data.type === 'RAW') {
-      if (typeof (data as any).payload !== 'string') return Promise.reject(new Error('invalid command'));
-    } else if (data.type === 'V') {
-      if (typeof (data as any).servoIndex !== 'number') return Promise.reject(new Error('invalid command'));
-      if (!['OPEN', 'CLOSE'].includes((data as any).action)) return Promise.reject(new Error('invalid command'));
-    } else {
-      return Promise.reject(new Error('invalid command'));
-    }
-    return ipcRenderer.invoke('send-to-serial', data);
-  },
-
   onSerialData: (callback: (data: string) => void) => {
     const listener = (_e: IpcRendererEvent, value: string) => callback(value);
     ipcRenderer.on('serial-data', listener);
     return () => ipcRenderer.removeListener('serial-data', listener);
   },
-  onSerialError: (callback: (err: string) => void) => {
-    const listener = (_e: IpcRendererEvent, value: string) => callback(value);
-    ipcRenderer.on('serial-error', listener);
-    return () => ipcRenderer.removeListener('serial-error', listener);
+
+  // 시퀀스 제어 API (신규/단일화)
+  startSequence: (name: string) => ipcRenderer.invoke('sequence-start', name),
+  cancelSequence: () => ipcRenderer.invoke('sequence-cancel'),
+  onSequenceEvent: (cb: (event: SequenceEvent) => void) => {
+    // 여러 채널의 이벤트를 하나로 통합하여 렌더러에 전달
+    const progressListener = (_e: IpcRendererEvent, ev: any) => cb({ type: 'progress', ...ev });
+    const errorListener = (_e: IpcRendererEvent, ev: any) => cb({ type: 'error', ...ev });
+    const completeListener = (_e: IpcRendererEvent, ev: any) => cb({ type: 'complete', ...ev });
+
+    ipcRenderer.on('sequence-progress', progressListener);
+    ipcRenderer.on('sequence-error', errorListener);
+    ipcRenderer.on('sequence-complete', completeListener);
+
+    return () => {
+      ipcRenderer.removeListener('sequence-progress', progressListener);
+      ipcRenderer.removeListener('sequence-error', errorListener);
+      ipcRenderer.removeListener('sequence-complete', completeListener);
+    };
   },
 
-  // 선택: 상태 알림 구독(재연결/연결/끊김)
-  onSerialStatus: (cb: (s: { state: 'connected' | 'disconnected' | 'reconnecting'; path?: string }) => void) => {
-    const listener = (_e: IpcRendererEvent, s: any) => cb(s);
-    ipcRenderer.on('serial-status', listener);
-    return () => ipcRenderer.removeListener('serial-status', listener);
+  // 안전 관련 API (기존 유지 및 확장)
+  safety: {
+    triggerFailsafe: (reason: string) => ipcRenderer.invoke('safety-trigger', { reason }),
+    clearEmergency: () => ipcRenderer.invoke('safety-clear'),
+    notifyPressureExceeded: (snap: { psi: number; rate?: number; reason?: string }) =>
+      ipcRenderer.send('safety:pressureExceeded', snap),
   },
 
-  zoomIn: () => ipcRenderer.send('zoom-in'),
-  zoomOut: () => ipcRenderer.send('zoom-out'),
-  zoomReset: () => ipcRenderer.send('zoom-reset'),
-  startLogging: () => ipcRenderer.send('start-logging'),
-  stopLogging: () => ipcRenderer.send('stop-logging'),
-  onLogCreationFailed: (callback: (error: string) => void) => {
-    const listener = (_e: IpcRendererEvent, value: string) => callback(value);
-    ipcRenderer.on('log-creation-failed', listener);
-    return () => ipcRenderer.removeListener('log-creation-failed', listener);
-  },
-  getConfig: (): Promise<AppConfig> => ipcRenderer.invoke('get-config'),
-
-  getSequences: () => ipcRenderer.invoke('get-sequences'),
-  onSequencesUpdated: (callback: (payload: import('./shared/types/ipc').SequencesPayload) => void) => {
-    const handler = (_event: IpcRendererEvent, payload: import('./shared/types/ipc').SequencesPayload) => callback(payload);
-    ipcRenderer.on('sequences-updated', handler);
-    return () => ipcRenderer.removeListener('sequences-updated', handler);
-  },
-  
-  // <<< 여기에 추가된 코드
-  // 렌더러(UI)에서 감지된 압력 이상 상태를 메인 프로세스로 보고합니다.
-  safetyPressureExceeded: (snapshot: any) => {
-    ipcRenderer.send('safety:pressureExceeded', snapshot);
-  },
-  // >>> 추가된 코드 끝
-
-  safetyClear: () => ipcRenderer.invoke('safety-clear'),
+  // 설정 및 기타 유틸리티 API (기존 유지)
+  getConfig: (): Promise<AppConfig> => ipcRenderer.invoke('config-get'),
+  getSequences: () => ipcRenderer.invoke('get-sequences'), // 시퀀스 목록 표시에 필요하므로 유지
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);
+
 export type ElectronAPI = typeof api;

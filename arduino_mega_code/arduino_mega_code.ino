@@ -29,10 +29,13 @@
 
 // =========================== 안전 파라미터 ===========================
 #define HEARTBEAT_TIMEOUT_MS 3000UL   // 하트비트 타임아웃 (ms)
-// 압력 임계(0이면 비활성). 단위: psi*100
-#define PRESSURE_MAX_PSIx100             120000UL // 예: 1200.00 psi
+
+// P0-4: 압력 임계값 역할 정의 및 정렬
+// ALARM (경보): GUI(렌더러)에서 감지하고 메인 프로세스에 보고. Failsafe 시퀀스를 트리거. (예: 850 psi)
+// TRIP (차단): MCU 펌웨어 레벨의 최후 방어선. 하드웨어 비상 시퀀스를 직접 트리거. ALARM보다 높아야 함.
+#define PRESSURE_TRIP_PSIx100            100000UL // 1000.00 psi. config.json의 pressureLimitTrip과 일치
 // 압력 상승률 임계(0이면 비활성). 단위: (psi*100)/s
-#define PRESSURE_ROC_MAX_PSIx100_PER_S   5000UL   // 예: 50.00 psi/s
+#define PRESSURE_ROC_MAX_PSIx100_PER_S   50000UL   // 500.00 psi/s (운영 중 재검토 필요)
 
 // =========================== CRC-8 (0x07, LUT) ===========================
 static const uint8_t CRC8_TABLE[256] PROGMEM = {
@@ -572,7 +575,7 @@ static void readAndSendAllSensorData(const unsigned long now) {
 #endif
 
     if (!emergencyActive) {
-      if (PRESSURE_MAX_PSIx100 > 0 && psi100 >= PRESSURE_MAX_PSIx100) {
+      if (PRESSURE_TRIP_PSIx100 > 0 && psi100 >= PRESSURE_TRIP_PSIx100) {
         pressureTrip = true;
       }
       if (!pressureTrip && PRESSURE_ROC_MAX_PSIx100_PER_S > 0 && dtPressMs > 0 && lastPressureCheckMs != 0) {

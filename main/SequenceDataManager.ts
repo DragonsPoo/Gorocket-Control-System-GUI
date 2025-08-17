@@ -34,10 +34,16 @@ export class SequenceDataManager {
   private readonly ajv: Ajv.Ajv;
   private validationResult: ValidationResult = { valid: false };
 
-  // 금지 조합 정의(필요 시 확장 가능)
-  // 동일 시점에 둘 다 Open이면 금지
+  // 금지 조합 정의(P0-2 확장)
+  // 동일 스텝 내에서 두 명령이 동시에 'Open'으로 나타나는 것을 금지합니다.
   private readonly forbiddenPairs: Array<[string, string]> = [
+    // 산화제와 연료 메인 밸브 동시 개방 금지
     ['Ethanol Main', 'N2O Main'],
+    // 메인 밸브가 열려있는 상태에서 벤트 밸브 개방 금지
+    ['Ethanol Main', 'System Vent'],
+    ['N2O Main', 'System Vent'],
+    // 가압제(프레셔런트) 충전 중 벤트 밸브 개방 금지
+    ['Pressurant Fill', 'System Vent'],
   ];
 
   constructor(basePath: string) {
