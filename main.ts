@@ -41,7 +41,7 @@ class MainApp {
       configManager: this.configManager,
       getWindow: () => this.mainWindow,
       options: {
-        hbIntervalMs: 1000,
+        hbIntervalMs: 200,
         defaultAckTimeoutMs: 1000,
         defaultFeedbackTimeoutMs: 5000,
         defaultPollMs: 50,
