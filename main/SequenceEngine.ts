@@ -341,6 +341,10 @@ export class SequenceEngine extends EventEmitter {
       const parts = s.trim().split(',');
       if (parts.length >= 2) {
         const id = Number(parts[1]);
+        if (!Number.isFinite(id)) {
+          console.warn(`Invalid ACK msgId: ${parts[1]} in line: ${s}`);
+          return;
+        }
         const p = this.pending.get(id);
         if (p) {
           clearTimeout(p.timer);
@@ -354,13 +358,22 @@ export class SequenceEngine extends EventEmitter {
       const parts = s.trim().split(',');
       if (parts.length >= 3) {
         const id = Number(parts[1]);
+        if (!Number.isFinite(id)) {
+          console.warn(`Invalid NACK msgId: ${parts[1]} in line: ${s}`);
+          return;
+        }
         const reason = parts[2];
         const p = this.pending.get(id);
         if (p) {
           clearTimeout(p.timer);
           p.reject(new Error(`NACK: ${reason}`));
           this.pending.delete(id);
+        } else {
+          // 대기 중 아님(예: HB 등) → 알림만
+          this.emit('error', new Error(`NACK(${reason}) for unknown msgId=${id}`));
         }
+      } else {
+        console.warn(`Malformed NACK line: ${s}`);
       }
       return;
     }
@@ -422,6 +435,9 @@ export class SequenceEngine extends EventEmitter {
   private mapCond(c: any): Condition {
     if (c.sensor && /^pt[1-4]$/i.test(c.sensor)) {
       const i = Number(c.sensor.slice(2));
+      if (i < 1 || i > 4) {
+        throw new Error(`Invalid sensor index: ${i}, must be 1-4`);
+      }
 
       const op = String(c.op ?? 'gte').toLowerCase();
       const sign = op === 'lte' ? '<=' : op === 'lt' ? '<' : op === 'gt' ? '>' : '>=';
@@ -489,6 +505,8 @@ export class SequenceEngine extends EventEmitter {
       p.reject(err);
     }
     this.pending.clear();
+    // Ensure heartbeat is also stopped on cleanup
+    this.stopHeartbeat();
   }
 
   private crc8(buf: Uint8Array): number {

@@ -66,7 +66,18 @@ export class LogManager {
   }
 
   formatLogLine(raw: string): string {
-    if (raw.startsWith('ACK') || raw.startsWith('NACK')) return '';
+    if (!raw || raw.trim() === '') return '';
+    
+    // Filter out ACK/NACK lines as per requirements
+    if (raw.startsWith('ACK,') || raw.startsWith('NACK,')) {
+      return '';
+    }
+    
+    // Mark state events with # for post-analysis
+    if (raw.startsWith('EMERG') || raw.startsWith('FAILSAFE') || raw.startsWith('READY')) {
+      return `${new Date().toISOString()} # ${raw}\n`;
+    }
+    
     const { sensor, valves, errors } = parseSensorData(raw);
     if (errors.length) {
       errors.forEach((e) => this.write(`# ${e}\n`));

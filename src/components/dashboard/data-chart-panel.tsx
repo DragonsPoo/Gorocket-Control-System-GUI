@@ -26,7 +26,8 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data, appConfig }) => {
     const alarm = appConfig?.pressureLimitAlarmPsi;
     const trip = appConfig?.pressureLimitTripPsi;
     const maxObserved = Math.max(0, ...data.map(d => Math.max(d.pt1 ?? 0, d.pt2 ?? 0, d.pt3 ?? 0, d.pt4 ?? 0)));
-    const calculatedMax = Math.max(maxObserved, (trip ?? 900) * 1.1);
+    const tripThreshold = typeof trip === 'number' ? trip : 900;
+    const calculatedMax = Math.max(maxObserved, tripThreshold * 1.1);
     const yMax = Number.isFinite(calculatedMax) && calculatedMax > 0 ? calculatedMax : 900 * 1.1;
 
     return (
