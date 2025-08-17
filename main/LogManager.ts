@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { app, BrowserWindow } from 'electron';
 import { parseSensorData } from '@shared/utils/sensorParser';
 
@@ -20,6 +21,9 @@ export class LogManager {
 
       // 설정/시퀀스 스냅샷 복제
       this.snapshotFiles(sessionDir, window);
+      
+      // 세션 메타 정보 생성
+      this.createSessionMeta(sessionDir);
 
       // CSV 스트림 오픈
       const filePath = path.join(sessionDir, 'data.csv');
@@ -44,17 +48,21 @@ export class LogManager {
   stop() {
     try {
       // 최종 플러시
-      if (this.stream && typeof (this.stream as any).fd === 'number') {
-        try {
-          fs.fsyncSync((this.stream as any).fd as number);
-        } catch { /* noop */ }
-      }
+      this.forceFlush();
     } catch { /* noop */ }
 
     this.clearFlushTimer();
     this.stream?.end();
     this.stream = null;
     this.sessionDir = null;
+  }
+
+  forceFlush() {
+    try {
+      if (this.stream && typeof (this.stream as any).fd === 'number') {
+        fs.fsyncSync((this.stream as any).fd as number);
+      }
+    } catch { /* noop */ }
   }
 
   write(line: string) {
@@ -142,6 +150,53 @@ export class LogManager {
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
       this.flushTimer = null;
+    }
+  }
+
+  private createSessionMeta(sessionDir: string) {
+    try {
+      const basePath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+      const configPath = path.join(basePath, 'config.json');
+      const sequencesPath = path.join(basePath, 'sequences.json');
+      
+      // 파일 해시 계산
+      const configHash = this.calculateFileHash(configPath);
+      const sequencesHash = this.calculateFileHash(sequencesPath);
+      
+      // 세션 메타 정보 구성
+      const sessionMeta = {
+        sessionStart: new Date().toISOString(),
+        appVersion: app.getVersion(),
+        platform: process.platform,
+        nodeVersion: process.version,
+        electronVersion: process.versions.electron,
+        configHash,
+        sequencesHash,
+        firmwareNote: 'Arduino Mega 2560 - See arduino_mega_code.ino',
+        safetyLevels: {
+          pressureAlarmPsi: 850,
+          pressureTripPsi: 1000,
+          pressureRocPsiPerSec: 50,
+          heartbeatTimeoutMs: 3000
+        }
+      };
+      
+      // 메타 파일 저장
+      const metaPath = path.join(sessionDir, 'session-meta.json');
+      fs.writeFileSync(metaPath, JSON.stringify(sessionMeta, null, 2));
+    } catch (err) {
+      // 메타 생성 실패해도 세션은 계속 진행
+      console.warn('Failed to create session meta:', err);
+    }
+  }
+
+  private calculateFileHash(filePath: string): string {
+    try {
+      if (!fs.existsSync(filePath)) return 'FILE_NOT_FOUND';
+      const content = fs.readFileSync(filePath);
+      return crypto.createHash('sha256').update(content).digest('hex');
+    } catch {
+      return 'HASH_ERROR';
     }
   }
 }

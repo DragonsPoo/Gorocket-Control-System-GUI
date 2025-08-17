@@ -100,6 +100,8 @@ class MainApp {
       // EMERG/EMERG_CLEARED 이벤트 시 HeartbeatDaemon 제어
       if (line.startsWith('EMERG')) {
         this.hbDaemon?.stop();
+        // 긴급 상황 시 로그 강제 플러시
+        this.logManager.forceFlush();
       }
       if (line.startsWith('EMERG_CLEARED')) {
         this.hbDaemon?.start();
@@ -117,6 +119,22 @@ class MainApp {
 
     app.on('window-all-closed', () => {
       if (process.platform !== 'darwin') app.quit();
+    });
+
+    // 프로세스 종료 시 로그 강제 플러시
+    app.on('before-quit', () => {
+      this.logManager.forceFlush();
+    });
+
+    // 비정상 종료 시에도 로그 보존
+    process.on('SIGINT', () => {
+      this.logManager.forceFlush();
+      app.quit();
+    });
+
+    process.on('SIGTERM', () => {
+      this.logManager.forceFlush();
+      app.quit();
     });
   }
 

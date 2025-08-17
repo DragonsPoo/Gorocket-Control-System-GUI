@@ -35,7 +35,7 @@
 // TRIP (차단): MCU 펌웨어 레벨의 최후 방어선. 하드웨어 비상 시퀀스를 직접 트리거. ALARM보다 높아야 함.
 #define PRESSURE_TRIP_PSIx100            100000UL // 1000.00 psi. config.json의 pressureLimitTrip과 일치
 // 압력 상승률 임계(0이면 비활성). 단위: (psi*100)/s
-#define PRESSURE_ROC_MAX_PSIx100_PER_S   50000UL   // 500.00 psi/s (운영 중 재검토 필요)
+#define PRESSURE_ROC_MAX_PSIx100_PER_S   5000UL    // 50.00 psi/s (config.json과 일치)
 
 // =========================== CRC-8 (0x07, LUT) ===========================
 static const uint8_t CRC8_TABLE[256] PROGMEM = {
