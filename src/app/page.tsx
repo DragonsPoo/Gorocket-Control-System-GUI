@@ -158,7 +158,7 @@ export default function Home() {
                 </div>
               </CardContent>
             </Card>
-            <DataChartPanel data={chartData} />
+            <DataChartPanel data={chartData} appConfig={appConfig} />
           </div>
 
           <div className="md:col-span-5 lg:col-span-4 grid grid-cols-1 gap-6 auto-rows-min">

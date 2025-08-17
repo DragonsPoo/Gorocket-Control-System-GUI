@@ -66,6 +66,9 @@ export class SequenceEngine extends EventEmitter {
   private failSafeOnError: boolean;
   private roles: { mains: number[]; vents: number[]; purges: number[] };
 
+  private inFailsafe = false;
+
+
   private psi100: number[] = [0, 0, 0, 0];
   private lsOpen: number[] = [0, 0, 0, 0, 0, 0, 0];
   private lsClosed: number[] = [0, 0, 0, 0, 0, 0, 0];
@@ -161,30 +164,30 @@ export class SequenceEngine extends EventEmitter {
     }
   }
 
-  async tryFailSafe(tag = 'FAILSAFE') {
-    try {
-      const cmds: string[] = [];
+  private uniq(arr: number[]) { return Array.from(new Set(arr)); }
 
-      // 메인 닫기
-      for (const m of this.roles.mains) cmds.push(`V,${m},C`);
-      // 벤트/퍼지 열기
-      for (const v of this.roles.vents) cmds.push(`V,${v},O`);
-      for (const p of this.roles.purges) cmds.push(`V,${p},O`);
+  async tryFailSafe(tag = 'FAILSAFE') {
+    if (this.inFailsafe) return;
+    this.inFailsafe = true;
+    try {
+      const mains = this.uniq(this.roles.mains);
+      const vents = this.uniq(this.roles.vents);
+      const purges = this.uniq(this.roles.purges);
+
+
+      const cmds: string[] = [];
+      for (const m of mains) cmds.push(`V,${m},C`);
+      for (const v of vents) cmds.push(`V,${v},O`);
+      for (const p of purges) cmds.push(`V,${p},O`);
 
       for (const c of cmds) this.serial.writeNow(c);
+      void Promise.allSettled(cmds.map((c) => this.sendWithAck(c, 500)));
 
-      void Promise.allSettled(cmds.map((c) => this.sendWithAck(c, 500))).then((res) => {
-        res.forEach((r) => {
-          if (r.status === 'rejected') {
-            console.error('Failsafe send error', r.reason);
-          }
-        });
-      });
       this.emitProgress({ name: this.currentName || 'failsafe', stepIndex: -1, step: { type: 'cmd', payload: 'FAILSAFE' } as any, note: tag });
-    } catch {
-      // ignore
+      await sleep(0);
     } finally {
       this.stopHeartbeat();
+      this.inFailsafe = false;
     }
   }
 
@@ -217,11 +220,17 @@ export class SequenceEngine extends EventEmitter {
   }
 
   private async execWaitStep(step: StepWait) {
-    const deadline = Date.now() + step.timeoutMs;
+    const { condition, timeoutMs, pollMs = this.defaultPollMs } = step;
+    if ((condition as any).kind === 'time') {
+      await sleep(timeoutMs);
+      return;
+    }
+
+    const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (this.cancelled) throw new Error('Cancelled');
-      if (this.evalCondition(step.condition)) return;
-      await this.delay(step.pollMs ?? this.defaultPollMs);
+      if (this.evalCondition(condition)) return;
+      await this.delay(pollMs);
     }
     throw new Error('Wait timeout');
   }
@@ -314,9 +323,14 @@ export class SequenceEngine extends EventEmitter {
 
     if (!line) return;
 
+    const s = String(line);
+    if (s.startsWith('EMERG')) {
+      (this.serial as any).clearQueue?.();
+    }
+
     // ACK/NACK 처리
-    if (line.startsWith('ACK,')) {
-      const parts = line.trim().split(',');
+    if (s.startsWith('ACK,')) {
+      const parts = s.trim().split(',');
       if (parts.length >= 2) {
         const id = Number(parts[1]);
         const p = this.pending.get(id);
@@ -328,8 +342,8 @@ export class SequenceEngine extends EventEmitter {
       }
       return;
     }
-    if (line.startsWith('NACK,')) {
-      const parts = line.trim().split(',');
+    if (s.startsWith('NACK,')) {
+      const parts = s.trim().split(',');
       if (parts.length >= 3) {
         const id = Number(parts[1]);
         const reason = parts[2];
