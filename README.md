@@ -1,3 +1,5 @@
+<img width="2879" height="1698" alt="image" src="https://github.com/user-attachments/assets/f48d19d2-b8f9-4a78-b9a2-351c8fc72f86" />
+
 # 🚀 GoRocket Control System GUI
 
 > **액체로켓 지상시험 제어시스템**  
@@ -276,7 +278,7 @@ graph TB
 
 ## 📈 업데이트 내역
 
-### 🔥 최신 업데이트 (2025-01-17)
+### 🔥 최신 업데이트 (2025-08-17)
 | 분야 | 변경사항 | 영향 |
 |------|----------|------|
 | **API** | `getSerialPorts` → `listSerialPorts` | 명명 표준화 |
