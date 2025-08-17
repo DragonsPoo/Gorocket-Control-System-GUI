@@ -48,6 +48,14 @@ class MainApp {
       return;
     }
 
+    const map = this.configManager.get().valveMappings;
+    const idx = (name: string) => map[name]?.servoIndex;
+    const roles = {
+      mains: [idx('Ethanol Main'), idx('N2O Main'), idx('Pressurant Fill'), idx('Igniter Fuel')].filter((n): n is number => n !== undefined),
+      vents: [idx('System Vent')].filter((n): n is number => n !== undefined),
+      purges: [idx('Ethanol Purge'), idx('N2O Purge')].filter((n): n is number => n !== undefined),
+    };
+
     // SequenceEngine 생성 및 설정
     this.sequenceEngine = new SequenceEngine({
       serialManager: this.serialManager,
@@ -61,8 +69,7 @@ class MainApp {
         defaultPollMs: 50,
         autoCancelOnRendererGone: true,
         failSafeOnError: true,
-        // config.json에서 역할을 읽어오도록 확장할 수 있습니다.
-        valveRoles: { mains: [0, 1, 2, 3, 4], vent: 5, purge: 6 },
+        valveRoles: roles,
       },
     });
 
