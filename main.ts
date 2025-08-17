@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, protocol } from 'electron';
 import path from 'path';
 import serve from 'electron-serve';
 import isDev from 'electron-is-dev';
@@ -34,11 +34,13 @@ class MainApp {
     }
 
     // SequenceDataManager 준비
-    this.sequenceManager = new SequenceDataManager();
     try {
       const basePath = app.isPackaged ? process.resourcesPath : app.getAppPath();
-      const sequencesPath = path.join(basePath, 'sequences.json');
-      await this.sequenceManager.load(sequencesPath);
+      this.sequenceManager = new SequenceDataManager(basePath);
+      const validationResult = this.sequenceManager.loadAndValidate();
+      if (!validationResult.valid) {
+        throw new Error(validationResult.errors || 'Validation failed');
+      }
     } catch (err) {
       dialog.showErrorBox('Sequences Error',
         `Failed to load sequences.json:\n${(err as Error)?.message ?? err}`);
@@ -84,7 +86,10 @@ class MainApp {
       // MCU에서 온 텔레메트리/로그 라인 → 렌더러로 브로드캐스트
       this.mainWindow?.webContents.send('serial-data', line);
       // 로그 파일에도 저장
-      this.logManager.append(line);
+      if (this.logManager.isLogging()) {
+        const formattedLine = this.logManager.formatLogLine(line);
+        this.logManager.write(formattedLine);
+      }
     });
     this.serialManager.on('error', (err: Error) => {
       this.mainWindow?.webContents.send('serial-error', err.message);
@@ -96,21 +101,25 @@ class MainApp {
   }
 
   private createWindow() {
-    const loadURL = serve({ directory: 'out' });
+    let loadURL: ((window: BrowserWindow) => Promise<void>) | undefined;
+    
+    if (!isDev) {
+      loadURL = serve({ directory: 'out' });
+    }
 
     this.mainWindow = new BrowserWindow({
       width: 1366,
       height: 900,
       webPreferences: {
         sandbox: true,
-        preload: path.join(__dirname, 'preload.mjs'), // 필요 시 경로 조정
+        preload: path.join(__dirname, 'preload.js'), // 필요 시 경로 조정
       },
     });
 
     if (isDev) {
-      this.mainWindow.loadURL('http://localhost:3000');
+      this.mainWindow.loadURL('http://localhost:9002');
       this.mainWindow.webContents.openDevTools({ mode: 'detach' });
-    } else {
+    } else if (loadURL) {
       loadURL(this.mainWindow);
     }
     this.mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -158,7 +167,7 @@ class MainApp {
     ipcMain.handle('serial-connect', async (_evt, { path, baud }: { path: string, baud: number }) => {
       try {
         // 로그 폴더 시작
-        this.logManager.startNewSession();
+        this.logManager.start(this.mainWindow);
         return await this.serialManager.connect(path, baud);
       } catch (err) {
         dialog.showErrorBox('Serial Error', (err as Error)?.message ?? String(err));
@@ -167,7 +176,7 @@ class MainApp {
     });
     ipcMain.handle('serial-disconnect', async () => {
       try {
-        this.logManager.endSession();
+        this.logManager.stop();
         return await this.serialManager.disconnect();
       } catch (err) {
         dialog.showErrorBox('Serial Error', (err as Error)?.message ?? String(err));
@@ -235,7 +244,45 @@ class MainApp {
     ipcMain.handle('config-get', async () => {
       return this.configManager.get();
     });
+
+    // 시퀀스 데이터 요청
+    ipcMain.handle('get-sequences', async () => {
+      try {
+        const sequences = this.sequenceManager?.getSequences() || {};
+        const result = this.sequenceManager?.getValidationResult() || { valid: false, errors: 'No sequence manager' };
+        return { sequences, result };
+      } catch (err) {
+        dialog.showErrorBox('Sequence Error', (err as Error)?.message ?? String(err));
+        return { sequences: {}, result: { valid: false, errors: (err as Error)?.message ?? String(err) } };
+      }
+    });
+
+    // safety-clear IPC 핸들러 추가
+    ipcMain.handle('safety-clear', async () => {
+      try {
+        // SerialManager는 RAW 문자열도 지원
+        await this.serialManager.send({ raw: 'SAFE_CLEAR' } as any);
+        return true;
+      } catch {
+        return false;
+      }
+    });
   }
+}
+
+// electron-serve를 위한 protocol 등록을 app.ready 이전에 수행
+if (!isDev) {
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: 'app',
+      privileges: {
+        standard: true,
+        secure: true,
+        allowServiceWorkers: true,
+        supportFetchAPI: true
+      }
+    }
+  ]);
 }
 
 const mainApp = new MainApp();

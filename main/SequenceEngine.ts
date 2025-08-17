@@ -139,7 +139,7 @@ export class SequenceEngine extends EventEmitter {
       throw err;
     } finally {
       this.stopHeartbeat();
-      this.cleanupPending(new Error('Sequence exit'));
+      this.cleanupAllPending(new Error('Sequence exit'));
       this.running = false;
       this.cancelled = false;
       this.currentName = '';
@@ -401,6 +401,14 @@ export class SequenceEngine extends EventEmitter {
 
   // =========== 유틸 ===========
   private delay(ms: number) { return new Promise<void>(r => setTimeout(r, ms)); }
+
+  private cleanupAllPending(err: Error) {
+    for (const [id, p] of this.pending) {
+      clearTimeout(p.timer);
+      p.reject(err);
+    }
+    this.pending.clear();
+  }
 
   private crc8(buf: Uint8Array): number {
     let crc = 0x00;

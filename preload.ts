@@ -70,6 +70,8 @@ const api = {
     ipcRenderer.send('safety:pressureExceeded', snapshot);
   },
   // >>> 추가된 코드 끝
+
+  safetyClear: () => ipcRenderer.invoke('safety-clear'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);
