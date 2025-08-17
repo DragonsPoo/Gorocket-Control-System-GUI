@@ -368,7 +368,9 @@ export class SequenceEngine extends EventEmitter {
     for (const s of rawSteps) {
       if (typeof s === 'string') { steps.push({ type: 'cmd', payload: s }); continue; }
       if (s && s.type) { steps.push(s as SequenceStep); continue; }
+
       if (s.delay && s.delay > 0) steps.push({ type: 'wait', timeoutMs: s.delay, condition: { kind: 'time' } as any });
+
       for (const c of (s.commands ?? [])) steps.push({ type: 'cmd', payload: this.mapCmd(c) });
       if (s.condition) steps.push({ type: 'wait', timeoutMs: s.condition.timeoutMs ?? 30000, condition: this.mapCond(s.condition) });
     }
@@ -390,11 +392,13 @@ export class SequenceEngine extends EventEmitter {
   private mapCond(c: any): Condition {
     if (c.sensor && /^pt[1-4]$/i.test(c.sensor)) {
       const i = Number(c.sensor.slice(2));
+
       const op = String(c.op ?? 'gte').toLowerCase();
       const sign = op === 'lte' ? '<=' : op === 'lt' ? '<' : op === 'gt' ? '>' : '>=';
       const threshold = op === 'lte' || op === 'lt' ? c.max : c.min;
       if (threshold == null) throw new Error(`Missing threshold for ${op} on ${c.sensor}`);
       return { kind: 'pressure', sensor: i, op: sign, valuePsi100: Math.round(threshold * 100) } as any;
+
     }
     throw new Error(`Unsupported condition: ${JSON.stringify(c)}`);
   }
