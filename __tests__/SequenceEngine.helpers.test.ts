@@ -1,6 +1,7 @@
 import { SequenceEngine } from '../main/SequenceEngine';
 import { EventEmitter } from 'events';
 
+
 function createEngine() {
   const serial = new EventEmitter() as any;
   serial.writeNow = jest.fn();
@@ -21,6 +22,7 @@ function createEngine() {
 }
 
 describe('SequenceEngine helpers', () => {
+
   test('mapCmd translates named valve', () => {
     const { engine } = createEngine();
     const result = (engine as any).mapCmd('CMD,Ethanol Main,Open');
@@ -68,7 +70,9 @@ describe('SequenceEngine helpers', () => {
 });
 
 describe('SequenceEngine failsafe', () => {
+
   function createEngineWithRoles(roles: { mains: number[]; vents: number[]; purges: number[] }) {
+
     const serial = new EventEmitter() as any;
     serial.writeNow = jest.fn();
     serial.write = jest.fn().mockResolvedValue(undefined);
@@ -79,6 +83,7 @@ describe('SequenceEngine failsafe', () => {
       sequenceDataManager: seqMgr,
       configManager: cfg,
       getWindow: () => null,
+
       options: { hbIntervalMs: 0, valveRoles: roles }
     });
     return { engine, serial };
@@ -86,10 +91,12 @@ describe('SequenceEngine failsafe', () => {
 
   test('tryFailSafe writes to all unique roles', async () => {
     const { engine, serial } = createEngineWithRoles({ mains: [0, 0, 1], vents: [2, 2], purges: [3, 4, 3] });
+
     await engine.tryFailSafe();
     await new Promise((r) => setTimeout(r, 600));
     expect(serial.writeNow).toHaveBeenCalledTimes(5);
   });
+
 
   test('failsafe reentry is guarded', async () => {
     const { engine, serial } = createEngineWithRoles({ mains: [0], vents: [1], purges: [2] });
@@ -106,4 +113,5 @@ describe('SequenceEngine wait steps', () => {
     await (engine as any).execWaitStep({ type: 'wait', condition: { kind: 'time' }, timeoutMs: 50 });
     expect(Date.now() - t0).toBeGreaterThanOrEqual(50);
   });
+
 });

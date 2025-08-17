@@ -65,7 +65,9 @@ export class SequenceEngine extends EventEmitter {
   private autoCancelOnRendererGone: boolean;
   private failSafeOnError: boolean;
   private roles: { mains: number[]; vents: number[]; purges: number[] };
+
   private inFailsafe = false;
+
 
   private psi100: number[] = [0, 0, 0, 0];
   private lsOpen: number[] = [0, 0, 0, 0, 0, 0, 0];
@@ -172,6 +174,7 @@ export class SequenceEngine extends EventEmitter {
       const vents = this.uniq(this.roles.vents);
       const purges = this.uniq(this.roles.purges);
 
+
       const cmds: string[] = [];
       for (const m of mains) cmds.push(`V,${m},C`);
       for (const v of vents) cmds.push(`V,${v},O`);
@@ -179,6 +182,7 @@ export class SequenceEngine extends EventEmitter {
 
       for (const c of cmds) this.serial.writeNow(c);
       void Promise.allSettled(cmds.map((c) => this.sendWithAck(c, 500)));
+
       this.emitProgress({ name: this.currentName || 'failsafe', stepIndex: -1, step: { type: 'cmd', payload: 'FAILSAFE' } as any, note: tag });
       await sleep(0);
     } finally {
@@ -378,7 +382,9 @@ export class SequenceEngine extends EventEmitter {
     for (const s of rawSteps) {
       if (typeof s === 'string') { steps.push({ type: 'cmd', payload: s }); continue; }
       if (s && s.type) { steps.push(s as SequenceStep); continue; }
+
       if (s.delay && s.delay > 0) steps.push({ type: 'wait', timeoutMs: s.delay, condition: { kind: 'time' } as any });
+
       for (const c of (s.commands ?? [])) steps.push({ type: 'cmd', payload: this.mapCmd(c) });
       if (s.condition) steps.push({ type: 'wait', timeoutMs: s.condition.timeoutMs ?? 30000, condition: this.mapCond(s.condition) });
     }
@@ -400,11 +406,13 @@ export class SequenceEngine extends EventEmitter {
   private mapCond(c: any): Condition {
     if (c.sensor && /^pt[1-4]$/i.test(c.sensor)) {
       const i = Number(c.sensor.slice(2));
+
       const op = String(c.op ?? 'gte').toLowerCase();
       const sign = op === 'lte' ? '<=' : op === 'lt' ? '<' : op === 'gt' ? '>' : '>=';
       const threshold = op === 'lte' || op === 'lt' ? c.max : c.min;
       if (threshold == null) throw new Error(`Missing threshold for ${op} on ${c.sensor}`);
       return { kind: 'pressure', sensor: i, op: sign, valuePsi100: Math.round(threshold * 100) } as any;
+
     }
     throw new Error(`Unsupported condition: ${JSON.stringify(c)}`);
   }
