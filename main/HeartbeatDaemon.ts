@@ -23,4 +23,9 @@ export class HeartbeatDaemon {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
   }
+
+  // SAFETY: Send immediate heartbeat for faster MCU arming
+  sendOnce() {
+    this.serial.send({ raw: 'HB' }).catch(() => {});
+  }
 }

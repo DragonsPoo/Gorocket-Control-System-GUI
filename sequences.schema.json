@@ -42,13 +42,31 @@
             "allOf": [
               {
                 "properties": {
-                  "commands": { "contains": { "const": "CMD,Ethanol Main,Open" } }
+                  "commands": { "contains": { "const": "CMD,Ethanol Main Supply,Open" } }
                 },
                 "required": ["commands"]
               },
               {
                 "properties": {
-                  "commands": { "contains": { "const": "CMD,N2O Main,Open" } }
+                  "commands": { "contains": { "const": "CMD,System Vent 1,Open" } }
+                },
+                "required": ["commands"]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "allOf": [
+              {
+                "properties": {
+                  "commands": { "contains": { "const": "CMD,N2O Main Supply,Open" } }
+                },
+                "required": ["commands"]
+              },
+              {
+                "properties": {
+                  "commands": { "contains": { "const": "CMD,System Vent 1,Open" } }
                 },
                 "required": ["commands"]
               }

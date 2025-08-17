@@ -8,7 +8,7 @@ export class LogManager {
   private stream: fs.WriteStream | null = null;
   private sessionDir: string | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
-  private readonly flushEveryMs = 2000; // 주기 플러시(2s)
+  private flushEveryMs = 2000; // 주기 플러시(2s, configurable)
 
   start(window?: BrowserWindow | null) {
     try {
@@ -71,6 +71,14 @@ export class LogManager {
 
   isLogging(): boolean {
     return !!this.stream;
+  }
+
+  // SAFETY: Allow setting faster flush interval during hot-fire operations
+  setFlushIntervalMs(intervalMs: number) {
+    this.flushEveryMs = Math.max(100, intervalMs); // minimum 100ms
+    if (this.stream && this.flushTimer) {
+      this.startFlushTimer(); // restart with new interval
+    }
   }
 
   formatLogLine(raw: string): string {

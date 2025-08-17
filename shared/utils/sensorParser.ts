@@ -65,7 +65,8 @@ export function parseSensorData(raw: string): ParsedSensorData {
   const calculatedCrc = crc8OfString(dataPart);
 
   if ((receivedCrc & 0xFF) !== calculatedCrc) {
-    const msg = `Telemetry integrity error: CRC mismatch. Data: "${dataPart}", Received: ${receivedCrc}, Calculated: ${calculatedCrc}`;
+    // SAFETY: Fixed CRC mismatch log message formatting
+    const msg = `Telemetry integrity error: CRC mismatch. Data="${dataPart}", received=${receivedCrc}, calculated=${calculatedCrc}`;
     errors.push(msg);
     console.error(msg);
     // Discard data on CRC failure.

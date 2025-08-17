@@ -76,11 +76,23 @@
       "commands": ["CMD,Main Pressurization,Open"]
     },
     {
-      "message": "Open most valves for system-wide purge",
+      "message": "Open purge line for N2 flow",
       "delay": 0,
       "commands": [
-        "CMD,Ethanol Fill Line,Open",
-        "CMD,Ethanol Purge Line,Open",
+        "CMD,Ethanol Purge Line,Open"
+      ]
+    },
+    {
+      "message": "Open ethanol fill line for purge",
+      "delay": 100,
+      "commands": [
+        "CMD,Ethanol Fill Line,Open"
+      ]
+    },
+    {
+      "message": "Open vent valves for purge exit",
+      "delay": 100,
+      "commands": [
         "CMD,System Vent 1,Open",
         "CMD,System Vent 2,Open"
       ]

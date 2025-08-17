@@ -1,11 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)",
-      "Bash(npm run typecheck:*)",
-      "Bash(npm run lint)",
-      "Bash(npm test:*)",
-      "Bash(node:*)"
+      "Bash(npm run build:electron:*)"
     ],
     "deny": [],
     "ask": []

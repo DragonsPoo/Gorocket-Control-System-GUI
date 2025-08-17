@@ -42,19 +42,19 @@ describe('SequenceDataManager', () => {
         {
           message: 'Open valve 1',
           delay: 1000,
-          commands: ['CMD,Ethanol Main,Open']
+          commands: ['CMD,Ethanol Main Supply,Open']
         },
         {
           message: 'Close valve 1',
           delay: 500,
-          commands: ['CMD,Ethanol Main,Close']
+          commands: ['CMD,Ethanol Main Supply,Close']
         }
       ],
       'Emergency Shutdown': [
         {
           message: 'Emergency close all',
           delay: 0,
-          commands: ['CMD,System Vent,Open', 'CMD,Ethanol Purge,Open', 'CMD,N2O Purge,Open']
+          commands: ['CMD,System Vent 1,Open', 'CMD,Ethanol Purge Line,Open', 'CMD,N2O Purge Line,Open']
         }
       ]
     };
@@ -120,7 +120,7 @@ describe('SequenceDataManager', () => {
           {
             message: 'Test',
             delay: 1000,
-            commands: ['CMD,Ethanol Main,Open']
+            commands: ['CMD,Ethanol Main Supply,Open']
           }
         ]
         // Missing Emergency Shutdown
@@ -150,7 +150,7 @@ describe('SequenceDataManager', () => {
           {
             message: 'Emergency',
             delay: 0,
-            commands: ['CMD,System Vent,Open']
+            commands: ['CMD,System Vent 1,Open']
           }
         ],
         'Dangerous Sequence': [
@@ -158,8 +158,8 @@ describe('SequenceDataManager', () => {
             message: 'Dangerous operation',
             delay: 1000,
             commands: [
-              'CMD,Ethanol Main,Open',
-              'CMD,N2O Main,Open' // Forbidden combination
+              'CMD,Ethanol Main Supply,Open',
+              'CMD,System Vent 1,Open' // Forbidden combination
             ]
           }
         ]
@@ -173,8 +173,8 @@ describe('SequenceDataManager', () => {
 
       expect(result.valid).toBe(false);
       expect(result.errors).toContain('Static forbidden combo');
-      expect(result.errors).toContain('Ethanol Main');
-      expect(result.errors).toContain('N2O Main');
+      expect(result.errors).toContain('Ethanol Main Supply');
+      expect(result.errors).toContain('System Vent 1');
     });
 
     it('should reject ethanol main + system vent combination', () => {
@@ -183,7 +183,7 @@ describe('SequenceDataManager', () => {
           {
             message: 'Emergency',
             delay: 0,
-            commands: ['CMD,System Vent,Open']
+            commands: ['CMD,System Vent 1,Open']
           }
         ],
         'Bad Sequence': [
@@ -191,8 +191,8 @@ describe('SequenceDataManager', () => {
             message: 'Bad operation',
             delay: 1000,
             commands: [
-              'CMD,Ethanol Main,Open',
-              'CMD,System Vent,Open' // Forbidden combination
+              'CMD,Ethanol Main Supply,Open',
+              'CMD,System Vent 1,Open' // Forbidden combination
             ]
           }
         ]
@@ -206,41 +206,39 @@ describe('SequenceDataManager', () => {
 
       expect(result.valid).toBe(false);
       expect(result.errors).toContain('Static forbidden combo');
-      expect(result.errors).toContain('Ethanol Main');
-      expect(result.errors).toContain('System Vent');
+      expect(result.errors).toContain('Ethanol Main Supply');
+      expect(result.errors).toContain('System Vent 1');
     });
 
-    it('should reject pressurant fill + system vent combination', () => {
-      const forbiddenSequences = {
+    it('should allow pressurant fill + system vent combination (for purge operations)', () => {
+      const validPurgeSequences = {
         'Emergency Shutdown': [
           {
             message: 'Emergency',
             delay: 0,
-            commands: ['CMD,System Vent,Open']
+            commands: ['CMD,System Vent 1,Open']
           }
         ],
-        'Pressurization Conflict': [
+        'Purge Operation': [
           {
-            message: 'Conflicting operations',
+            message: 'Purge operations are allowed',
             delay: 1000,
             commands: [
-              'CMD,Pressurant Fill,Open',
-              'CMD,System Vent,Open' // Forbidden combination
+              'CMD,Main Pressurization,Open',
+              'CMD,System Vent 1,Open' // Now allowed for purge operations
             ]
           }
         ]
       };
 
       mockReadFileSync
-        .mockReturnValueOnce(JSON.stringify(forbiddenSequences))
+        .mockReturnValueOnce(JSON.stringify(validPurgeSequences))
         .mockReturnValueOnce(JSON.stringify(validSchema));
 
       const result = sequenceDataManager.loadAndValidate();
 
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Static forbidden combo');
-      expect(result.errors).toContain('Pressurant Fill');
-      expect(result.errors).toContain('System Vent');
+      expect(result.valid).toBe(true);
+      expect(result.errors).toBeNull();
     });
 
     it('should allow valid sequences without forbidden combinations', () => {
@@ -249,19 +247,19 @@ describe('SequenceDataManager', () => {
           {
             message: 'Emergency close all',
             delay: 0,
-            commands: ['CMD,System Vent,Open', 'CMD,Ethanol Purge,Open', 'CMD,N2O Purge,Open']
+            commands: ['CMD,System Vent 1,Open', 'CMD,Ethanol Purge Line,Open', 'CMD,N2O Purge Line,Open']
           }
         ],
         'Safe Sequence': [
           {
             message: 'Open ethanol main',
             delay: 1000,
-            commands: ['CMD,Ethanol Main,Open']
+            commands: ['CMD,Ethanol Main Supply,Open']
           },
           {
             message: 'Close ethanol main',
             delay: 500,
-            commands: ['CMD,Ethanol Main,Close']
+            commands: ['CMD,Ethanol Main Supply,Close']
           }
         ]
       };
@@ -284,19 +282,19 @@ describe('SequenceDataManager', () => {
           {
             message: 'Emergency',
             delay: 0,
-            commands: ['CMD,System Vent,Open']
+            commands: ['CMD,System Vent 1,Open']
           }
         ],
         'Test Sequence': [
           {
             message: 'Step 1',
             delay: 1000,
-            commands: ['CMD,Ethanol Main,Open']
+            commands: ['CMD,Ethanol Main Supply,Open']
           },
           {
             message: 'Step 2',
             delay: 2000,
-            commands: ['CMD,N2O Main,Open'] // This will create a forbidden state
+            commands: ['CMD,System Vent 1,Open'] // This will create a forbidden state
           }
         ]
       };
@@ -315,8 +313,8 @@ describe('SequenceDataManager', () => {
 
       expect(result.ok).toBe(false);
       expect(result.errors[0]).toContain('Dynamic forbidden combo');
-      expect(result.errors[0]).toContain('Ethanol Main');
-      expect(result.errors[0]).toContain('N2O Main');
+      expect(result.errors[0]).toContain('Ethanol Main Supply');
+      expect(result.errors[0]).toContain('System Vent 1');
       expect(result.errors[0]).toContain('both OPEN');
     });
 
@@ -326,24 +324,24 @@ describe('SequenceDataManager', () => {
           {
             message: 'Emergency',
             delay: 0,
-            commands: ['CMD,System Vent,Open']
+            commands: ['CMD,System Vent 1,Open']
           }
         ],
         'Safe Sequence': [
           {
             message: 'Open ethanol',
             delay: 1000,
-            commands: ['CMD,Ethanol Main,Open']
+            commands: ['CMD,Ethanol Main Supply,Open']
           },
           {
             message: 'Close ethanol before opening N2O',
             delay: 500,
-            commands: ['CMD,Ethanol Main,Close']
+            commands: ['CMD,Ethanol Main Supply,Close']
           },
           {
             message: 'Open N2O',
             delay: 1000,
-            commands: ['CMD,N2O Main,Open']
+            commands: ['CMD,N2O Main Supply,Open']
           }
         ]
       };
@@ -386,14 +384,14 @@ describe('SequenceDataManager', () => {
           {
             message: 'Emergency',
             delay: 0,
-            commands: ['CMD,System Vent,Open']
+            commands: ['CMD,System Vent 1,Open']
           }
         ],
         'Timing Test': [
           {
             message: 'Open valve',
             delay: 1000,
-            commands: ['CMD,Ethanol Main,Open']
+            commands: ['CMD,Ethanol Main Supply,Open']
           },
           {
             message: 'Wait period',
@@ -403,7 +401,7 @@ describe('SequenceDataManager', () => {
           {
             message: 'Open another valve - should conflict',
             delay: 500,
-            commands: ['CMD,N2O Main,Open']
+            commands: ['CMD,System Vent 1,Open']
           }
         ]
       };

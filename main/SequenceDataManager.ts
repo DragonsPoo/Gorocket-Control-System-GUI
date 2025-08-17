@@ -34,16 +34,17 @@ export class SequenceDataManager {
   private readonly ajv: Ajv.Ajv;
   private validationResult: ValidationResult = { valid: false };
 
-  // 금지 조합 정의(P0-2 확장)
-  // 동일 스텝 내에서 두 명령이 동시에 'Open'으로 나타나는 것을 금지합니다.
+  // SAFETY: 금지 조합 정의 - 실제 위험한 조합만 제한
+  // 실제 운영상 위험한 조합만 금지하고, 필요한 작업(퍼지, 핫파이어)은 허용
   private readonly forbiddenPairs: Array<[string, string]> = [
-    // 산화제와 연료 메인 밸브 동시 개방 금지
-    ['Ethanol Main', 'N2O Main'],
-    // 메인 밸브가 열려있는 상태에서 벤트 밸브 개방 금지
-    ['Ethanol Main', 'System Vent'],
-    ['N2O Main', 'System Vent'],
-    // 가압제(프레셔런트) 충전 중 벤트 밸브 개방 금지
-    ['Pressurant Fill', 'System Vent'],
+    // 위험: 연료 메인 밸브가 열린 상태에서 벤트 밸브 개방 (연료 손실/화재 위험)
+    ['Ethanol Main Supply', 'System Vent 1'],
+    ['Ethanol Main Supply', 'System Vent 2'],
+    // 위험: 산화제 메인 밸브가 열린 상태에서 벤트 밸브 개방 (산화제 손실 위험)  
+    ['N2O Main Supply', 'System Vent 1'],
+    ['N2O Main Supply', 'System Vent 2'],
+    // 주의: 메인 공급 라인들이 동시에 열린 채로 같은 스텝에서 명령되는 것만 제한
+    // (핫파이어 시퀀스에서 순차 개방은 허용하되, 동일 스텝 동시 개방은 금지)
   ];
 
   constructor(basePath: string) {

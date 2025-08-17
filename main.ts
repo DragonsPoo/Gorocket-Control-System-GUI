@@ -45,6 +45,15 @@ class MainApp {
       if (!validationResult.valid) {
         throw new Error(validationResult.errors || 'Validation failed');
       }
+
+      // SAFETY: Run dry-run validation and fail fast if sequences are invalid
+      const dryRunResult = this.sequenceManager.dryRunAll();
+      if (!dryRunResult.ok) {
+        const errorMessage = `Sequence dry-run validation failed:\n${dryRunResult.errors.join('\n')}`;
+        dialog.showErrorBox('Sequence Validation Error', errorMessage);
+        app.quit();
+        return;
+      }
     } catch (err) {
       dialog.showErrorBox('Sequences Error',
         `Failed to load sequences.json:\n${(err as Error)?.message ?? err}`);
@@ -88,7 +97,9 @@ class MainApp {
     this.serialManager.on('status', (s: SerialStatus) => {
         this.mainWindow?.webContents.send('serial-status', s);
         if (s.state === 'connected') {
+          // SAFETY: Start heartbeat and send immediate first heartbeat for faster MCU arming
           this.hbDaemon?.start();
+          this.hbDaemon?.sendOnce();
         } else {
           this.hbDaemon?.stop();
         }
@@ -260,18 +271,22 @@ class MainApp {
       try { await this.sequenceEngine?.tryFailSafe('UI_SAFETY'); } catch {}
 
       // 2. 저수준으로도 보강 (ACK 실패 무시하고 시도)
+      // SAFETY: Using actual valve names from config
       const config = this.configManager.get();
       const { valveMappings } = config;
-      const systemVentIndex = valveMappings['System Vent']?.servoIndex;
-      const ethanolPurgeIndex = valveMappings['Ethanol Purge']?.servoIndex;
-      const n2oPurgeIndex = valveMappings['N2O Purge']?.servoIndex;
+      const fallbackNames = ['System Vent 1', 'System Vent 2', 'Ethanol Purge Line', 'Ethanol Fill Line'];
       
       const cmds: Array<{ raw: string }> = [
         { raw: 'HB' }, // MCU가 EMERG 중이면 HB는 NACK될 수 있으나 부담 없음
       ];
-      if (systemVentIndex !== undefined) cmds.push({ raw: `V,${systemVentIndex},O` });
-      if (ethanolPurgeIndex !== undefined) cmds.push({ raw: `V,${ethanolPurgeIndex},O` });
-      if (n2oPurgeIndex !== undefined) cmds.push({ raw: `V,${n2oPurgeIndex},O` });
+      
+      for (const name of fallbackNames) {
+        const idx = valveMappings?.[name]?.servoIndex;
+        if (typeof idx === 'number') {
+          cmds.push({ raw: `V,${idx},O` });
+        }
+      }
+      
       for (const c of cmds) {
         try {
           await this.serialManager.send(c as any);
@@ -354,22 +369,22 @@ class MainApp {
       }
 
       // 2. 저수준으로 비상 밸브(벤트/퍼지) 개방 명령을 직접 전송 (이중 안전)
-      // ACK 여부나 성공 여부를 기다리지 않고 즉시 전송 시도
+      // SAFETY: Using actual valve names from config
       const config = this.configManager.get();
       const { valveMappings } = config;
-      const systemVentIndex = valveMappings['System Vent']?.servoIndex;
-      const ethanolPurgeIndex = valveMappings['Ethanol Purge']?.servoIndex;
-      const n2oPurgeIndex = valveMappings['N2O Purge']?.servoIndex;
-      
-      const emergencyRawCmds = [];
-      if (systemVentIndex !== undefined) emergencyRawCmds.push(`V,${systemVentIndex},O`);
-      if (ethanolPurgeIndex !== undefined) emergencyRawCmds.push(`V,${ethanolPurgeIndex},O`);
-      if (n2oPurgeIndex !== undefined) emergencyRawCmds.push(`V,${n2oPurgeIndex},O`);
-      for (const raw of emergencyRawCmds) {
-        try {
-          await this.serialManager.send({ raw } as any);
-        } catch (e) {
-          console.error(`[SAFETY] Low-level command '${raw}' failed`, e);
+      const fallbackNames = ['System Vent 1', 'System Vent 2', 'Ethanol Purge Line', 'Ethanol Fill Line'];
+
+      for (const name of fallbackNames) {
+        const idx = valveMappings?.[name]?.servoIndex;
+        if (typeof idx === 'number') {
+          try {
+            await this.serialManager.send({ raw: `V,${idx},O` } as any);
+            console.info(`[SAFETY] Fallback OPEN '${name}' (idx=${idx})`);
+          } catch (e) {
+            console.error(`[SAFETY] Fallback open failed '${name}' (idx=${idx})`, e);
+          }
+        } else {
+          console.warn(`[SAFETY] Fallback mapping missing for '${name}'`);
         }
       }
 

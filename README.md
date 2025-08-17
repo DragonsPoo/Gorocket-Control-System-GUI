@@ -9,7 +9,7 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-jungho1902-blue?style=for-the-badge)](https://github.com/jungho1902/Gorocket-Control-System-GUI)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](#license)
-[![Version](https://img.shields.io/badge/Version-v2.5.0-orange?style=for-the-badge)](#)
+[![Version](https://img.shields.io/badge/Version-v2.6.0-orange?style=for-the-badge)](#)
 [![Safety](https://img.shields.io/badge/Safety-Critical-red?style=for-the-badge)](#)
 
 [![Next.js](https://img.shields.io/badge/Next.js-15.3.3-black?style=flat-square&logo=next.js)](https://nextjs.org/)
@@ -741,6 +741,16 @@ npm run session-replay
 ## 📈 업데이트 내역
 
 ### 🔥 최신 업데이트 (2025-08-17)
+
+#### 🛡️ **안전 시스템 강화** *(v2.6.0)*
+| 분야 | 변경사항 | 영향 |
+|------|----------|------|
+| **Heartbeat 개선** | 연결 시 즉시 첫 하트비트 송신 | MCU 안전 시스템 더 빠른 활성화 |
+| **압력 안전** | 실제 밸브명으로 페일세이프 매핑 업데이트 | System Vent 1/2, Ethanol Purge Line 등 정확한 제어 |
+| **금지 조합 검증** | 실제 운영 요구사항에 맞게 안전 규칙 조정 | 질소 퍼지, 핫파이어 등 필수 작업 허용하면서 위험 조합만 차단 |
+| **시퀀스 검증** | 로딩 시 드라이런 검증으로 조기 오류 탐지 | 앱 시작 전 모든 안전 위반 사항 사전 차단 |
+| **CRC 무결성** | 센서 데이터 CRC 오류 메시지 개선 | 데이터 무결성 오류 더 명확한 디버깅 |
+| **로그 성능** | 핫파이어 시 1초 간격 빠른 플러시 옵션 | 중요 데이터 더 빠른 저장 |
 
 #### 🚀 **실제 운용 시스템 전환** *(v2.5.0)*
 | 분야 | 변경사항 | 영향 |
