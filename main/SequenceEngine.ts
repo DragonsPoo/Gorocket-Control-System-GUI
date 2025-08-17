@@ -14,7 +14,7 @@ type StepCmd = {
   payload: string;           // 예) "V,0,O"
   ackTimeoutMs?: number;     // 기본 1000
   feedback?: {               // 옵션: 서보 리미트 스위치 피드백
-    valveIndex: number;
+    index: number;           // 밸브 인덱스
     expect: 'open' | 'closed';
     timeoutMs?: number;      // 기본 5000
     pollMs?: number;         // 기본 50
@@ -24,17 +24,13 @@ type StepCmd = {
 type StepWait = {
   type: 'wait';
   condition: Condition;
-  timeoutMs: number;         // 필수
-  pollMs?: number;           // 기본 50
+  timeoutMs: number;
+  pollMs?: number;         // 기본 50
 };
 
-type StepDelay = {
-  type: 'delay';
-  ms: number;
-};
+type SequenceStep = StepCmd | StepWait;
 
-type SequenceStep = StepCmd | StepWait | StepDelay;
-type SequenceMap = Record<string, SequenceStep[] | any[]>;
+type SequenceMap = Record<string, any[]>;
 
 type EngineOptions = {
   hbIntervalMs?: number;
@@ -69,14 +65,12 @@ export class SequenceEngine extends EventEmitter {
   private failSafeOnError: boolean;
   private roles: { mains: number[]; vent: number; purge: number };
 
-  // 센서 스냅샷
   private psi100: number[] = [0, 0, 0, 0];
   private lsOpen: number[] = [0, 0, 0, 0, 0, 0, 0];
   private lsClosed: number[] = [0, 0, 0, 0, 0, 0, 0];
 
-  // ACK/NACK 대기
+  private pending = new Map<number, { resolve: () => void; reject: (e?: any) => void; timer: NodeJS.Timeout; payload: string }>();
   private nextMsgId = 1;
-  private pending = new Map<number, { resolve: () => void; reject: (e: any) => void; timer: NodeJS.Timeout; payload: string }>();
 
   constructor(params: {
     serialManager: SerialManager;
@@ -111,15 +105,6 @@ export class SequenceEngine extends EventEmitter {
     const seq = this.getSequence(name);
     if (!seq || seq.length === 0) throw new Error(`Sequence not found or empty: ${name}`);
 
-    // <<< 여기에 추가된 코드
-    // Dry-run을 실행하여 동적 위험을 사전에 차단합니다.
-    const dryRunResult = this.seqMgr.dryRunSequence(name);
-    if (!dryRunResult.ok) {
-      // 드라이런 실패 시, 에러를 발생시켜 시퀀스 실행을 막습니다.
-      throw new Error(`Dry-run failed: ${dryRunResult.errors.join(' | ')}`);
-    }
-    // >>> 추가된 코드 끝
-
     this.running = true;
     this.cancelled = false;
     this.currentName = name;
@@ -136,25 +121,18 @@ export class SequenceEngine extends EventEmitter {
         if (this.cancelled) throw new Error('Cancelled');
 
         switch (step.type) {
-          case 'cmd':
-            await this.execCmdStep(step);
-            break;
-          case 'wait':
-            await this.execWaitStep(step);
-            break;
-          case 'delay':
-            await this.delay(step.ms);
-            break;
-          default:
-            throw new Error('Unknown step');
+          case 'cmd': await this.execCmdStep(step); break;
+          case 'wait': await this.execWaitStep(step); break;
+          default: throw new Error(`Unknown step type: ${(step as any)?.type}`);
         }
 
         this.emitProgress({ name, stepIndex: i, step, note: 'done' });
       }
 
-      this.emitComplete({ name });
+      // 완료
+      this.emit('complete', { name });
     } catch (err: any) {
-      this.emitError({ name, stepIndex: this.currentIndex, step: undefined, error: err?.message ?? String(err) });
+      this.emitError({ name, stepIndex: this.currentIndex, step: this.getSequence(name)[this.currentIndex], error: err?.message ?? String(err) });
       if (this.failSafeOnError) {
         await this.tryFailSafe('ENGINE_ERROR');
       }
@@ -169,58 +147,57 @@ export class SequenceEngine extends EventEmitter {
     }
   }
 
-  cancel(): void {
+  async cancel() {
     if (!this.running) return;
     this.cancelled = true;
   }
 
-  // 렌더러 강제 종료 시 호출(메인에서 wire)
-  onRendererGone(details?: any) {
-    if (!this.autoCancelOnRendererGone) return;
-    if (this.running) {
-      this.emitError({ name: this.currentName, stepIndex: this.currentIndex, error: 'Renderer gone' });
-      this.cancel();
+  onRendererGone(details: { reason: string }) {
+    if (this.autoCancelOnRendererGone) {
       void this.tryFailSafe('RENDERER_GONE');
+      void this.cancel();
     }
   }
 
-  // =========== 내부 로직 ===========
-  private getSequence(name: string): SequenceStep[] | any[] {
-    const all = (this.seqMgr.getSequences?.() ?? {}) as SequenceMap;
-    return all[name] ?? [];
-  }
+  async tryFailSafe(tag = 'FAILSAFE') {
+    try {
+      const cmds: string[] = [];
 
-  private normalizeStep(raw: any): SequenceStep {
-    // 문자열 → cmd 스텝으로 간주
-    if (typeof raw === 'string') {
-      return { type: 'cmd', payload: raw };
-    }
-    if (raw && raw.type) {
-      // 필드 보정
-      if (raw.type === 'cmd') {
-        const st = raw as StepCmd;
-        st.ackTimeoutMs ??= this.defaultAckTimeoutMs;
-        if (st.feedback) {
-          st.feedback.timeoutMs ??= this.defaultFeedbackTimeoutMs;
-          st.feedback.pollMs ??= this.defaultPollMs;
-        }
-        return st;
+      // 메인 닫기
+      for (const m of this.roles.mains) cmds.push(`V,${m},C`);
+      // 벤트/퍼지 열기
+      cmds.push(`V,${this.roles.vent},O`);
+      cmds.push(`V,${this.roles.purge},O`);
+
+      for (const c of cmds) {
+        // 페일세이프에서는 ACK 타임아웃을 짧게 사용(연쇄 실패를 빠르게 판단)
+        await this.sendWithAck(c, 700).catch(() => {/* ignore to continue attempts */});
       }
-      if (raw.type === 'wait') {
-        const st = raw as StepWait;
-        st.pollMs ??= this.defaultPollMs;
-        return st;
-      }
-      if (raw.type === 'delay') return raw as StepDelay;
+      this.emitProgress({ name: this.currentName || 'failsafe', stepIndex: -1, step: { type: 'cmd', payload: 'FAILSAFE' } as any, note: tag });
+    } catch {
+      // ignore
+    } finally {
+      this.stopHeartbeat();
     }
-    // 알 수 없는 구조 → 에러
-    throw new Error('Invalid step format');
   }
 
+  // =========== 시퀀스 스텝 실행 ===========
   private async execCmdStep(step: StepCmd) {
-    await this.sendWithAck(step.payload, step.ackTimeoutMs ?? this.defaultAckTimeoutMs);
+    const payload = step.payload;
+    const ackMs = step.ackTimeoutMs ?? this.defaultAckTimeoutMs;
+    await this.sendWithAck(payload, ackMs);
+
+    // 피드백 요구 시 폴링
     if (step.feedback) {
-      await this.waitForValveLS(step.feedback.valveIndex, step.feedback.expect, step.feedback.timeoutMs!, step.feedback.pollMs!);
+      const { index, expect, timeoutMs, pollMs } = step.feedback;
+      const deadline = Date.now() + (timeoutMs ?? this.defaultFeedbackTimeoutMs);
+      const p = pollMs ?? this.defaultPollMs;
+      while (Date.now() < deadline) {
+        const ok = expect === 'open' ? this.lsOpen[index] === 1 : this.lsClosed[index] === 1;
+        if (ok) return;
+        await this.delay(p);
+      }
+      throw new Error(`Feedback timeout: V${index} ${expect}`);
     }
   }
 
@@ -245,25 +222,16 @@ export class SequenceEngine extends EventEmitter {
         case '<=': return v <= c.valuePsi100;
         case '>': return v > c.valuePsi100;
         case '>=': return v >= c.valuePsi100;
+        default: return false;
       }
     }
     return false;
   }
 
-  private async waitForValveLS(index: number, expect: 'open' | 'closed', timeoutMs: number, pollMs: number) {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      if (this.cancelled) throw new Error('Cancelled');
-      const ok = expect === 'open' ? this.lsOpen[index] === 1 : this.lsClosed[index] === 1;
-      if (ok) return;
-      await this.delay(pollMs);
-    }
-    throw new Error(`Feedback timeout: V${index} ${expect}`);
-  }
-
   // =========== 시리얼 송수신 ===========
   private hbSending = false;
   private startHeartbeat() {
+    if (this.hbIntervalMs <= 0) return;
     if (this.hbTimer) return;
     this.hbSending = true;
     this.hbTimer = setInterval(() => {
@@ -335,11 +303,12 @@ export class SequenceEngine extends EventEmitter {
     if (line.startsWith('ACK,')) {
       const parts = line.trim().split(',');
       if (parts.length >= 2) {
-        const msgId = Number(parts[1]);
-        const p = this.pending.get(msgId);
+        const id = Number(parts[1]);
+        const p = this.pending.get(id);
         if (p) {
-          this.pending.delete(msgId);
+          clearTimeout(p.timer);
           p.resolve();
+          this.pending.delete(id);
         }
       }
       return;
@@ -347,94 +316,86 @@ export class SequenceEngine extends EventEmitter {
     if (line.startsWith('NACK,')) {
       const parts = line.trim().split(',');
       if (parts.length >= 3) {
-        const msgId = Number(parts[1]);
+        const id = Number(parts[1]);
         const reason = parts[2];
-        const p = this.pending.get(msgId);
+        const p = this.pending.get(id);
         if (p) {
-          this.pending.delete(msgId);
-          p.reject(new Error(`NACK(${reason}) for msgId=${msgId} payload="${p.payload}"`));
-        } else {
-          // HB 등 비대기 패킷에서 CRC 오류 → 즉시 페일세이프
-          this.emitError({ name: this.currentName, stepIndex: this.currentIndex, error: `NACK(${reason})` });
-          void this.tryFailSafe('NACK');
+          clearTimeout(p.timer);
+          p.reject(new Error(`NACK: ${reason}`));
+          this.pending.delete(id);
         }
       }
       return;
     }
 
-    // EMERG 이벤트(펌웨어) 감지 시 즉시 중단
-    if (line.startsWith('EMERG,')) {
-      this.emitError({ name: this.currentName, stepIndex: this.currentIndex, error: `Firmware emergency: ${line.trim()}` });
-      this.cancel();
-      // 이미 펌웨어가 비상 시퀀스 수행 중
-      return;
-    }
-
-    // 텔레메트리 파싱: ptN, Vx_LS_OPEN/CLOSED
-    // 예: "pt1:123.45,pt2:...,tc1:...,fm1_m3h:...,V0_LS_OPEN:1,V0_LS_CLOSED:0,..."
-    const tokens = line.trim().split(',');
-    for (const t of tokens) {
-      if (t.startsWith('pt')) {
-        // ptN:value
-        const [k, v] = t.split(':');
-        const m = /^pt(\d+)$/.exec(k);
-        if (m && v) {
-          const idx = Number(m[1]) - 1;
-          const f = Number(v);
-          if (!Number.isNaN(f) && idx >= 0 && idx < this.psi100.length) {
-            this.psi100[idx] = Math.round(f * 100);
-          }
-        }
-      } else if (t.startsWith('V')) {
-        // Vx_LS_OPEN:n or Vx_LS_CLOSED:n
-        const [k, v] = t.split(':');
-        const m1 = /^V(\d+)_LS_OPEN$/.exec(k);
-        const m2 = /^V(\d+)_LS_CLOSED$/.exec(k);
-        const n = v !== undefined ? Number(v) : NaN;
-        if (m1 && !Number.isNaN(n)) {
-          const idx = Number(m1[1]);
-          this.lsOpen[idx] = n ? 1 : 0;
-        } else if (m2 && !Number.isNaN(n)) {
-          const idx = Number(m2[1]);
-          this.lsClosed[idx] = n ? 1 : 0;
-        }
-      }
-    }
+    // 센서/상태 파싱 (간단 구현)
+    this.tryParseTelemetry(line);
   }
 
   private onSerialError(err: Error) {
-    this.emitError({ name: this.currentName, stepIndex: this.currentIndex, error: `Serial error: ${err.message}` });
-    void this.tryFailSafe('SERIAL_ERR');
+    this.emitError({ name: this.currentName, stepIndex: this.currentIndex, error: `Serial error: ${err?.message ?? err}` });
   }
 
-  private cleanupPending(reason: Error) {
-    for (const [id, p] of this.pending.entries()) {
-      clearTimeout(p.timer);
-      p.reject(reason);
+  private emitProgress(evt: ProgressEvt) {
+    this.emit('progress', evt);
+    const win = this.getWindow();
+    win?.webContents.send('sequence-progress', evt);
+  }
+  private emitError(evt: ErrorEvt) {
+    this.emit('error', evt);
+    const win = this.getWindow();
+    win?.webContents.send('sequence-error', evt);
+  }
+
+  private getSequence(name: string): SequenceStep[] | any[] {
+    const all = (this.seqMgr.getSequences?.() ?? {}) as SequenceMap;
+    return all[name] ?? [];
+  }
+
+  private normalizeStep(raw: any): SequenceStep {
+    // 문자열 → cmd 스텝으로 간주
+    if (typeof raw === 'string') {
+      return { type: 'cmd', payload: raw };
     }
-    this.pending.clear();
+    if (raw && raw.type) {
+      // 필드 보정
+      if (raw.type === 'cmd') {
+        const st = raw as StepCmd;
+        st.ackTimeoutMs = st.ackTimeoutMs ?? this.defaultAckTimeoutMs;
+        if (st.feedback) {
+          st.feedback.timeoutMs = st.feedback.timeoutMs ?? this.defaultFeedbackTimeoutMs;
+          st.feedback.pollMs = st.feedback.pollMs ?? this.defaultPollMs;
+        }
+        return st;
+      }
+      if (raw.type === 'wait') {
+        const st = raw as StepWait;
+        st.pollMs = st.pollMs ?? this.defaultPollMs;
+        return st;
+      }
+    }
+    // 알 수 없으면 cmd로 취급
+    return { type: 'cmd', payload: String(raw ?? '') };
   }
 
-  // =========== 페일세이프 ===========
-  private async tryFailSafe(tag: string) {
-    try {
-      // 펌웨어도 HB 타임아웃 비상 시퀀스가 있으나, 즉시 상태 수렴을 위해 명시 명령 보냄
-      const cmds: string[] = [];
-      // MAIN들 CLOSE
-      for (const m of this.roles.mains) cmds.push(`V,${m},C`);
-      // VENT/PURGE OPEN
-      cmds.push(`V,${this.roles.vent},O`);
-      cmds.push(`V,${this.roles.purge},O`);
-
-      for (const c of cmds) {
-        // 페일세이프에서는 ACK 타임아웃을 짧게 사용(연쇄 실패를 빠르게 판단)
-        await this.sendWithAck(c, 700).catch(() => {/* ignore to continue attempts */});
-      }
-      this.emitProgress({ name: this.currentName || 'failsafe', stepIndex: -1, step: { type: 'cmd', payload: 'FAILSAFE' } as any, note: tag });
-    } catch {
-      // ignore
-    } finally {
-      this.stopHeartbeat();
+  // =========== 텔레메트리 파서(간단) ===========
+  private tryParseTelemetry(line: string) {
+    // 예시: pt1:1234.56,pt2:...,tc1:...,V0_LS_OPEN:1,V0_LS_CLOSED:0 ...
+    // 압력
+    const m = /(?:^|,)pt(\d+):(-?\d+(?:\.\d+)?)/g;
+    let mm: RegExpExecArray | null;
+    while ((mm = m.exec(line)) !== null) {
+      const idx = Number(mm[1]) - 1;
+      const psi = Math.round(parseFloat(mm[2]) * 100);
+      if (idx >= 0 && idx < this.psi100.length && Number.isFinite(psi)) this.psi100[idx] = psi;
+    }
+    // 리미트 스위치
+    const m2 = /(?:^|,)V(\d+)_LS_(OPEN|CLOSED):([01])/g;
+    while ((mm = m2.exec(line)) !== null) {
+      const idx = Number(mm[1]);
+      const which = mm[2] as 'OPEN' | 'CLOSED';
+      const bit = Number(mm[3]) as 0 | 1;
+      if (which === 'OPEN') this.lsOpen[idx] = bit; else this.lsClosed[idx] = bit;
     }
   }
 
@@ -450,18 +411,5 @@ export class SequenceEngine extends EventEmitter {
       }
     }
     return crc & 0xFF;
-  }
-
-  private emitProgress(evt: ProgressEvt) {
-    this.emit('progress', evt);
-    this.getWindow()?.webContents.send('sequence-progress', evt);
-  }
-  private emitError(evt: ErrorEvt) {
-    this.emit('error', evt);
-    this.getWindow()?.webContents.send('sequence-error', evt);
-  }
-  private emitComplete(evt: { name: string }) {
-    this.emit('complete', evt);
-    this.getWindow()?.webContents.send('sequence-complete', evt);
   }
 }
