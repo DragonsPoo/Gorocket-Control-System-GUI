@@ -42,10 +42,8 @@ type EngineOptions = {
   valveRoles?: { mains: number[]; vent: number; purge: number }; // 페일세이프용
 };
 
-type SequenceEvent =
-  | { type: 'progress'; name: string; stepIndex: number; step: SequenceStep; note?: string }
-  | { type: 'error'; name: string; stepIndex: number; step?: SequenceStep; error: string }
-  | { type: 'complete'; name: string };
+type ProgressEvt = { name: string; stepIndex: number; step: SequenceStep; note?: string };
+type ErrorEvt = { name: string; stepIndex: number; step?: SequenceStep; error: string };
 
 export class SequenceEngine extends EventEmitter {
   private serial: SerialManager;
@@ -118,7 +116,7 @@ export class SequenceEngine extends EventEmitter {
       for (let i = 0; i < seq.length; i++) {
         this.currentIndex = i;
         const step = this.normalizeStep(seq[i]);
-        this.emitEvent({ type: 'progress', name, stepIndex: i, step, note: 'start' });
+        this.emitProgress({ name, stepIndex: i, step, note: 'start' });
 
         if (this.cancelled) throw new Error('Cancelled');
 
@@ -128,13 +126,13 @@ export class SequenceEngine extends EventEmitter {
           default: throw new Error(`Unknown step type: ${(step as any)?.type}`);
         }
 
-        this.emitEvent({ type: 'progress', name, stepIndex: i, step, note: 'done' });
+        this.emitProgress({ name, stepIndex: i, step, note: 'done' });
       }
 
       // 완료
-      this.emitEvent({ type: 'complete', name });
+      this.emit('complete', { name });
     } catch (err: any) {
-      this.emitEvent({ type: 'error', name, stepIndex: this.currentIndex, step: this.getSequence(name)?.[this.currentIndex], error: err?.message ?? String(err) });
+      this.emitError({ name, stepIndex: this.currentIndex, step: this.getSequence(name)[this.currentIndex], error: err?.message ?? String(err) });
       if (this.failSafeOnError) {
         await this.tryFailSafe('ENGINE_ERROR');
       }
@@ -175,7 +173,7 @@ export class SequenceEngine extends EventEmitter {
         // 페일세이프에서는 ACK 타임아웃을 짧게 사용(연쇄 실패를 빠르게 판단)
         await this.sendWithAck(c, 700).catch(() => {/* ignore to continue attempts */});
       }
-      this.emitEvent({ type: 'progress', name: this.currentName || 'failsafe', stepIndex: -1, step: { type: 'cmd', payload: 'FAILSAFE' } as any, note: tag });
+      this.emitProgress({ name: this.currentName || 'failsafe', stepIndex: -1, step: { type: 'cmd', payload: 'FAILSAFE' } as any, note: tag });
     } catch {
       // ignore
     } finally {
@@ -242,7 +240,7 @@ export class SequenceEngine extends EventEmitter {
       const payload = 'HB';
       const line = this.buildFramed(payload);
       void this.writeLine(line).catch((e) => {
-        this.emitEvent({ type: 'error', name: this.currentName, stepIndex: this.currentIndex, error: `HB send error: ${e?.message ?? e}` });
+        this.emitError({ name: this.currentName, stepIndex: this.currentIndex, error: `HB send error: ${e?.message ?? e}` });
         void this.tryFailSafe('HB_SEND_ERR');
       });
     }, this.hbIntervalMs);
@@ -335,13 +333,14 @@ export class SequenceEngine extends EventEmitter {
   }
 
   private onSerialError(err: Error) {
-    this.emitEvent({ type: 'error', name: this.currentName, stepIndex: this.currentIndex, error: `Serial error: ${err?.message ?? err}` });
+    this.emitError({ name: this.currentName, stepIndex: this.currentIndex, error: `Serial error: ${err?.message ?? err}` });
   }
 
-  private emitEvent(event: SequenceEvent) {
-    this.emit('sequence-event', event);
-    // The main process will now listen for 'sequence-event' and forward it
-    // to the renderer, so direct sending from here is removed.
+  private emitProgress(evt: ProgressEvt) {
+    this.emit('progress', evt);
+  }
+  private emitError(evt: ErrorEvt) {
+    this.emit('error', evt);
   }
 
   private getSequence(name: string): SequenceStep[] | any[] {

@@ -66,10 +66,10 @@ class MainApp {
       },
     });
 
-    // 단일화된 'sequence-event'를 구독하여 렌더러로 전달 (사용자 피드백 반영)
-    this.sequenceEngine.on('sequence-event', (e) => {
-      this.mainWindow?.webContents.send('sequence-event', e);
-    });
+    // SequenceEngine 이벤트를 렌더러로 전달
+    this.sequenceEngine.on('progress', (e) => this.mainWindow?.webContents.send('sequence-progress', e));
+    this.sequenceEngine.on('error', (e) => this.mainWindow?.webContents.send('sequence-error', e));
+    this.sequenceEngine.on('complete', (e) => this.mainWindow?.webContents.send('sequence-complete', e));
 
     this.createWindow();
     this.setupIpc();

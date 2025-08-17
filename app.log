@@ -1,0 +1,7 @@
+
+> nextn@0.1.0 predev
+> npm run build:electron
+
+
+> nextn@0.1.0 build:electron
+> rimraf dist && tsc -p tsconfig.electron.json && tsc-alias -p tsconfig.electron.json && node -e "require('fs').copyFileSync('config.json','dist/config.json')"
