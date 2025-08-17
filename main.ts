@@ -9,12 +9,14 @@ import { LogManager } from './main/LogManager';
 import { SequenceDataManager } from './main/SequenceDataManager';
 import { SequenceEngine } from './main/SequenceEngine'; // SequenceEngine 임포트
 import type { SerialCommand, SerialStatus } from '@shared/types/ipc';
+import { HeartbeatDaemon } from './main/HeartbeatDaemon';
 
 class MainApp {
   private mainWindow: BrowserWindow | null = null;
   private configManager = new ConfigManager();
   private serialManager = new SerialManager();
   private logManager = new LogManager();
+  private hbDaemon = new HeartbeatDaemon(this.serialManager, 250);
   private sequenceManager: SequenceDataManager | null = null;
   private sequenceEngine: SequenceEngine | null = null; // SequenceEngine 필드 추가
   private ipcInitialized = false;
@@ -25,14 +27,24 @@ class MainApp {
       const configPath = path.join(basePath, 'config.json');
       await this.configManager.load(configPath);
     } catch (err) {
-      dialog.showErrorBox('Configuration Error', 'Failed to load configuration file.');
+      dialog.showErrorBox('Configuration Error',
+        `Failed to load config.json:\n${(err as Error)?.message ?? err}`);
       app.quit();
       return;
     }
-    await app.whenReady();
-    const basePath = app.isPackaged ? process.resourcesPath : app.getAppPath();
-    this.sequenceManager = new SequenceDataManager(basePath);
-    this.sequenceManager.loadAndValidate();
+
+    // SequenceDataManager 준비
+    this.sequenceManager = new SequenceDataManager();
+    try {
+      const basePath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+      const sequencesPath = path.join(basePath, 'sequences.json');
+      await this.sequenceManager.load(sequencesPath);
+    } catch (err) {
+      dialog.showErrorBox('Sequences Error',
+        `Failed to load sequences.json:\n${(err as Error)?.message ?? err}`);
+      app.quit();
+      return;
+    }
 
     // SequenceEngine 생성 및 설정
     this.sequenceEngine = new SequenceEngine({
@@ -41,7 +53,7 @@ class MainApp {
       configManager: this.configManager,
       getWindow: () => this.mainWindow,
       options: {
-        hbIntervalMs: 200,
+        hbIntervalMs: 0,               // 내부 HB 비활성화 (아이들 HB 데몬이 담당)
         defaultAckTimeoutMs: 1000,
         defaultFeedbackTimeoutMs: 5000,
         defaultPollMs: 50,
@@ -62,31 +74,43 @@ class MainApp {
 
     this.serialManager.on('status', (s: SerialStatus) => {
         this.mainWindow?.webContents.send('serial-status', s);
+        if (s.state === 'connected') {
+          this.hbDaemon?.start();
+        } else {
+          this.hbDaemon?.stop();
+        }
+    });
+    this.serialManager.on('data', (line: string) => {
+      // MCU에서 온 텔레메트리/로그 라인 → 렌더러로 브로드캐스트
+      this.mainWindow?.webContents.send('serial-data', line);
+      // 로그 파일에도 저장
+      this.logManager.append(line);
+    });
+    this.serialManager.on('error', (err: Error) => {
+      this.mainWindow?.webContents.send('serial-error', err.message);
     });
 
-    this.sequenceManager.watch((sequences, result) => {
-      this.mainWindow?.webContents.send('sequences-updated', { sequences, result });
+    app.on('window-all-closed', () => {
+      if (process.platform !== 'darwin') app.quit();
     });
   }
 
   private createWindow() {
+    const loadURL = serve({ directory: 'out' });
+
     this.mainWindow = new BrowserWindow({
-      width: 1200,
-      height: 800,
+      width: 1366,
+      height: 900,
       webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
         sandbox: true,
-        webviewTag: false,
-        preload: path.join(__dirname, 'preload.js'),
+        preload: path.join(__dirname, 'preload.mjs'), // 필요 시 경로 조정
       },
     });
 
     if (isDev) {
-      this.mainWindow.loadURL('http://localhost:9002');
-      this.mainWindow.webContents.openDevTools();
+      this.mainWindow.loadURL('http://localhost:3000');
+      this.mainWindow.webContents.openDevTools({ mode: 'detach' });
     } else {
-      const loadURL = serve({ directory: 'out' });
       loadURL(this.mainWindow);
     }
     this.mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -120,92 +144,80 @@ class MainApp {
     if (this.ipcInitialized) return;
     this.ipcInitialized = true;
 
-    // 줌 기능 IPC
-    ipcMain.on('zoom-in', () => {
-      const current = this.mainWindow?.webContents.getZoomFactor() ?? 1;
-      this.mainWindow?.webContents.setZoomFactor(current + 0.1);
-    });
-    ipcMain.on('zoom-out', () => {
-      const current = this.mainWindow?.webContents.getZoomFactor() ?? 1;
-      this.mainWindow?.webContents.setZoomFactor(current - 0.1);
-    });
-    ipcMain.on('zoom-reset', () => {
-      this.mainWindow?.webContents.setZoomFactor(1.0);
-    });
-
-    // 설정 및 시퀀스 데이터 IPC
-    ipcMain.handle('get-config', () => this.configManager.get());
-    ipcMain.handle('get-sequences', () => {
-      if (!this.sequenceManager) return { sequences: {}, result: { valid: false, errors: 'Sequence manager not initialized' } };
-      return {
-        sequences: this.sequenceManager.getSequences(),
-        result: this.sequenceManager.getValidationResult(),
-      };
-    });
-
-    // 로깅 IPC
-    ipcMain.on('start-logging', () => this.logManager.start(this.mainWindow));
-    ipcMain.on('stop-logging', () => this.logManager.stop());
-
-    // 시리얼 데이터 및 에러 이벤트 핸들링
-    this.serialManager.on('data', (data) => {
-      this.mainWindow?.webContents.send('serial-data', data);
-      if (this.logManager.isLogging()) {
-        const line = this.logManager.formatLogLine(data);
-        this.logManager.write(line);
+    // 포트 나열
+    ipcMain.handle('serial-list', async () => {
+      try {
+        return await this.serialManager.listPorts();
+      } catch (err) {
+        dialog.showErrorBox('Serial Error', (err as Error)?.message ?? String(err));
+        return [];
       }
     });
-    this.serialManager.on('error', (err) => {
-      this.mainWindow?.webContents.send('serial-error', err.message);
+
+    // 연결/해제
+    ipcMain.handle('serial-connect', async (_evt, { path, baud }: { path: string, baud: number }) => {
+      try {
+        // 로그 폴더 시작
+        this.logManager.startNewSession();
+        return await this.serialManager.connect(path, baud);
+      } catch (err) {
+        dialog.showErrorBox('Serial Error', (err as Error)?.message ?? String(err));
+        return false;
+      }
+    });
+    ipcMain.handle('serial-disconnect', async () => {
+      try {
+        this.logManager.endSession();
+        return await this.serialManager.disconnect();
+      } catch (err) {
+        dialog.showErrorBox('Serial Error', (err as Error)?.message ?? String(err));
+        return false;
+      }
     });
 
-    // 시리얼 포트 제어 IPC
-    ipcMain.handle('get-serial-ports', () => {
-      return this.serialManager.listPorts();
-    });
-    ipcMain.handle('connect-serial', async (_e, portName: string) => {
-      const baudRate = this.configManager.get().serial.baudRate;
-      return this.serialManager.connect(portName, baudRate);
-    });
-    ipcMain.handle('disconnect-serial', async () => {
-      return this.serialManager.disconnect();
-    });
-    ipcMain.handle('send-to-serial', async (_e, cmd: SerialCommand) => {
-      return this.serialManager.send(cmd);
+    // 원시 송신 (수동 명령창 등에서 사용)
+    ipcMain.handle('serial-send', async (_evt, cmd: SerialCommand | { raw: string } | string) => {
+      try {
+        return await this.serialManager.send(cmd);
+      } catch (err) {
+        dialog.showErrorBox('Send Error', (err as Error)?.message ?? String(err));
+        return false;
+      }
     });
 
-    // SequenceEngine 제어 IPC
-    ipcMain.handle('sequence-start', async (_e, name: string) => {
-      if (!this.sequenceEngine) throw new Error('Sequence engine not initialized');
-      return this.sequenceEngine.start(name);
+    // 시퀀스 시작/중단
+    ipcMain.handle('sequence-start', async (_evt, name: string) => {
+      try {
+        await this.sequenceEngine?.start(name);
+        return true;
+      } catch (err) {
+        dialog.showErrorBox('Sequence Error', (err as Error)?.message ?? String(err));
+        return false;
+      }
     });
     ipcMain.handle('sequence-cancel', async () => {
-      this.sequenceEngine?.cancel();
-      return true;
+      try {
+        await this.sequenceEngine?.cancel();
+        return true;
+      } catch (err) {
+        dialog.showErrorBox('Sequence Error', (err as Error)?.message ?? String(err));
+        return false;
+      }
     });
 
-    // <<< 여기에 추가된 코드
-    // 렌더러(UI)로부터 압력 초과 비상 신호를 수신하는 리스너
-    ipcMain.on('safety:pressureExceeded', async (_e, snapshot) => {
-      console.warn(`SAFETY TRIGGER from renderer: ${snapshot?.reason ?? 'unknown'}`);
-      
-      // 1. 진행 중인 시퀀스가 있다면 즉시 취소
-      this.sequenceEngine?.cancel();
-      
-      // 2. 즉시 호스트(메인 프로세스) 측 페일세이프 명령을 실행
-      // (펌웨어의 하트비트 타임아웃을 기다리지 않고 선제적으로 조치)
-      const mains = [0, 1, 2, 3, 4], vent = 5, purge = 6;
-      const cmds = [
-        ...mains.map(i => ({ type: 'RAW', payload: `V,${i},C` })),
-        { type: 'RAW', payload: `V,${vent},O` },
-        { type: 'RAW', payload: `V,${purge},O` },
-      ];
+    // 안전(비상) 트리거: UI에서 수동으로 페일세이프를 강제할 때 사용
+    ipcMain.handle('safety-trigger', async (_evt, snapshot?: { reason?: string }) => {
+      // 1. 엔진 쪽 페일세이프 호출(역할에 따라 메인 닫고 벤트/퍼지 오픈)
+      try { await this.sequenceEngine?.tryFailSafe('UI_SAFETY'); } catch {}
 
+      // 2. 저수준으로도 보강 (ACK 실패 무시하고 시도)
+      const cmds = [
+        { raw: 'HB' }, // MCU가 EMERG 중이면 HB는 NACK될 수 있으나 부담 없음
+        { raw: 'V,5,O' }, // 예: vent
+        { raw: 'V,6,O' }, // 예: purge
+      ] as const;
       for (const c of cmds) {
         try {
-          // send는 ACK를 기다리므로, 비상 상황에서는 타임아웃을 짧게 주거나
-          // fire-and-forget 방식의 low-level write를 사용하는 것이 더 좋을 수 있습니다.
-          // 여기서는 일단 send를 사용하되, 실패는 무시하고 다음 명령을 시도합니다.
           await this.serialManager.send(c as any);
         } catch {}
       }
@@ -214,43 +226,21 @@ class MainApp {
       this.mainWindow?.webContents.send('sequence-error', {
         name: 'safety-trigger',
         stepIndex: -1,
-        error: `Pressure safety triggered by UI (${snapshot?.reason ?? 'unknown'})`
+        error: `Pressure safety triggered by UI (${snapshot?.reason ?? 'unknown'})`,
       });
+      return true;
     });
-    // >>> 추가된 코드 끝
-  }
 
-  cleanup() {
-    this.sequenceEngine?.cancel();
-    void this.serialManager.disconnect();
+    // 설정 요청 (렌더러가 config.json 내용을 보고싶을 때)
+    ipcMain.handle('config-get', async () => {
+      return this.configManager.get();
+    });
   }
 }
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
-  const appInstance = new MainApp();
-  appInstance.init();
+const mainApp = new MainApp();
 
-  app.on('second-instance', () => {
-    const win = (appInstance as any).mainWindow as BrowserWindow | null;
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
-    }
-  });
-
-  app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-      app.quit();
-    }
-  });
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      appInstance.init();
-    }
-  });
-
-  app.on('before-quit', () => appInstance.cleanup?.());
-}
+app.whenReady().then(() => mainApp.init());
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) mainApp['createWindow']?.();
+});
