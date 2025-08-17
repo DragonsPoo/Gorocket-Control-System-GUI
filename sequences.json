@@ -1,16 +1,16 @@
 {
   "Emergency Shutdown": [
     {
-      "message": "Immediate safe state (close mains, open vent/purges, stop fills/igniter)",
+      "message": "Immediate safe state (close mains, open vents, stop pressurization)",
       "delay": 0,
       "commands": [
-        "CMD,Ethanol Main,Close",
-        "CMD,N2O Main,Close",
-        "CMD,Pressurant Fill,Close",
-        "CMD,Igniter Fuel,Close",
-        "CMD,System Vent,Open",
-        "CMD,Ethanol Purge,Open",
-        "CMD,N2O Purge,Open"
+        "CMD,Ethanol Main Supply,Close",
+        "CMD,N2O Main Supply,Close",
+        "CMD,Main Pressurization,Close",
+        "CMD,Ethanol Fill Line,Close",
+        "CMD,System Vent 1,Open",
+        "CMD,System Vent 2,Open",
+        "CMD,Ethanol Purge Line,Open"
       ]
     }
   ],
@@ -52,74 +52,68 @@
       "message": "Ensure all valves closed (baseline safe state)",
       "delay": 0,
       "commands": [
-        "CMD,Ethanol Main,Close",
-        "CMD,N2O Main,Close",
-        "CMD,Ethanol Purge,Close",
-        "CMD,N2O Purge,Close",
-        "CMD,Pressurant Fill,Close",
-        "CMD,System Vent,Close",
-        "CMD,Igniter Fuel,Close"
+        "CMD,Ethanol Main Supply,Close",
+        "CMD,N2O Main Supply,Close",
+        "CMD,Ethanol Purge Line,Close",
+        "CMD,Ethanol Fill Line,Close",
+        "CMD,Main Pressurization,Close",
+        "CMD,System Vent 1,Close",
+        "CMD,System Vent 2,Close"
       ]
     }
   ],
 
-  "Pre-Chill & Purge": [
-    { "message": "Ethanol purge OPEN", "delay": 0,    "commands": ["CMD,Ethanol Purge,Open"] },
+  "Legacy Pre-Chill & Purge": [
+    { "message": "Ethanol purge OPEN", "delay": 0,    "commands": ["CMD,Ethanol Purge Line,Open"] },
     { "message": "Hold purge",         "delay": 5000, "commands": [] },
-    { "message": "Ethanol purge CLOSE","delay": 0,    "commands": ["CMD,Ethanol Purge,Close"] },
+    { "message": "Ethanol purge CLOSE","delay": 0,    "commands": ["CMD,Ethanol Purge Line,Close"] },
 
-    { "message": "N2O purge OPEN",     "delay": 0,    "commands": ["CMD,N2O Purge,Open"] },
+    { "message": "System vent OPEN",   "delay": 0,    "commands": ["CMD,System Vent 2,Open"] },
     { "message": "Hold purge",         "delay": 5000, "commands": [] },
-    { "message": "N2O purge CLOSE",    "delay": 0,    "commands": ["CMD,N2O Purge,Close"] }
+    { "message": "System vent CLOSE", "delay": 0,    "commands": ["CMD,System Vent 2,Close"] }
   ],
 
-  "Pressurize Ethanol Tank": [
-    { "message": "Pressurant Fill OPEN", "delay": 0, "commands": ["CMD,Pressurant Fill,Open"] },
+  "Legacy Pressurize Ethanol Tank": [
+    { "message": "Main Pressurization OPEN", "delay": 0, "commands": ["CMD,Main Pressurization,Open"] },
     {
       "message": "Wait pt1 >= 250 psi",
       "delay": 0,
       "commands": [],
       "condition": { "sensor": "pt1", "min": 250, "op": "gte", "timeoutMs": 120000 }
     },
-    { "message": "Pressurant Fill CLOSE", "delay": 0, "commands": ["CMD,Pressurant Fill,Close"] }
+    { "message": "Main Pressurization CLOSE", "delay": 0, "commands": ["CMD,Main Pressurization,Close"] }
   ],
 
-  "Pressurize N2O Tank": [
-    { "message": "Pressurant Fill OPEN", "delay": 0, "commands": ["CMD,Pressurant Fill,Open"] },
+  "Legacy Pressurize N2O Tank": [
+    { "message": "Main Pressurization OPEN", "delay": 0, "commands": ["CMD,Main Pressurization,Open"] },
     {
       "message": "Wait pt2 >= 450 psi",
       "delay": 0,
       "commands": [],
       "condition": { "sensor": "pt2", "min": 450, "op": "gte", "timeoutMs": 120000 }
     },
-    { "message": "Pressurant Fill CLOSE", "delay": 0, "commands": ["CMD,Pressurant Fill,Close"] }
+    { "message": "Main Pressurization CLOSE", "delay": 0, "commands": ["CMD,Main Pressurization,Close"] }
   ],
 
-  "Ethanol Flow Check": [
-    { "message": "Ensure N2O main CLOSED",    "delay": 0,    "commands": ["CMD,N2O Main,Close"] },
-    { "message": "Ethanol Main OPEN",         "delay": 0,    "commands": ["CMD,Ethanol Main,Open"] },
+  "Legacy Ethanol Flow Check": [
+    { "message": "Ensure N2O main CLOSED",    "delay": 0,    "commands": ["CMD,N2O Main Supply,Close"] },
+    { "message": "Ethanol Main OPEN",         "delay": 0,    "commands": ["CMD,Ethanol Main Supply,Open"] },
     { "message": "Stabilize flow (timed)",    "delay": 3000, "commands": [] },
-    { "message": "Ethanol Main CLOSE",        "delay": 0,    "commands": ["CMD,Ethanol Main,Close"] }
+    { "message": "Ethanol Main CLOSE",        "delay": 0,    "commands": ["CMD,Ethanol Main Supply,Close"] }
   ],
 
-  "N2O Flow Check": [
-    { "message": "Ensure Ethanol main CLOSED", "delay": 0,    "commands": ["CMD,Ethanol Main,Close"] },
-    { "message": "N2O Main OPEN",              "delay": 0,    "commands": ["CMD,N2O Main,Open"] },
+  "Legacy N2O Flow Check": [
+    { "message": "Ensure Ethanol main CLOSED", "delay": 0,    "commands": ["CMD,Ethanol Main Supply,Close"] },
+    { "message": "N2O Main OPEN",              "delay": 0,    "commands": ["CMD,N2O Main Supply,Open"] },
     { "message": "Stabilize flow (timed)",     "delay": 3000, "commands": [] },
-    { "message": "N2O Main CLOSE",             "delay": 0,    "commands": ["CMD,N2O Main,Close"] }
+    { "message": "N2O Main CLOSE",             "delay": 0,    "commands": ["CMD,N2O Main Supply,Close"] }
   ],
 
-  "Igniter Solo Test": [
-    { "message": "Igniter OPEN (fuel only)", "delay": 0,    "commands": ["CMD,Igniter Fuel,Open"] },
-    { "message": "Hold 1s",                  "delay": 1000, "commands": [] },
-    { "message": "Igniter CLOSE",            "delay": 0,    "commands": ["CMD,Igniter Fuel,Close"] }
-  ],
-
-  "Vent Down / Safe End": [
+  "Legacy Vent Down / Safe End": [
     { "message": "Open VENT & PURGEs", "delay": 0, "commands": [
-      "CMD,System Vent,Open",
-      "CMD,Ethanol Purge,Open",
-      "CMD,N2O Purge,Open"
+      "CMD,System Vent 1,Open",
+      "CMD,System Vent 2,Open",
+      "CMD,Ethanol Purge Line,Open"
     ]},
     {
       "message": "Wait pt1 <= 15 psi",
@@ -134,15 +128,172 @@
       "condition": { "sensor": "pt2", "min": 0, "max": 15, "op": "lte", "timeoutMs": 60000 }
     },
     { "message": "Close VENT & PURGEs", "delay": 0, "commands": [
-      "CMD,System Vent,Close",
-      "CMD,Ethanol Purge,Close",
-      "CMD,N2O Purge,Close"
+      "CMD,System Vent 1,Close",
+      "CMD,System Vent 2,Close",
+      "CMD,Ethanol Purge Line,Close"
     ]},
     { "message": "Confirm mains closed", "delay": 0, "commands": [
-      "CMD,Ethanol Main,Close",
-      "CMD,N2O Main,Close",
-      "CMD,Pressurant Fill,Close",
-      "CMD,Igniter Fuel,Close"
+      "CMD,Ethanol Main Supply,Close",
+      "CMD,N2O Main Supply,Close",
+      "CMD,Main Pressurization,Close",
+      "CMD,Ethanol Fill Line,Close"
     ]}
+  ],
+
+  "Pre-Test Nitrogen Purge": [
+    {
+      "message": "Set PR1 to 5 psig low pressure",
+      "delay": 0,
+      "commands": []
+    },
+    {
+      "message": "Open main pressurization for N2 purge",
+      "delay": 0,
+      "commands": ["CMD,Main Pressurization,Open"]
+    },
+    {
+      "message": "Open most valves for system-wide purge",
+      "delay": 0,
+      "commands": [
+        "CMD,Ethanol Fill Line,Open",
+        "CMD,Ethanol Purge Line,Open",
+        "CMD,System Vent 1,Open",
+        "CMD,System Vent 2,Open"
+      ]
+    },
+    {
+      "message": "N2 purge for 20+ seconds",
+      "delay": 20000,
+      "commands": []
+    },
+    {
+      "message": "Close all valves to seal system",
+      "delay": 0,
+      "commands": [
+        "CMD,Main Pressurization,Close",
+        "CMD,Ethanol Fill Line,Close",
+        "CMD,Ethanol Purge Line,Close",
+        "CMD,System Vent 1,Close",
+        "CMD,System Vent 2,Close"
+      ]
+    }
+  ],
+
+  "System Pressurization (600 psi)": [
+    {
+      "message": "Set PR1 to 600 psi final pressure",
+      "delay": 0,
+      "commands": []
+    },
+    {
+      "message": "Open main pressurization line",
+      "delay": 0,
+      "commands": ["CMD,Main Pressurization,Open"]
+    },
+    {
+      "message": "Wait for PT1 to reach 600 psi",
+      "delay": 0,
+      "commands": [],
+      "condition": { "sensor": "pt1", "min": 580, "op": "gte", "timeoutMs": 120000 }
+    },
+    {
+      "message": "System pressurized - ready for hot-fire",
+      "delay": 2000,
+      "commands": []
+    }
+  ],
+
+  "Hot-Fire Sequence": [
+    {
+      "message": "Ensure oxidizer line closed",
+      "delay": 0,
+      "commands": ["CMD,N2O Main Supply,Close"]
+    },
+    {
+      "message": "Fuel lead - Open ethanol supply first",
+      "delay": 0,
+      "commands": ["CMD,Ethanol Main Supply,Open"]
+    },
+    {
+      "message": "Fuel lead time (0.1-0.2s)",
+      "delay": 150,
+      "commands": []
+    },
+    {
+      "message": "Ignition - Open N2O supply",
+      "delay": 0,
+      "commands": ["CMD,N2O Main Supply,Open"]
+    },
+    {
+      "message": "Main burn phase (2+ seconds)",
+      "delay": 2000,
+      "commands": []
+    },
+    {
+      "message": "Shutdown - Close oxidizer first",
+      "delay": 0,
+      "commands": ["CMD,N2O Main Supply,Close"]
+    },
+    {
+      "message": "Delay before closing fuel",
+      "delay": 100,
+      "commands": []
+    },
+    {
+      "message": "Close fuel supply",
+      "delay": 0,
+      "commands": ["CMD,Ethanol Main Supply,Close"]
+    }
+  ],
+
+  "Post-Test Safing": [
+    {
+      "message": "Immediate line purge - Open ethanol purge",
+      "delay": 0,
+      "commands": ["CMD,Ethanol Purge Line,Open"]
+    },
+    {
+      "message": "Purge engine lines with N2",
+      "delay": 3000,
+      "commands": []
+    },
+    {
+      "message": "Open vent valves for pressure relief",
+      "delay": 0,
+      "commands": [
+        "CMD,System Vent 1,Open",
+        "CMD,System Vent 2,Open"
+      ]
+    },
+    {
+      "message": "Wait for complete pressure relief (pt1 <= 15 psi)",
+      "delay": 0,
+      "commands": [],
+      "condition": { "sensor": "pt1", "min": 0, "max": 15, "op": "lte", "timeoutMs": 60000 }
+    },
+    {
+      "message": "Wait for complete pressure relief (pt2 <= 15 psi)",
+      "delay": 0,
+      "commands": [],
+      "condition": { "sensor": "pt2", "min": 0, "max": 15, "op": "lte", "timeoutMs": 60000 }
+    },
+    {
+      "message": "Close all valves and shut down system",
+      "delay": 0,
+      "commands": [
+        "CMD,Main Pressurization,Close",
+        "CMD,Ethanol Main Supply,Close",
+        "CMD,N2O Main Supply,Close",
+        "CMD,Ethanol Fill Line,Close",
+        "CMD,Ethanol Purge Line,Close",
+        "CMD,System Vent 1,Close",
+        "CMD,System Vent 2,Close"
+      ]
+    },
+    {
+      "message": "System safed - power down complete",
+      "delay": 1000,
+      "commands": []
+    }
   ]
 }

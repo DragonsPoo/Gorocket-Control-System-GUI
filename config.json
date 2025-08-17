@@ -8,21 +8,21 @@
   "pressureRateLimitPsiPerSec": 50,
   "valveFeedbackTimeout": 2000,
   "initialValves": [
-    { "id": 1, "name": "Ethanol Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
-    { "id": 2, "name": "N2O Main", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
-    { "id": 3, "name": "Ethanol Purge", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
-    { "id": 4, "name": "N2O Purge", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
-    { "id": 5, "name": "Pressurant Fill", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
-    { "id": 6, "name": "System Vent", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
-    { "id": 7, "name": "Igniter Fuel", "state": "CLOSED", "lsOpen": false, "lsClosed": false }
+    { "id": 1, "name": "Ethanol Purge Line", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 2, "name": "Main Pressurization", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 3, "name": "Ethanol Fill Line", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 4, "name": "N2O Main Supply", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 5, "name": "Ethanol Main Supply", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 6, "name": "System Vent 1", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
+    { "id": 7, "name": "System Vent 2", "state": "CLOSED", "lsOpen": false, "lsClosed": false }
   ],
   "valveMappings": {
-    "Ethanol Main": { "servoIndex": 0 },
-    "N2O Main": { "servoIndex": 1 },
-    "Ethanol Purge": { "servoIndex": 2 },
-    "N2O Purge": { "servoIndex": 3 },
-    "Pressurant Fill": { "servoIndex": 4 },
-    "System Vent": { "servoIndex": 5 },
-    "Igniter Fuel": { "servoIndex": 6 }
+    "Ethanol Purge Line": { "servoIndex": 0 },
+    "Main Pressurization": { "servoIndex": 1 },
+    "Ethanol Fill Line": { "servoIndex": 2 },
+    "N2O Main Supply": { "servoIndex": 3 },
+    "Ethanol Main Supply": { "servoIndex": 4 },
+    "System Vent 1": { "servoIndex": 5 },
+    "System Vent 2": { "servoIndex": 6 }
   }
 }

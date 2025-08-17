@@ -55,9 +55,9 @@ class MainApp {
     const map = this.configManager.get().valveMappings;
     const idx = (name: string) => map[name]?.servoIndex;
     const roles = {
-      mains: [idx('Ethanol Main'), idx('N2O Main'), idx('Pressurant Fill'), idx('Igniter Fuel')].filter((n): n is number => n !== undefined),
-      vents: [idx('System Vent')].filter((n): n is number => n !== undefined),
-      purges: [idx('Ethanol Purge'), idx('N2O Purge')].filter((n): n is number => n !== undefined),
+      mains: [idx('Ethanol Main Supply'), idx('N2O Main Supply'), idx('Main Pressurization')].filter((n): n is number => n !== undefined),
+      vents: [idx('System Vent 1'), idx('System Vent 2')].filter((n): n is number => n !== undefined),
+      purges: [idx('Ethanol Purge Line'), idx('Ethanol Fill Line')].filter((n): n is number => n !== undefined),
     };
 
     // SequenceEngine 생성 및 설정
