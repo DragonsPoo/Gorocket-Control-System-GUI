@@ -1,27 +1,46 @@
+// P0-2: User Feedback - Standardize API surface and provide global types
+import type { AppConfig, SerialStatus } from './index';
+import type { SequenceEvent, SequencesPayload } from './ipc';
 
-export {};
+// A snapshot of the pressure state when a safety limit is exceeded
+export interface PressureSnapshot {
+  timestamp: number;
+  reason: 'limit' | 'rate' | 'limit+rate';
+  pressure: number;
+  pressureLimit: number | null;
+  rate: number | null;
+  rateLimit: number | null;
+  history: number[];
+}
 
 declare global {
   interface Window {
     electronAPI: {
-      getSerialPorts: () => Promise<string[]>;
-      connectSerial: (portName: string) => Promise<boolean>;
+      // Serial Port Management
+      listSerialPorts: () => Promise<string[]>;
+      connectSerial: (path: string, baud: number) => Promise<boolean>;
       disconnectSerial: () => Promise<boolean>;
-      sendToSerial: (data: import('./ipc').SerialCommand) => Promise<boolean>;
-      onSerialData: (callback: (data: string) => void) => () => void;
-      onSerialError: (callback: (error: string) => void) => () => void;
-      zoomIn: () => void;
-      zoomOut: () => void;
-      zoomReset: () => void;
-      startLogging: () => void;
-      stopLogging: () => void;
-      getConfig: () => Promise<import('./index').AppConfig>;
-      onLogCreationFailed: (callback: (error: string) => void) => () => void;
+      onSerialStatus: (cb: (s: SerialStatus) => void) => () => void;
+      onSerialData: (cb: (data: string) => void) => () => void;
 
-      getSequences: () => Promise<import('./ipc').SequencesPayload>;
-      onSequencesUpdated: (
-        callback: (payload: import('./ipc').SequencesPayload) => void
-      ) => () => void;
+      // Sequence Control
+      startSequence: (name: string) => Promise<boolean>;
+      cancelSequence: () => Promise<boolean>;
+      onSequenceEvent: (cb: (e: SequenceEvent) => void) => () => void;
+      getSequences: () => Promise<SequencesPayload>;
+
+      // Safety Controls
+      safety: {
+        notifyPressureExceeded: (s: PressureSnapshot) => void;
+        triggerFailsafe: (reason?: string) => Promise<boolean>;
+        clearEmergency: () => Promise<boolean>;
+      };
+
+      // Config and Utilities
+      getConfig: () => Promise<AppConfig>;
     };
   }
 }
+
+// This is required to make the file a module.
+export {};

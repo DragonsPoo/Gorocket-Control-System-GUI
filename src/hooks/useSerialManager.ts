@@ -14,6 +14,7 @@ interface SerialState {
   appConfig: AppConfig | null;
   connectionRetryCount: number;
   lastConnectionError: string | null;
+  isEmergency: boolean;
 }
 
 const initialState: SerialState = {
@@ -23,6 +24,7 @@ const initialState: SerialState = {
   appConfig: null,
   connectionRetryCount: 0,
   lastConnectionError: null,
+  isEmergency: false,
 };
 
 type Action =
@@ -32,7 +34,8 @@ type Action =
   | { type: 'SET_CONFIG'; config: AppConfig }
   | { type: 'SET_RETRY_COUNT'; count: number }
   | { type: 'SET_CONNECTION_ERROR'; error: string | null }
-  | { type: 'RESET_CONNECTION_STATE' };
+  | { type: 'RESET_CONNECTION_STATE' }
+  | { type: 'SET_EMERGENCY'; status: boolean };
 
 function reducer(state: SerialState, action: Action): SerialState {
   switch (action.type) {
@@ -50,6 +53,8 @@ function reducer(state: SerialState, action: Action): SerialState {
       return { ...state, lastConnectionError: action.error };
     case 'RESET_CONNECTION_STATE':
       return { ...state, connectionRetryCount: 0, lastConnectionError: null };
+    case 'SET_EMERGENCY':
+      return { ...state, isEmergency: action.status };
     default:
       return state;
   }
@@ -62,6 +67,7 @@ export interface SerialManagerApi {
   getLatestSensorData: () => SensorData | null;
   valves: Valve[];
   connectionStatus: ConnectionStatus;
+  isEmergency: boolean;
   serialPorts: string[];
   selectedPort: string;
   setSelectedPort: (port: string) => void;
@@ -72,6 +78,7 @@ export interface SerialManagerApi {
   setLogger: (logger: (msg: string) => void) => void;
   setSequenceHandler: (handler: (name: string) => void) => void;
   resetEmergency: () => void;
+  clearMcuEmergency: () => Promise<void>;
   connectionRetryCount: number;
   lastConnectionError: string | null;
 }
@@ -156,7 +163,7 @@ export function useSerialManager(): SerialManagerApi {
     getLatestSensorData,
   } = useSensorData(
     state.appConfig?.maxChartDataPoints ?? 100,
-    state.appConfig?.pressureLimit ?? null,             // psi
+    (state.appConfig as any)?.pressureLimitAlarm ?? null, // psi
     (state.appConfig as any)?.pressureRateLimit ?? null, // psi/s (옵션)
     updateValves
   );
@@ -164,7 +171,7 @@ export function useSerialManager(): SerialManagerApi {
   useEffect(() => {
     const init = async () => {
       try {
-        const ports = await window.electronAPI.getSerialPorts();
+        const ports = await window.electronAPI.listSerialPorts();
         dispatch({ type: 'SET_SERIAL_PORTS', ports });
         if (ports[0]) dispatch({ type: 'SET_SELECTED_PORT', port: ports[0] });
 
@@ -182,94 +189,50 @@ export function useSerialManager(): SerialManagerApi {
     };
     init();
     const cleanupData = window.electronAPI.onSerialData((d) => {
-      // loggerRef.current(`Received: ${d}`);
-      handleSerialMessage(d);
+      const event = handleSerialMessage(d);
+      if (event === 'EMERG') {
+        dispatch({ type: 'SET_EMERGENCY', status: true });
+        toast({ title: 'MCU EMERGENCY', description: 'MCU has entered emergency state.', variant: 'destructive' });
+      } else if (event === 'CLEARED') {
+        dispatch({ type: 'SET_EMERGENCY', status: false });
+        toast({ title: 'MCU Emergency Cleared', description: 'MCU emergency state has been cleared.', variant: 'default' });
+      }
     });
     const cleanupError = window.electronAPI.onSerialError((err) => {
       const errorMsg = `Serial communication error: ${err}`;
       toast({ title: 'Serial Error', description: errorMsg, variant: 'destructive' });
       loggerRef.current(errorMsg);
       dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
-      dispatch({ type: 'SET_CONNECTION_ERROR', error: err });
+      dispatch({ type: 'SET_CONNECTION_ERROR', error: String(err) });
       dispatch({ type: 'SET_RETRY_COUNT', count: state.connectionRetryCount + 1 });
-      
-      // 자동 재연결 시도 (최대 3회)
-      if (state.connectionRetryCount < 3) {
-        loggerRef.current(`Attempting auto-reconnection (${state.connectionRetryCount + 1}/3)...`);
-        setTimeout(async () => {
-          if (state.selectedPort) {
-            const success = await window.electronAPI.connectSerial(state.selectedPort);
-            if (success) {
-              dispatch({ type: 'SET_CONNECTION_STATUS', status: 'connected' });
-              dispatch({ type: 'RESET_CONNECTION_STATE' });
-              loggerRef.current('Auto-reconnection successful');
-            } else {
-              loggerRef.current('Auto-reconnection failed');
-            }
-          }
-        }, 2000 * (state.connectionRetryCount + 1)); // 점진적 지연
-      } else {
-        loggerRef.current('Max reconnection attempts reached. Manual intervention required.');
+    });
+
+    const cleanupStatus = window.electronAPI.onSerialStatus(status => {
+      dispatch({ type: 'SET_CONNECTION_STATUS', status: status.state });
+      if (status.state === 'disconnected') {
+        dispatch({ type: 'SET_EMERGENCY', status: false });
       }
     });
+
     return () => {
       cleanupData();
       cleanupError();
+      cleanupStatus();
     };
   }, [handleSerialMessage, setValves, toast, state.connectionRetryCount, state.selectedPort]);
 
   const handleConnect = useCallback(async () => {
     if (state.connectionStatus === 'connected') {
       await window.electronAPI.disconnectSerial();
-      dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
-      dispatch({ type: 'RESET_CONNECTION_STATE' });
-      loggerRef.current(`Disconnected from ${state.selectedPort}.`);
       reset();
       return;
     }
-    
     if (!state.selectedPort) {
       toast({ title: 'Connection Error', description: 'Please select a serial port.', variant: 'destructive' });
       return;
     }
-    
-    const availablePorts = await window.electronAPI.getSerialPorts();
-    if (!availablePorts.includes(state.selectedPort)) {
-      toast({ 
-        title: 'Port Unavailable', 
-        description: `Selected port ${state.selectedPort} is not available. Please refresh and select another port.`,
-        variant: 'destructive' 
-      });
-      dispatch({ type: 'SET_SERIAL_PORTS', ports: availablePorts });
-      return;
-    }
-    
-    dispatch({ type: 'SET_CONNECTION_STATUS', status: 'connecting' });
-    loggerRef.current(`Connecting to ${state.selectedPort}...`);
-    
-    try {
-      const success = await window.electronAPI.connectSerial(state.selectedPort);
-      if (success) {
-        dispatch({ type: 'SET_CONNECTION_STATUS', status: 'connected' });
-        dispatch({ type: 'RESET_CONNECTION_STATE' });
-        emergencyTriggered.current = false;
-        loggerRef.current(`Successfully connected to ${state.selectedPort}.`);
-        toast({ title: 'Connected', description: `Connected to ${state.selectedPort}`, variant: 'default' });
-      } else {
-        dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
-        const errorMsg = `Failed to connect to ${state.selectedPort}. Check cable and permissions.`;
-        dispatch({ type: 'SET_CONNECTION_ERROR', error: errorMsg });
-        loggerRef.current(errorMsg);
-        toast({ title: 'Connection Failed', description: errorMsg, variant: 'destructive' });
-      }
-    } catch (error) {
-      dispatch({ type: 'SET_CONNECTION_STATUS', status: 'disconnected' });
-      const errorMsg = error instanceof Error ? error.message : 'Unknown connection error';
-      dispatch({ type: 'SET_CONNECTION_ERROR', error: errorMsg });
-      loggerRef.current(`Connection error: ${errorMsg}`);
-      toast({ title: 'Connection Error', description: errorMsg, variant: 'destructive' });
-    }
-  }, [state.connectionStatus, state.selectedPort, toast, reset]);
+    await window.electronAPI.connectSerial(state.selectedPort, state.appConfig?.serial.baudRate ?? 115200);
+  }, [state.connectionStatus, state.selectedPort, state.appConfig, toast, reset]);
 
   const setSelectedPort = useCallback((port: string) => {
     dispatch({ type: 'SET_SELECTED_PORT', port });
@@ -284,16 +247,19 @@ export function useSerialManager(): SerialManagerApi {
   }, []);
 
   const refreshPorts = useCallback(async () => {
-    const ports = await window.electronAPI.getSerialPorts();
+    const ports = await window.electronAPI.listSerialPorts();
     dispatch({ type: 'SET_SERIAL_PORTS', ports });
-    dispatch({
-      type: 'SET_SELECTED_PORT',
-      port: ports.includes(state.selectedPort) ? state.selectedPort : '',
-    });
+    if (!ports.includes(state.selectedPort)) {
+      dispatch({ type: 'SET_SELECTED_PORT', port: '' });
+    }
   }, [state.selectedPort]);
 
   const resetEmergency = useCallback(() => {
     emergencyTriggered.current = false;
+  }, []);
+
+  const clearMcuEmergency = useCallback(async () => {
+    await window.electronAPI.safety.clearEmergency();
   }, []);
 
   return {
@@ -303,6 +269,7 @@ export function useSerialManager(): SerialManagerApi {
     getLatestSensorData,
     valves,
     connectionStatus: state.connectionStatus,
+    isEmergency: state.isEmergency,
     serialPorts: state.serialPorts,
     selectedPort: state.selectedPort,
     setSelectedPort,
@@ -313,6 +280,7 @@ export function useSerialManager(): SerialManagerApi {
     setLogger,
     setSequenceHandler,
     resetEmergency,
+    clearMcuEmergency,
     connectionRetryCount: state.connectionRetryCount,
     lastConnectionError: state.lastConnectionError,
   };
