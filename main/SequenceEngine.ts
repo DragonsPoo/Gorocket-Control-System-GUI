@@ -40,7 +40,7 @@ type EngineOptions = {
   defaultPollMs?: number;
   autoCancelOnRendererGone?: boolean;
   failSafeOnError?: boolean;
-  valveRoles?: { mains: number[]; vent: number; purge: number }; // 페일세이프용
+  valveRoles?: { mains: number[]; vents: number[]; purges: number[] }; // 페일세이프용
 };
 
 type ProgressEvt = { name: string; stepIndex: number; step: SequenceStep; note?: string };
@@ -64,7 +64,7 @@ export class SequenceEngine extends EventEmitter {
   private defaultPollMs: number;
   private autoCancelOnRendererGone: boolean;
   private failSafeOnError: boolean;
-  private roles: { mains: number[]; vent: number; purge: number };
+  private roles: { mains: number[]; vents: number[]; purges: number[] };
 
   private psi100: number[] = [0, 0, 0, 0];
   private lsOpen: number[] = [0, 0, 0, 0, 0, 0, 0];
@@ -93,7 +93,7 @@ export class SequenceEngine extends EventEmitter {
     this.defaultPollMs = opt.defaultPollMs ?? 50;
     this.autoCancelOnRendererGone = opt.autoCancelOnRendererGone ?? true;
     this.failSafeOnError = opt.failSafeOnError ?? true;
-    this.roles = opt.valveRoles ?? { mains: [0, 1, 2, 3, 4], vent: 5, purge: 6 };
+    this.roles = opt.valveRoles ?? { mains: [0, 1, 2, 3, 4], vents: [5], purges: [6] };
 
     // 시리얼 이벤트 구독
     this.serial.on('data', (d: any) => this.onSerialData(d));
@@ -103,8 +103,9 @@ export class SequenceEngine extends EventEmitter {
   // =========== 외부 API ===========
   async start(name: string): Promise<void> {
     if (this.running) throw new Error('Sequence already running');
-    const seq = this.getSequence(name);
-    if (!seq || seq.length === 0) throw new Error(`Sequence not found or empty: ${name}`);
+    const raw = this.getSequence(name);
+    const seq = Array.isArray(raw) ? this.toSteps(raw) : [];
+    if (seq.length === 0) throw new Error(`Sequence not found or empty: ${name}`);
 
     this.running = true;
     this.cancelled = false;
@@ -133,7 +134,7 @@ export class SequenceEngine extends EventEmitter {
       // 완료
       this.emit('complete', { name });
     } catch (err: any) {
-      this.emitError({ name, stepIndex: this.currentIndex, step: this.getSequence(name)[this.currentIndex], error: err?.message ?? String(err) });
+      this.emitError({ name, stepIndex: this.currentIndex, step: seq[this.currentIndex], error: err?.message ?? String(err) });
       if (this.failSafeOnError) {
         await this.tryFailSafe('ENGINE_ERROR');
       }
@@ -167,8 +168,8 @@ export class SequenceEngine extends EventEmitter {
       // 메인 닫기
       for (const m of this.roles.mains) cmds.push(`V,${m},C`);
       // 벤트/퍼지 열기
-      cmds.push(`V,${this.roles.vent},O`);
-      cmds.push(`V,${this.roles.purge},O`);
+      for (const v of this.roles.vents) cmds.push(`V,${v},O`);
+      for (const p of this.roles.purges) cmds.push(`V,${p},O`);
 
       for (const c of cmds) {
         // 페일세이프에서는 ACK 타임아웃을 짧게 사용(연쇄 실패를 빠르게 판단)
@@ -355,6 +356,41 @@ export class SequenceEngine extends EventEmitter {
   private getSequence(name: string): SequenceStep[] | any[] {
     const all = (this.seqMgr.getSequences?.() ?? {}) as SequenceMap;
     return all[name] ?? [];
+  }
+
+  private toSteps(rawSteps: any[]): SequenceStep[] {
+    const steps: SequenceStep[] = [];
+    for (const s of rawSteps) {
+      if (typeof s === 'string') { steps.push({ type: 'cmd', payload: s }); continue; }
+      if (s && s.type) { steps.push(s as SequenceStep); continue; }
+      if (s.delay && s.delay > 0) steps.push({ type: 'cmd', payload: `sleep,${s.delay}` });
+      for (const c of (s.commands ?? [])) steps.push({ type: 'cmd', payload: this.mapCmd(c) });
+      if (s.condition) steps.push({ type: 'wait', timeoutMs: s.condition.timeoutMs ?? 30000, condition: this.mapCond(s.condition) });
+    }
+    return steps;
+  }
+
+  private mapCmd(cmd: string): string {
+    const mV = /^V,(\d+),(O|C)$/i.exec(cmd); if (mV) return `V,${mV[1]},${mV[2].toUpperCase()}`;
+    const mN = /^CMD,([^,]{1,64}),(Open|Close)$/i.exec(cmd);
+    if (mN) {
+      const name = mN[1]; const act = mN[2].toUpperCase().startsWith('OPEN') ? 'O' : 'C';
+      const map = this.cfg?.get()?.valveMappings ?? {}; const idx = map[name]?.servoIndex;
+      if (typeof idx !== 'number') throw new Error(`Unknown valve: ${name}`);
+      return `V,${idx},${act}`;
+    }
+    throw new Error(`Unsupported command: ${cmd}`);
+  }
+
+  private mapCond(c: any): Condition {
+    if (c.sensor && /^pt[1-4]$/i.test(c.sensor)) {
+      const i = Number(c.sensor.slice(2));
+      const op = (c.op ?? 'gte').toUpperCase() as any;
+      const sign = op === 'LTE' ? '<=' : op === 'GT' ? '>' : op === 'LT' ? '<' : '>=';
+      const val = op === 'LTE' ? c.max : c.min;
+      return { kind: 'pressure', sensor: i, op: sign, valuePsi100: Math.round((val ?? 0) * 100) } as any;
+    }
+    throw new Error(`Unsupported condition: ${JSON.stringify(c)}`);
   }
 
   private normalizeStep(raw: any): SequenceStep {
