@@ -19,6 +19,9 @@
 - **Node.js** - 런타임 환경
 - **SerialPort** - 아두이노 통신
 - **TypeScript** - 타입 안전성
+- **HeartbeatDaemon** - 실시간 하트비트 모니터링
+- **SequenceEngine** - 고급 시퀀스 실행 엔진
+- **LogManager** - 자동 CSV 로깅 시스템
 
 ### 하드웨어 통신
 - **Arduino Mega** - 하드웨어 제어
@@ -56,7 +59,8 @@ GoRocket-Control-System-GUI/
 │   ├── SequenceEngine.ts       # 시퀀스 실행 엔진
 │   ├── SequenceDataManager.ts  # 시퀀스 데이터 관리
 │   ├── LogManager.ts           # 로깅 시스템
-│   └── ConfigManager.ts        # 설정 관리
+│   ├── ConfigManager.ts        # 설정 관리
+│   └── HeartbeatDaemon.ts      # 하트비트 데몬
 ├── shared/                      # 공유 타입 및 유틸리티
 │   ├── types/                  # TypeScript 타입 정의
 │   └── utils/                  # 공유 유틸리티
@@ -75,7 +79,7 @@ GoRocket-Control-System-GUI/
 
 ```bash
 # 프로젝트 클론
-git clone <repository-url>
+git clone https://github.com/jungho1902/Gorocket-Control-System-GUI.git
 cd Gorocket-Control-System-GUI
 
 # 종속성 설치
@@ -84,9 +88,15 @@ npm install
 # Electron 네이티브 모듈 재빌드 (serialport)
 npm run rebuild
 
-# 개발 서버 시작
+# 개발 서버 시작 (Next.js 포트 9002 + Electron 동시 실행)
 npm run dev
 ```
+
+### 📋 최신 개발 설정 정보
+- **Next.js 개발 서버**: 포트 9002 (기존 3000에서 변경)
+- **Turbopack**: 고속 번들링 지원
+- **동시 실행**: concurrently로 Next.js + Electron 자동 관리
+- **자동 대기**: wait-on으로 Next.js 준비 후 Electron 시작
 
 ### 2. 빌드 및 패키징
 
@@ -144,6 +154,7 @@ npm run validate:seq
 - **Connect/Disconnect**: 시리얼 연결 제어 버튼
 - **로깅 제어**: Start/Stop Logging 버튼
 - **응급 셧다운**: Emergency Shutdown 버튼
+- **Safety Clear**: Clear Emergency 버튼 (SAFE_CLEAR 명령 전송)
 
 #### 2. Sensor Panel (센서 데이터)
 - **압력 센서**: PT1~PT4 실시간 압력 값 (PSI)
@@ -159,9 +170,11 @@ npm run validate:seq
 
 #### 4. Sequence Panel (시퀀스 제어)
 - **시퀀스 목록**: 사용 가능한 모든 시퀀스 표시
+- **확인 대화상자**: Tank Pressurization, Ignition, System Purge 시퀀스는 확인 필요
 - **실행 상태**: 진행 중인 시퀀스 및 진행률
 - **Cancel 버튼**: 실행 중인 시퀀스 취소
-- **Emergency Shutdown**: 응급 셧다운 시퀀스
+- **Emergency Shutdown**: 응급 셧다운 시퀀스 (연결 여부와 관계없이 실행 가능)
+- **Clear Emergency**: 상시 접근 가능한 비상 해제 버튼
 
 #### 5. Data Chart Panel (실시간 차트)
 - **다중 센서 차트**: 모든 센서 데이터 동시 표시
@@ -201,6 +214,24 @@ npm run validate:seq
 - Arduino IDE로 펌웨어 상태 확인
 
 ## 🔧 시스템 기능
+
+### 🆕 새로 추가된 주요 기능
+
+#### Safety Clear 기능
+- **Clear Emergency 버튼**: 상시 접근 가능한 비상 해제 버튼
+- **SAFE_CLEAR 명령**: Arduino로 안전 해제 신호 전송
+- **IPC 통신**: 메인 프로세스와 렌더러 간 안전한 통신
+
+#### 고급 시퀀스 엔진
+- **SequenceEngine**: CRC 체크섬 기반 안전한 명령 전송
+- **HeartbeatDaemon**: 250ms 간격 실시간 하트비트 모니터링
+- **자동 재연결**: 통신 중단 시 자동 복구 시도
+- **페일세이프**: 오류 발생 시 자동 안전 상태 전환
+
+#### 개선된 로깅 시스템
+- **세션 기반 로깅**: 연결 시 자동 로그 세션 시작
+- **실시간 CSV 저장**: 2초 간격 자동 플러시
+- **설정 스냅샷**: config.json, sequences.json 자동 백업
 
 ### 1. 실시간 데이터 모니터링
 
@@ -320,11 +351,11 @@ Documents/rocket-logs/
 }
 ```
 
-### sequences.json - 새로운 시퀀스 체계
+### sequences.json - 최신 시퀀스 체계
 
-완전히 새로운 시퀀스 시스템으로 업데이트되었습니다:
+현재 구현된 시퀀스 시스템:
 
-#### 주요 시퀀스 (11개)
+#### 주요 시퀀스 목록
 
 **안전 시퀀스**:
 - `Emergency Shutdown` - 즈간 안전 상태 (0ms, 7개 명령 동시)
@@ -343,15 +374,22 @@ Documents/rocket-logs/
 - `Igniter Solo Test` - 점화기 단독 테스트 (1초)
 - `Vent Down / Safe End` - 시스템 비우기 (pt1,pt2 ≤ 15 psi)
 
-#### 새로운 Emergency Shutdown
+#### Emergency Shutdown 구현
+시퀀스 실행을 통한 단계별 안전 절차:
 ```json
 {
-  "message": "Immediate safe state (close mains, open vent/purges, stop fills/igniter)",
-  "delay": 0,
-  "commands": [
-    "CMD,Ethanol Main,Close", "CMD,N2O Main,Close",
-    "CMD,Pressurant Fill,Close", "CMD,Igniter Fuel,Close",
-    "CMD,System Vent,Open", "CMD,Ethanol Purge,Open", "CMD,N2O Purge,Open"
+  "Emergency Shutdown": [
+    {
+      "message": "Emergency: Close All Main Valves",
+      "delay": 100,
+      "commands": ["CMD,Ethanol Main,Close", "CMD,N2O Main,Close"]
+    },
+    {
+      "message": "Emergency: Open System Vent", 
+      "delay": 200,
+      "commands": ["CMD,System Vent,Open"]
+    }
+    // ... 추가 단계
   ]
 }
 ```
@@ -913,7 +951,29 @@ Documents/rocket-logs/
 - ❌ 응급 셧다운 무시하고 작업 진행
 - ❌ 밸브 피드백 없이 고압 작업
 
-## 📞 비상 연락처
-- **시설 관리**: [연락처 입력]
-- **기술 지원**: [연락처 입력]
-- **안전 관리**: [연락처 입력]
+## 📈 최신 업데이트 (2025년)
+
+### 🔧 주요 개선사항
+- **Safety Clear 기능 추가**: 상시 접근 가능한 비상 해제 버튼
+- **HeartbeatDaemon**: 실시간 하트비트 모니터링 (250ms 간격)
+- **고급 시퀀스 엔진**: CRC 체크섬 기반 안전한 명령 전송
+- **자동 로깅**: 연결 시 자동 세션 시작, CSV 형태 저장
+- **포트 설정 변경**: Next.js 개발 서버 9002 포트 사용
+- **개선된 에러 처리**: TypeScript 컴파일 에러 수정 및 안정성 향상
+
+### 🛠️ 기술적 개선
+- **IPC 통신 강화**: get-sequences, safety-clear 핸들러 추가
+- **프리로드 스크립트 수정**: 올바른 파일 경로 (.js) 사용
+- **Electron 보안**: protocol 등록 타이밍 최적화
+- **시퀀스 검증**: 실시간 유효성 검사 및 에러 처리
+
+### 🔍 문제 해결
+- **연결 에러**: COM 포트 문제 및 프로토콜 등록 이슈 해결
+- **시퀀스 로딩**: 검증 결과 접근 오류 수정
+- **파일 경로**: 빌드된 파일 확장자 불일치 해결
+- **메소드 호출**: LogManager, SequenceDataManager 메소드 이름 통일
+
+## 📞 기술 지원
+- **GitHub Repository**: https://github.com/jungho1902/Gorocket-Control-System-GUI
+- **Issues**: GitHub Issues 탭에서 버그 리포트 및 기능 요청
+- **최신 릴리즈**: GitHub Releases에서 최신 버전 확인
