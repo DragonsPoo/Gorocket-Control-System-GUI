@@ -21,6 +21,10 @@ class MainApp {
   private sequenceEngine: SequenceEngine | null = null; // SequenceEngine 필드 추가
   private ipcInitialized = false;
 
+  getMainWindow() {
+    return this.mainWindow;
+  }
+
   async init() {
     try {
       const basePath = app.isPackaged ? process.resourcesPath : app.getAppPath();
@@ -367,9 +371,17 @@ if (!isDev) {
   ]);
 }
 
-const mainApp = new MainApp();
-
-app.whenReady().then(() => mainApp.init());
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) mainApp['createWindow']?.();
-});
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  const mainApp = new MainApp();
+  app.on('second-instance', () => {
+    const win = mainApp.getMainWindow();
+    if (win) { win.show(); win.focus(); }
+  });
+  app.whenReady().then(() => mainApp.init());
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) (mainApp as any)['createWindow']?.();
+  });
+}

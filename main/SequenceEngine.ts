@@ -171,10 +171,15 @@ export class SequenceEngine extends EventEmitter {
       for (const v of this.roles.vents) cmds.push(`V,${v},O`);
       for (const p of this.roles.purges) cmds.push(`V,${p},O`);
 
-      for (const c of cmds) {
-        // 페일세이프에서는 ACK 타임아웃을 짧게 사용(연쇄 실패를 빠르게 판단)
-        await this.sendWithAck(c, 700).catch(() => {/* ignore to continue attempts */});
-      }
+      for (const c of cmds) this.serial.writeNow(c);
+
+      void Promise.allSettled(cmds.map((c) => this.sendWithAck(c, 500))).then((res) => {
+        res.forEach((r) => {
+          if (r.status === 'rejected') {
+            console.error('Failsafe send error', r.reason);
+          }
+        });
+      });
       this.emitProgress({ name: this.currentName || 'failsafe', stepIndex: -1, step: { type: 'cmd', payload: 'FAILSAFE' } as any, note: tag });
     } catch {
       // ignore
@@ -363,7 +368,9 @@ export class SequenceEngine extends EventEmitter {
     for (const s of rawSteps) {
       if (typeof s === 'string') { steps.push({ type: 'cmd', payload: s }); continue; }
       if (s && s.type) { steps.push(s as SequenceStep); continue; }
-      if (s.delay && s.delay > 0) steps.push({ type: 'cmd', payload: `sleep,${s.delay}` });
+
+      if (s.delay && s.delay > 0) steps.push({ type: 'wait', timeoutMs: s.delay, condition: { kind: 'time' } as any });
+
       for (const c of (s.commands ?? [])) steps.push({ type: 'cmd', payload: this.mapCmd(c) });
       if (s.condition) steps.push({ type: 'wait', timeoutMs: s.condition.timeoutMs ?? 30000, condition: this.mapCond(s.condition) });
     }
@@ -385,10 +392,13 @@ export class SequenceEngine extends EventEmitter {
   private mapCond(c: any): Condition {
     if (c.sensor && /^pt[1-4]$/i.test(c.sensor)) {
       const i = Number(c.sensor.slice(2));
-      const op = (c.op ?? 'gte').toUpperCase() as any;
-      const sign = op === 'LTE' ? '<=' : op === 'GT' ? '>' : op === 'LT' ? '<' : '>=';
-      const val = op === 'LTE' ? c.max : c.min;
-      return { kind: 'pressure', sensor: i, op: sign, valuePsi100: Math.round((val ?? 0) * 100) } as any;
+
+      const op = String(c.op ?? 'gte').toLowerCase();
+      const sign = op === 'lte' ? '<=' : op === 'lt' ? '<' : op === 'gt' ? '>' : '>=';
+      const threshold = op === 'lte' || op === 'lt' ? c.max : c.min;
+      if (threshold == null) throw new Error(`Missing threshold for ${op} on ${c.sensor}`);
+      return { kind: 'pressure', sensor: i, op: sign, valuePsi100: Math.round(threshold * 100) } as any;
+
     }
     throw new Error(`Unsupported condition: ${JSON.stringify(c)}`);
   }
