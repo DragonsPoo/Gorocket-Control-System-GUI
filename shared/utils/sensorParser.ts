@@ -34,7 +34,7 @@ function crc8OfString(input: string): number {
 }
 
 // System messages that are sent without a CRC checksum.
-const SYSTEM_PREFIXES = ['VACK', 'VERR', 'PONG', 'BOOT', 'READY', 'EMERG_CLEARED'];
+const SYSTEM_PREFIXES = ['VACK', 'VERR', 'PONG', 'BOOT', 'READY', 'EMERG', 'EMERG_CLEARED', 'ACK', 'NACK'];
 
 export function parseSensorData(raw: string): ParsedSensorData {
   const errors: string[] = [];

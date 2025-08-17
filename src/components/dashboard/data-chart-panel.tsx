@@ -6,6 +6,10 @@ import type { SensorData } from '@shared/types';
 
 interface DataChartPanelProps {
     data: SensorData[];
+    appConfig?: {
+        pressureLimitAlarmPsi?: number;
+        pressureLimitTripPsi?: number;
+    };
 }
 
 const chartConfig = {
@@ -19,8 +23,15 @@ const chartConfig = {
     tc2: { label: "TC-2 (Nozzle)", color: "hsl(var(--chart-3))" },
 };
 
-const DataChartPanel: React.FC<DataChartPanelProps> = ({ data }) => {
+const DataChartPanel: React.FC<DataChartPanelProps> = ({ data, appConfig }) => {
     const timeFormatter = (timestamp: number) => new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    const alarm = appConfig?.pressureLimitAlarmPsi;
+    const trip = appConfig?.pressureLimitTripPsi;
+    const maxObserved = data.reduce((max, d) => {
+        const vals = [d.pt1, d.pt2, d.pt3, d.pt4].filter((v): v is number => typeof v === 'number');
+        return Math.max(max, ...vals);
+    }, 0);
+    const yMax = Math.max(maxObserved, (trip ?? 900) * 1.1);
 
     return (
         <Card className="bg-card/50 border-border/60">
@@ -38,9 +49,10 @@ const DataChartPanel: React.FC<DataChartPanelProps> = ({ data }) => {
                         <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                             <CartesianGrid vertical={false} strokeDasharray="3 3" />
                             <XAxis dataKey="timestamp" tickFormatter={timeFormatter} fontSize={12} tickMargin={10} />
-                            <YAxis domain={[0, 900]} fontSize={12} tickMargin={5}/>
+                            <YAxis domain={[0, yMax]} fontSize={12} tickMargin={5}/>
                             <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" labelClassName="font-bold" />} />
-                            <ReferenceLine y={850} label={{ value: 'Pressure Limit', position: 'insideTopLeft', fill: 'hsl(var(--destructive))', fontSize: 12 }} stroke="hsl(var(--destructive))" strokeDasharray="3 3" />
+                            {typeof alarm === 'number' && <ReferenceLine y={alarm} strokeDasharray="3 3" />}
+                            {typeof trip === 'number' && <ReferenceLine y={trip} strokeDasharray="3 3" stroke="hsl(var(--destructive))" />}
                             <Line type="monotone" dataKey="pt1" stroke={chartConfig.pt1.color} strokeWidth={2} dot={false} />
                             <Line type="monotone" dataKey="pt2" stroke={chartConfig.pt2.color} strokeWidth={2} dot={false} />
                             <Line type="monotone" dataKey="pt3" stroke={chartConfig.pt3.color} strokeWidth={2} dot={false} />

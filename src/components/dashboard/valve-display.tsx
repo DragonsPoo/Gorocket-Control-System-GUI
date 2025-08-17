@@ -12,6 +12,7 @@ interface ValveDisplayProps {
     valveId: number,
     targetState: 'OPEN' | 'CLOSED'
   ) => Promise<void>;
+  disabled?: boolean;
 }
 
 const ValveIcon: React.FC<{ state: ValveState }> = ({ state }) => {
@@ -41,7 +42,7 @@ const LimitSwitchIndicator: React.FC<{ label: string; active: boolean }> = ({ la
   </div>
 );
 
-const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChange }) => {
+const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChange, disabled = false }) => {
   const isTransitioning = valve.state === 'OPENING' || valve.state === 'CLOSING';
 
   const stateInfo = {
@@ -93,7 +94,7 @@ const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChan
           onClick={() => {
             void onValveChange(valve.id, 'OPEN');
           }}
-          disabled={isTransitioning || valve.state === 'OPEN'}
+          disabled={disabled || isTransitioning || valve.state === 'OPEN'}
         >
           Open
         </Button>
@@ -104,7 +105,7 @@ const ValveDisplayComponent: React.FC<ValveDisplayProps> = ({ valve, onValveChan
           onClick={() => {
             void onValveChange(valve.id, 'CLOSED');
           }}
-          disabled={isTransitioning || valve.state === 'CLOSED'}
+          disabled={disabled || isTransitioning || valve.state === 'CLOSED'}
         >
           Close
         </Button>
