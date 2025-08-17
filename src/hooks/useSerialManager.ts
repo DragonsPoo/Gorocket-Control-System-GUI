@@ -90,12 +90,13 @@ export function useSerialManager(): SerialManagerApi {
   const sequenceHandlerRef = useRef<(name: string) => void>(() => {});
   const emergencyTriggered = useRef(false);
 
+  // Emergency handler removed as it's not currently used in the UI
   // UI에서 수동 비상 시퀀스 버튼 등을 쓸 수 있도록 유지(자동 보호는 메인/펌웨어가 담당)
-  const handleEmergency = useCallback(() => {
-    if (emergencyTriggered.current) return;
-    emergencyTriggered.current = true;
-    sequenceHandlerRef.current?.('Emergency Shutdown');
-  }, []);
+  // const handleEmergency = useCallback(() => {
+  //   if (emergencyTriggered.current) return;
+  //   emergencyTriggered.current = true;
+  //   sequenceHandlerRef.current?.('Emergency Shutdown');
+  // }, []);
 
   const sendCommand = useCallback(
     async (cmd: SerialCommand) => {
@@ -163,8 +164,8 @@ export function useSerialManager(): SerialManagerApi {
     getLatestSensorData,
   } = useSensorData(
     state.appConfig?.maxChartDataPoints ?? 100,
-    (state.appConfig as any)?.pressureLimitAlarm ?? null, // psi
-    (state.appConfig as any)?.pressureRateLimit ?? null, // psi/s (옵션)
+    state.appConfig?.pressureLimitAlarm ?? null, // psi
+    state.appConfig?.pressureRateLimit ?? null, // psi/s (옵션)
     updateValves
   );
 

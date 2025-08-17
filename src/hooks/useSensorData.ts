@@ -33,10 +33,10 @@ export function useSensorData(
   const lastSafetyEmitMs = useRef(0);
   const SAFETY_EMIT_COOLDOWN_MS = 1000;
 
-  const emitSafetyPressureExceeded = useCallback((snapshot: any) => {
+  const emitSafetyPressureExceeded = useCallback((snapshot: { timestamp: number; reason: string; pressure: number; pressureLimit: number | null; rate: number | null; rateLimit: number | null; history: number[] }) => {
     try {
       // 메인 라우팅: preload에서 ipcRenderer.send('safety:pressureExceeded', snapshot)를 노출해야 함
-      (window as any).electronAPI?.safetyPressureExceeded?.(snapshot);
+      (window as unknown as Record<string, { safetyPressureExceeded?: (snapshot: unknown) => void }>).electronAPI?.safetyPressureExceeded?.(snapshot);
     } catch (e) {
       console.warn('safetyPressureExceeded emit failed (no bridge?):', e);
     }

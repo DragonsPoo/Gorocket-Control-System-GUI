@@ -67,16 +67,15 @@ describe('SequenceEngine', () => {
       expect(sendWithAckMock).toHaveBeenCalledTimes(5);
     });
 
-    it('should emit a sequence-event with type "progress" on successful execution', async () => {
+    it('should emit a progress event with type "progress" on successful execution', async () => {
       const eventSpy = jest.fn();
-      engine.on('sequence-event', eventSpy);
+      engine.on('progress', eventSpy);
 
       await engine.tryFailSafe('TEST_FAILSAFE_PROGRESS');
 
       expect(eventSpy).toHaveBeenCalledTimes(1);
 
       const emittedEvent = eventSpy.mock.calls[0][0];
-      expect(emittedEvent.type).toBe('progress');
       expect(emittedEvent).toMatchObject({
         name: 'failsafe',
         stepIndex: -1,

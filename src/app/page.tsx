@@ -45,9 +45,9 @@ export default function Home() {
     sequencesValid,
   } = useSequenceManager({
     valves,
-    appConfig,
-    sendCommand,
-    getSensorData: getLatestSensorData,
+    // appConfig, // Not used in current implementation
+    // sendCommand, // Not used in current implementation
+    // getSensorData: getLatestSensorData, // Not used in current implementation
     onSequenceComplete: (name) => {
       if (name === 'Emergency Shutdown') resetEmergency();
     },
