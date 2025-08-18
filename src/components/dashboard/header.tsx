@@ -218,17 +218,19 @@ const Header: React.FC<HeaderProps> = ({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>⚠️ ARM System Confirmation</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>Before ARMING the system, confirm the following:</p>
-              <div className="pl-4 space-y-1 text-sm">
-                <p>✓ MCU has sent SAFE_CLEAR or READY signal</p>
-                <p>✓ Physical system safety confirmed on-site</p>
-                <p>✓ All personnel cleared from hazard zones</p>
-                <p>✓ Emergency stop procedures are ready</p>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <div>Before ARMING the system, confirm the following:</div>
+                <div className="pl-4 space-y-1 text-sm">
+                  <div>✓ MCU has sent SAFE_CLEAR or READY signal</div>
+                  <div>✓ Physical system safety confirmed on-site</div>
+                  <div>✓ All personnel cleared from hazard zones</div>
+                  <div>✓ Emergency stop procedures are ready</div>
+                </div>
+                <div className="font-medium text-amber-600">
+                  ARMING will enable all control commands including valve operations.
+                </div>
               </div>
-              <p className="font-medium text-amber-600">
-                ARMING will enable all control commands including valve operations.
-              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
