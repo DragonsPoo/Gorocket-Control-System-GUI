@@ -41,6 +41,7 @@ type EngineOptions = {
   autoCancelOnRendererGone?: boolean;
   failSafeOnError?: boolean;
   valveRoles?: { mains: number[]; vents: number[]; purges: number[] }; // 페일세이프용
+  pressureDebounceCount?: number; // 압력 조건 디바운싱 샘플 수
 };
 
 type ProgressEvt = { name: string; stepIndex: number; step: SequenceStep; note?: string };
@@ -74,6 +75,11 @@ export class SequenceEngine extends EventEmitter {
   private psi100: number[] = [0, 0, 0, 0];
   private lsOpen: number[] = [0, 0, 0, 0, 0, 0, 0];
   private lsClosed: number[] = [0, 0, 0, 0, 0, 0, 0];
+  
+  // Pressure debounce tracking
+  private pressureDebounceCount = 0;
+  private pressureDebounceRequired = 3; // Default to 3 consecutive samples
+  private lastPressureCondition: Condition | null = null;
 
   private pending = new Map<number, { resolve: () => void; reject: (e?: any) => void; timer: NodeJS.Timeout; payload: string }>();
   private nextMsgId = 1;
@@ -98,6 +104,7 @@ export class SequenceEngine extends EventEmitter {
     this.defaultPollMs = opt.defaultPollMs ?? 50;
     this.autoCancelOnRendererGone = opt.autoCancelOnRendererGone ?? true;
     this.failSafeOnError = opt.failSafeOnError ?? true;
+    this.pressureDebounceRequired = opt.pressureDebounceCount ?? 3;
     this.roles = opt.valveRoles ?? { mains: [0, 1, 2, 3, 4], vents: [5], purges: [6] };
 
     // 시리얼 이벤트 구독
@@ -243,13 +250,39 @@ export class SequenceEngine extends EventEmitter {
     }
     if (c.kind === 'pressure') {
       const v = this.psi100[c.sensor - 1] ?? 0;
+      let currentConditionMet = false;
+      
       switch (c.op) {
-        case '<': return v < c.valuePsi100;
-        case '<=': return v <= c.valuePsi100;
-        case '>': return v > c.valuePsi100;
-        case '>=': return v >= c.valuePsi100;
+        case '<': currentConditionMet = v < c.valuePsi100; break;
+        case '<=': currentConditionMet = v <= c.valuePsi100; break;
+        case '>': currentConditionMet = v > c.valuePsi100; break;
+        case '>=': currentConditionMet = v >= c.valuePsi100; break;
         default: return false;
       }
+      
+      // Check if this is the same condition as last time
+      const conditionChanged = !this.lastPressureCondition || 
+        this.lastPressureCondition.kind !== c.kind ||
+        this.lastPressureCondition.sensor !== c.sensor ||
+        this.lastPressureCondition.op !== c.op ||
+        this.lastPressureCondition.valuePsi100 !== c.valuePsi100;
+      
+      if (conditionChanged) {
+        // Reset debounce count for new condition
+        this.pressureDebounceCount = 0;
+        this.lastPressureCondition = { ...c };
+      }
+      
+      if (currentConditionMet) {
+        this.pressureDebounceCount++;
+        if (this.pressureDebounceCount >= this.pressureDebounceRequired) {
+          return true;
+        }
+      } else {
+        this.pressureDebounceCount = 0;
+      }
+      
+      return false;
     }
     return false;
   }
