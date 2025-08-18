@@ -19,15 +19,15 @@ export interface AppConfig {
 // Sensor and valve related types
 export interface SensorData {
   pressure?: number; // From user feedback, for legacy/compatibility
-  pt1: number;
-  pt2: number;
-  pt3: number;
-  pt4: number;
-  flow1: number;
-  flow2: number;
-  tc1: number | string;
-  tc2: number | string;
-  timestamp: number;
+  pt1?: number;
+  pt2?: number;
+  pt3?: number;
+  pt4?: number;
+  flow1?: number;
+  flow2?: number;
+  tc1?: number | string;
+  tc2?: number | string;
+  timestamp?: number;
 }
 
 export type ValveState =

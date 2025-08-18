@@ -5,6 +5,7 @@
 // - 기존 최적화 유지: ADC 프리런, 패키지 전송 등
 // - 변경점: 비상 시퀀스에서 진행 중 서보도 강제로 목표 각도로 이동하도록 오버라이드 구현
 // =================================================================
+
 #include <SPI.h>
 #include <Servo.h>
 #include <avr/io.h>
@@ -18,7 +19,7 @@
 
 // =========================== 옵션 및 설정 ===========================
 #ifndef SERIAL_BAUD
-#define SERIAL_BAUD 115200
+#define SERIAL_BAUD 115200  // Back to stable standard rate
 #endif
 
 #define FAST_LIMIT_IO       1
@@ -64,10 +65,19 @@ static uint8_t crc8(const uint8_t *data, size_t len) {
   return crc;
 }
 
+// CRC 스트리밍 유틸
+static inline uint8_t crc8_update(uint8_t crc, uint8_t b){
+  return pgm_read_byte(&CRC8_TABLE[crc ^ b]);
+}
+static inline uint8_t crc8_stream(uint8_t crc, const uint8_t* data, size_t len){
+  for(size_t i=0;i<len;i++) crc = pgm_read_byte(&CRC8_TABLE[crc ^ data[i]]);
+  return crc;
+}
+
 // =========================== 서보/상수 ===========================
 #define NUM_SERVOS 7
-const uint8_t initialOpenAngles[NUM_SERVOS]   = {7,25,12,13,27,39,45};
-const uint8_t initialClosedAngles[NUM_SERVOS] = {103,121,105,117,129,135,135};
+const uint8_t initialOpenAngles[NUM_SERVOS]   = {7,25,12,13,27,34,16};
+const uint8_t initialClosedAngles[NUM_SERVOS] = {103,121,105,117,129,135,120};
 const uint8_t servoPins[NUM_SERVOS]           = {13,12,11,10,9,8,7};
 Servo servos[NUM_SERVOS];
 
@@ -133,8 +143,8 @@ int32_t flowRates_m3h_1e4[NUM_FLOW_SENSORS] = {0, 0};
 int32_t tempCelsius_mC_1 = 0;
 int32_t tempCelsius_mC_2 = 0;
 
-#define SENSOR_READ_INTERVAL 100UL
-#define TEMP_READ_INTERVAL   250UL
+#define SENSOR_READ_INTERVAL 100UL  // Back to normal rate for responsive graphs
+#define TEMP_READ_INTERVAL   250UL  // Back to normal rate
 unsigned long lastSensorReadTime = 0;
 unsigned long lastTempReadTime   = 0;
 unsigned long lastFlowCalcMs     = 0;
@@ -157,7 +167,7 @@ static unsigned long lastByteMs = 0;
 
 // =========================== PACKED_SERIAL 버퍼 ===========================
 #if PACKED_SERIAL
-static constexpr size_t OUTBUF_SZ = 512;
+static constexpr size_t OUTBUF_SZ = 1024;
 static char outBuf[OUTBUF_SZ];
 static constexpr uint32_t POW10[7] = {1UL,10UL,100UL,1000UL,10000UL,100000UL,1000000UL};
 static inline void bufPutChar(size_t &pos, char c){ if(pos<OUTBUF_SZ-1) outBuf[pos++]=c; }
@@ -362,10 +372,11 @@ static void processCommandFrame(char* line) {
 
     char* msgIdStr = msgIdComma + 1;
     char* payload = line;
-    // 송신측과 동일하게 "payload,msgId"로 CRC 계산
-    char crcData[96];
-    snprintf(crcData, sizeof(crcData), "%s,%s", payload, msgIdStr);
-    uint8_t calculated_crc = crc8((const uint8_t*)crcData, strlen(crcData));
+    // 송신측과 동일하게 "payload,msgId"로 CRC 계산 (스트리밍 방식)
+    uint8_t calculated_crc = 0;
+    calculated_crc = crc8_stream(calculated_crc, (const uint8_t*)payload, strlen(payload));
+    calculated_crc = crc8_update(calculated_crc, ',');
+    calculated_crc = crc8_stream(calculated_crc, (const uint8_t*)msgIdStr, strlen(msgIdStr));
     uint8_t received_crc   = (uint8_t)strtoul(crcHexStr, NULL, 16);
     uint32_t msgId         = strtoul(msgIdStr, NULL, 10);
     if (calculated_crc != received_crc) {
@@ -569,9 +580,9 @@ static void readAndSendAllSensorData(const unsigned long now) {
     const uint32_t psi100 = ((uint32_t)adc * PSI_PER_ADC_X1000 + 5) / 10;
     psi100_now[i] = psi100;
 #if PACKED_SERIAL
+    if (i > 0) bufPutChar(p, ',');
     bufPutChar(p, 'p'); bufPutChar(p, 't'); bufPutUInt(p, i+1); bufPutChar(p, ':');
     bufPutFixed(p, (int32_t)psi100, 2);
-    bufPutChar(p, ',');
 #endif
 
     if (!emergencyActive) {
@@ -593,7 +604,7 @@ static void readAndSendAllSensorData(const unsigned long now) {
   if (pressureTrip) triggerEmergency(F("PRESSURE"));
 
 #if PACKED_SERIAL
-  bufPutStr(p, "tc1:");
+  bufPutStr(p, ",tc1:");
   if (tempCelsius_mC_1 == INT32_MIN) bufPutStr(p, "ERR");
   else { const int32_t k100 = (tempCelsius_mC_1 + 273150) / 10; bufPutFixed(p, k100, 2);
   }
@@ -616,17 +627,18 @@ static void readAndSendAllSensorData(const unsigned long now) {
     bufPutStr(p, ",V"); bufPutUInt(p, i); bufPutStr(p, "_LS_CLOSED:"); bufPutUInt(p, currentLimitSwitchStates[i][1]);
   }
   
-  // --- 수정된 부분 (경량/안전 버전) ---
-  if (p > 0 && p + 3 < OUTBUF_SZ) {
+  // --- 수정된 부분 (안전한 CRC 추가) ---
+  if (p > 0 && p + 4 < OUTBUF_SZ) {
     uint8_t crc = crc8((const uint8_t*)outBuf, p);
     static const char HEX_DIGITS[] = "0123456789ABCDEF";
     bufPutChar(p, ',');
     bufPutChar(p, HEX_DIGITS[(crc >> 4) & 0x0F]);
     bufPutChar(p, HEX_DIGITS[crc & 0x0F]);
+    bufEndlineAndSend(p);
+  } else {
+    // Buffer overflow - send error message instead
+    Serial.println(F("NACK,0,BUF_OVERFLOW"));
   }
-  // --- 여기까지 ---
-
-  bufEndlineAndSend(p);
 #endif
 }
 
