@@ -14,8 +14,8 @@ export class HeartbeatDaemon {
     }
     this.stop();
     this.timer = setInterval(() => {
-      // HB는 실패해도 조용히 무시. 연결 안 되어 있으면 send가 reject됨.
-      this.serial.send({ raw: 'HB' }).catch(() => {});
+      // HB는 비차단 경로로 즉시 전송 (큐 대기 없음)
+      this.serial.writeNow('HB');
     }, this.intervalMs);
   }
 
@@ -26,6 +26,6 @@ export class HeartbeatDaemon {
 
   // SAFETY: Send immediate heartbeat for faster MCU arming
   sendOnce() {
-    this.serial.send({ raw: 'HB' }).catch(() => {});
+    this.serial.writeNow('HB');
   }
 }

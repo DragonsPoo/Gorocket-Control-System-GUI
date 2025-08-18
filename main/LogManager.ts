@@ -10,7 +10,7 @@ export class LogManager {
   private flushTimer: NodeJS.Timeout | null = null;
   private flushEveryMs = 2000; // 주기 플러시(2s, configurable)
 
-  start(window?: BrowserWindow | null) {
+  start(window?: BrowserWindow | null, config?: any) {
     try {
       // 세션 폴더 생성
       const sessionDir = this.getSessionDir();
@@ -23,7 +23,7 @@ export class LogManager {
       this.snapshotFiles(sessionDir, window);
       
       // 세션 메타 정보 생성
-      this.createSessionMeta(sessionDir);
+      this.createSessionMeta(sessionDir, config);
 
       // CSV 스트림 오픈
       const filePath = path.join(sessionDir, 'data.csv');
@@ -161,7 +161,7 @@ export class LogManager {
     }
   }
 
-  private createSessionMeta(sessionDir: string) {
+  private createSessionMeta(sessionDir: string, config?: any) {
     try {
       const basePath = app.isPackaged ? process.resourcesPath : app.getAppPath();
       const configPath = path.join(basePath, 'config.json');
@@ -171,7 +171,14 @@ export class LogManager {
       const configHash = this.calculateFileHash(configPath);
       const sequencesHash = this.calculateFileHash(sequencesPath);
       
-      // 세션 메타 정보 구성
+      // 세션 메타 정보 구성 - 설정에서 안전 임계값 읽기
+      const safetyLevels = {
+        pressureAlarmPsi: config?.pressureLimitAlarmPsi ?? 850,
+        pressureTripPsi: config?.pressureLimitTripPsi ?? 1000,
+        pressureRocPsiPerSec: config?.pressureRateLimitPsiPerSec ?? 50,
+        heartbeatTimeoutMs: 3000 // 펌웨어 하드코딩 값과 일치
+      };
+      
       const sessionMeta = {
         sessionStart: new Date().toISOString(),
         appVersion: app.getVersion(),
@@ -181,12 +188,7 @@ export class LogManager {
         configHash,
         sequencesHash,
         firmwareNote: 'Arduino Mega 2560 - See arduino_mega_code.ino',
-        safetyLevels: {
-          pressureAlarmPsi: 850,
-          pressureTripPsi: 1000,
-          pressureRocPsiPerSec: 50,
-          heartbeatTimeoutMs: 3000
-        }
+        safetyLevels
       };
       
       // 메타 파일 저장

@@ -52,6 +52,7 @@ export class SerialManager extends EventEmitter {
   private DEFAULT_RETRIES = 5;        // 총 시도 횟수(초기+재시도)
   private NACK_RETRY_DELAY = 80;      // ms
   private BACKOFF_MAX = 5000;         // ms
+  private MAX_QUEUE_LEN = 200;        // 최대 큐 길이 (older commands dropped)
 
   // ====================== 포트 열기/닫기 ======================
   async listPorts(): Promise<string[]> {
@@ -150,6 +151,20 @@ export class SerialManager extends EventEmitter {
         payload, framed, msgId, attempts: 0, maxRetries, ackTimeoutMs,
         resolve, reject, isFramed
       };
+      
+      // Enforce queue length limit by dropping old general commands
+      if (this.queue.length >= this.MAX_QUEUE_LEN) {
+        // Remove the oldest general command (not priority commands)
+        for (let i = 0; i < this.queue.length; i++) {
+          const cmd = this.queue[i];
+          if (!this.isPriorityCommand(cmd.payload)) {
+            this.queue.splice(i, 1);
+            cmd.reject(new Error('Queue overflow - command dropped'));
+            break;
+          }
+        }
+      }
+      
       this.queue.push(msg);
       this.processQueue();
     });
@@ -180,6 +195,12 @@ export class SerialManager extends EventEmitter {
     this.pendingById.clear();
   }
 
+
+  // Check if command is priority (EMERG/FAILSAFE/HB)
+  private isPriorityCommand(payload: string): boolean {
+    const upper = payload.toUpperCase();
+    return upper.startsWith('EMERG') || upper.startsWith('FAILSAFE') || upper === 'HB' || upper === 'SAFE_CLEAR';
+  }
 
   // ====================== 내부 구현 ======================
   private processQueue() {

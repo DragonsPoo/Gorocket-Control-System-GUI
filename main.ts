@@ -20,6 +20,7 @@ class MainApp {
   private sequenceManager: SequenceDataManager | null = null;
   private sequenceEngine: SequenceEngine | null = null; // SequenceEngine 필드 추가
   private ipcInitialized = false;
+  private requiresArm = false; // Re-ARM gate flag
 
   getMainWindow() {
     return this.mainWindow;
@@ -83,6 +84,7 @@ class MainApp {
         autoCancelOnRendererGone: true,
         failSafeOnError: true,
         valveRoles: roles,
+        pressureDebounceCount: 3,      // 압력 조건 디바운싱 샘플 수
       },
     });
 
@@ -102,17 +104,31 @@ class MainApp {
           this.hbDaemon?.sendOnce();
         } else {
           this.hbDaemon?.stop();
+          // Port disconnection also triggers queue failsafe
+          this.serialManager.clearQueue();
+          this.serialManager.abortInflight('port closed');
+          this.serialManager.abortAllPendings('port closed');
+          this.requiresArm = true;
+          // Stop logging on disconnection/failure
+          this.logManager.stop();
+          console.warn('[SAFETY] Port disconnected - queue cleared, requires re-ARM, logging stopped');
         }
     });
     this.serialManager.on('data', (line: string) => {
       // MCU에서 온 텔레메트리/로그 라인 → 렌더러로 브로드캐스트
       this.mainWindow?.webContents.send('serial-data', line);
       
-      // EMERG/EMERG_CLEARED 이벤트 시 HeartbeatDaemon 제어
+      // EMERG/EMERG_CLEARED 이벤트 시 HeartbeatDaemon 제어 및 큐 페일세이프
       if (line.startsWith('EMERG')) {
         this.hbDaemon?.stop();
         // 긴급 상황 시 로그 강제 플러시
         this.logManager.forceFlush();
+        // EMERG queue failsafe - clear all pending commands
+        this.serialManager.clearQueue();
+        this.serialManager.abortInflight('emergency');
+        this.serialManager.abortAllPendings('emergency');
+        this.requiresArm = true;
+        console.warn('[SAFETY] EMERG detected - queue cleared, requires re-ARM');
       }
       if (line.startsWith('EMERG_CLEARED')) {
         this.hbDaemon?.start();
@@ -217,10 +233,15 @@ class MainApp {
     // 연결/해제
     ipcMain.handle('serial-connect', async (_evt, { path, baud }: { path: string, baud: number }) => {
       try {
-        // 로그 폴더 시작
-        this.logManager.start(this.mainWindow);
-        return await this.serialManager.connect(path, baud);
+        const connected = await this.serialManager.connect(path, baud);
+        if (connected) {
+          // 연결 성공 후에만 로깅 시작
+          this.logManager.start(this.mainWindow, this.configManager.get());
+        }
+        return connected;
       } catch (err) {
+        // 연결 실패 시 로깅 중단 (이미 시작된 경우)
+        this.logManager.stop();
         dialog.showErrorBox('Serial Error', (err as Error)?.message ?? String(err));
         return false;
       }
@@ -238,6 +259,10 @@ class MainApp {
     // 원시 송신 (수동 명령창 등에서 사용)
     ipcMain.handle('serial-send', async (_evt, cmd: SerialCommand | { raw: string } | string) => {
       try {
+        // Check if control commands are blocked due to disarmed state
+        if (this.requiresArm && this.isControlCommand(cmd)) {
+          throw new Error('System is disarmed - re-ARM required before sending control commands');
+        }
         return await this.serialManager.send(cmd);
       } catch (err) {
         dialog.showErrorBox('Send Error', (err as Error)?.message ?? String(err));
@@ -248,6 +273,10 @@ class MainApp {
     // 시퀀스 시작/중단
     ipcMain.handle('sequence-start', async (_evt, name: string) => {
       try {
+        // Check if system is disarmed
+        if (this.requiresArm) {
+          throw new Error('System is disarmed - re-ARM required before starting sequences');
+        }
         await this.sequenceEngine?.start(name);
         return true;
       } catch (err) {
@@ -351,7 +380,7 @@ class MainApp {
 
     // Logging controls
     ipcMain.on('start-logging', () => {
-      this.logManager.start(this.mainWindow);
+      this.logManager.start(this.mainWindow, this.configManager.get());
     });
     ipcMain.on('stop-logging', () => {
       this.logManager.stop();
@@ -395,6 +424,36 @@ class MainApp {
         error: `UI pressure safety exceeded (${snap?.reason ?? 'unknown'})`,
       });
     });
+
+    // Re-ARM system IPC handler
+    ipcMain.handle('system-arm', async () => {
+      try {
+        this.requiresArm = false;
+        console.info('[SAFETY] System re-armed - control commands enabled');
+        return true;
+      } catch (err) {
+        return false;
+      }
+    });
+
+    // Get system arm status
+    ipcMain.handle('system-arm-status', async () => {
+      return !this.requiresArm;
+    });
+  }
+
+  // Check if command is a control command that should be blocked when disarmed
+  private isControlCommand(cmd: SerialCommand | { raw: string } | string): boolean {
+    if (typeof cmd === 'string') {
+      const upper = cmd.toUpperCase();
+      return upper.startsWith('V,') || upper.startsWith('FAILSAFE');
+    }
+    if ('raw' in cmd) {
+      const upper = cmd.raw.toUpperCase();
+      return upper.startsWith('V,') || upper.startsWith('FAILSAFE');
+    }
+    // SerialCommand type
+    return cmd.type === 'V' || (cmd.type === 'RAW' && cmd.payload.toUpperCase().startsWith('V,'));
   }
 }
 
