@@ -14,8 +14,12 @@ export class HeartbeatDaemon {
     }
     this.stop();
     this.timer = setInterval(() => {
-      // HB는 비차단 경로로 즉시 전송 (큐 대기 없음)
-      this.serial.writeNow('HB');
+      // HB는 CRC 프레이밍 후 비차단 전송
+      try {
+        this.serial.send({ raw: 'HB' }).catch(() => {});
+      } catch (e) {
+        // 연결이 끊어진 경우 조용히 무시
+      }
     }, this.intervalMs);
   }
 
@@ -26,6 +30,10 @@ export class HeartbeatDaemon {
 
   // SAFETY: Send immediate heartbeat for faster MCU arming
   sendOnce() {
-    this.serial.writeNow('HB');
+    try {
+      this.serial.send({ raw: 'HB' }).catch(() => {});
+    } catch (e) {
+      // 연결이 끊어진 경우 조용히 무시
+    }
   }
 }
