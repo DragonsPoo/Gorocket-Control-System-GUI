@@ -619,10 +619,10 @@ static void readAndSendAllSensorData(const unsigned long now) {
   // --- 수정된 부분 (경량/안전 버전) ---
   if (p > 0 && p + 3 < OUTBUF_SZ) {
     uint8_t crc = crc8((const uint8_t*)outBuf, p);
-    static const char HEX[] = "0123456789ABCDEF";
+    static const char HEX_DIGITS[] = "0123456789ABCDEF";
     bufPutChar(p, ',');
-    bufPutChar(p, HEX[(crc >> 4) & 0x0F]);
-    bufPutChar(p, HEX[crc & 0x0F]);
+    bufPutChar(p, HEX_DIGITS[(crc >> 4) & 0x0F]);
+    bufPutChar(p, HEX_DIGITS[crc & 0x0F]);
   }
   // --- 여기까지 ---
 
