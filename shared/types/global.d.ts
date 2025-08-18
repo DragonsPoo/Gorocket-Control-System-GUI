@@ -27,6 +27,7 @@ declare global {
       onSerialStatus: (cb: (s: SerialStatus) => void) => () => void;
       onSerialData: (cb: (data: string) => void) => () => void;
       onSerialError: (cb: (err: string) => void) => () => void;
+      onSerialBusy: (cb: (data: { command: any; error: string }) => void) => () => void;
       sendToSerial: (data: any) => Promise<boolean>;
 
       // Sequence Control (multi-channel)

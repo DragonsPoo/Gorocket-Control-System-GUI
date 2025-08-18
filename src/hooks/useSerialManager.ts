@@ -242,10 +242,21 @@ export function useSerialManager(): SerialManagerApi {
       }
     });
 
+    const cleanupBusy = window.electronAPI.onSerialBusy(data => {
+      // Show non-disruptive toast for BUSY errors instead of dialog
+      toast({ 
+        title: 'MCU Busy', 
+        description: 'MCU is processing another command. Please wait and try again.', 
+        variant: 'default' 
+      });
+      loggerRef.current(`MCU BUSY: ${data.error}`);
+    });
+
     return () => {
       cleanupData();
       cleanupError();
       cleanupStatus();
+      cleanupBusy();
     };
   }, [handleSerialMessage, setValves, toast, state.connectionRetryCount, state.selectedPort]);
 

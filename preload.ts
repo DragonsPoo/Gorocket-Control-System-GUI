@@ -23,6 +23,11 @@ const api = {
     ipcRenderer.on('serial-error', listener);
     return () => ipcRenderer.removeListener('serial-error', listener);
   },
+  onSerialBusy: (callback: (data: { command: any; error: string }) => void) => {
+    const listener = (_e: IpcRendererEvent, value: { command: any; error: string }) => callback(value);
+    ipcRenderer.on('serial-busy', listener);
+    return () => ipcRenderer.removeListener('serial-busy', listener);
+  },
   sendToSerial: (data: any): Promise<boolean> => ipcRenderer.invoke('serial-send', data),
 
   // Sequence Control (User Snippet)

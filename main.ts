@@ -267,7 +267,21 @@ class MainApp {
         }
         return await this.serialManager.send(cmd);
       } catch (err) {
-        dialog.showErrorBox('Send Error', (err as Error)?.message ?? String(err));
+        const errorMsg = (err as Error)?.message ?? String(err);
+        
+        // Handle BUSY errors gracefully - don't show disruptive dialog
+        if (errorMsg.includes('BUSY')) {
+          console.warn(`[BUSY] Command rejected by MCU: ${errorMsg}`);
+          // Send error details to renderer for toast notification
+          this.mainWindow?.webContents.send('serial-busy', {
+            command: cmd,
+            error: errorMsg
+          });
+          return false;
+        }
+        
+        // Show dialog only for serious errors
+        dialog.showErrorBox('Send Error', errorMsg);
         return false;
       }
     });
