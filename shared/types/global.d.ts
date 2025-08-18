@@ -42,6 +42,10 @@ declare global {
       safetyPressureExceeded: (snapshot: PressureSnapshot) => void;
       safetyTrigger: (snapshot?: { reason?: string }) => Promise<boolean>;
       safetyClear: () => Promise<void>;
+      
+      // System ARM controls
+      systemArm: () => Promise<boolean>;
+      getArmStatus: () => Promise<boolean>;
 
       // Config and Utilities
       getConfig: () => Promise<AppConfig>;

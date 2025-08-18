@@ -177,6 +177,8 @@ class MainApp {
       height: 900,
       webPreferences: {
         sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
         preload: path.join(__dirname, 'preload.js'), // 필요 시 경로 조정
       },
     });

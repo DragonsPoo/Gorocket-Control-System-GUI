@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Rocket, Wifi, WifiOff, Plug, AlertTriangle, ShieldAlert, Siren } from 'lucide-react';
+import { Rocket, Wifi, WifiOff, Plug, AlertTriangle, ShieldAlert, Siren, Shield, ShieldCheck } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { AppConfig } from '@shared/types';
@@ -28,6 +28,8 @@ interface HeaderProps {
   appConfig: AppConfig | null;
   isEmergency: boolean;
   onClearEmergency: () => void;
+  isArmed: boolean;
+  onSystemArm: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -42,11 +44,14 @@ const Header: React.FC<HeaderProps> = ({
   appConfig,
   isEmergency,
   onClearEmergency,
+  isArmed,
+  onSystemArm,
 }) => {
   const isConnected = connectionStatus === 'connected';
   const isConnecting = connectionStatus === 'connecting' || connectionStatus === 'reconnecting';
 
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showArmConfirm, setShowArmConfirm] = useState(false);
   const [holdProgress, setHoldProgress] = useState(0);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,6 +82,11 @@ const Header: React.FC<HeaderProps> = ({
   const handleConfirmClear = () => {
     onClearEmergency();
     setShowClearConfirm(false);
+  };
+
+  const handleConfirmArm = () => {
+    onSystemArm();
+    setShowArmConfirm(false);
   };
 
   useEffect(() => {
@@ -130,6 +140,31 @@ const Header: React.FC<HeaderProps> = ({
             {isLogging ? "Stop Logging" : "Start Logging"}
           </Button>
 
+          {!isArmed && isConnected && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-md">
+                <Shield className="w-4 h-4 text-red-600" />
+                <span className="text-sm font-medium text-red-600">DISARMED</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowArmConfirm(true)}
+                className="border-amber-300 text-amber-700 hover:bg-amber-50"
+              >
+                <ShieldCheck className="w-4 h-4 mr-2" />
+                ARM System
+              </Button>
+            </div>
+          )}
+
+          {isArmed && isConnected && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-md">
+              <ShieldCheck className="w-4 h-4 text-green-600" />
+              <span className="text-sm font-medium text-green-600">ARMED</span>
+            </div>
+          )}
+
           {isEmergency && isConnected && (
             <div className="relative">
               <Button
@@ -175,6 +210,32 @@ const Header: React.FC<HeaderProps> = ({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmClear}>Confirm Clear</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showArmConfirm} onOpenChange={setShowArmConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ ARM System Confirmation</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Before ARMING the system, confirm the following:</p>
+              <div className="pl-4 space-y-1 text-sm">
+                <p>✓ MCU has sent SAFE_CLEAR or READY signal</p>
+                <p>✓ Physical system safety confirmed on-site</p>
+                <p>✓ All personnel cleared from hazard zones</p>
+                <p>✓ Emergency stop procedures are ready</p>
+              </div>
+              <p className="font-medium text-amber-600">
+                ARMING will enable all control commands including valve operations.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmArm} className="bg-amber-600 hover:bg-amber-700">
+              Confirm ARM
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -21,6 +21,7 @@ export default function Home() {
     valves,
     connectionStatus,
     isEmergency,
+    isArmed,
     serialPorts,
     selectedPort,
     setSelectedPort,
@@ -31,6 +32,7 @@ export default function Home() {
     setSequenceHandler,
     resetEmergency,
     clearMcuEmergency,
+    handleSystemArm,
   } = useSerialManager();
 
   const {
@@ -128,6 +130,8 @@ export default function Home() {
         appConfig={appConfig}
         isEmergency={isEmergency}
         onClearEmergency={clearMcuEmergency}
+        isArmed={isArmed}
+        onSystemArm={handleSystemArm}
       />
       {isEmergency && (
         <div className="bg-destructive text-destructive-foreground text-center py-2 font-bold">

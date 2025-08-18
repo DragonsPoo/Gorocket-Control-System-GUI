@@ -15,6 +15,7 @@ interface SerialState {
   connectionRetryCount: number;
   lastConnectionError: string | null;
   isEmergency: boolean;
+  isArmed: boolean;
 }
 
 const initialState: SerialState = {
@@ -25,6 +26,7 @@ const initialState: SerialState = {
   connectionRetryCount: 0,
   lastConnectionError: null,
   isEmergency: false,
+  isArmed: false, // Default to disarmed for safety
 };
 
 type Action =
@@ -35,7 +37,8 @@ type Action =
   | { type: 'SET_RETRY_COUNT'; count: number }
   | { type: 'SET_CONNECTION_ERROR'; error: string | null }
   | { type: 'RESET_CONNECTION_STATE' }
-  | { type: 'SET_EMERGENCY'; status: boolean };
+  | { type: 'SET_EMERGENCY'; status: boolean }
+  | { type: 'SET_ARMED'; status: boolean };
 
 function reducer(state: SerialState, action: Action): SerialState {
   switch (action.type) {
@@ -55,6 +58,8 @@ function reducer(state: SerialState, action: Action): SerialState {
       return { ...state, connectionRetryCount: 0, lastConnectionError: null };
     case 'SET_EMERGENCY':
       return { ...state, isEmergency: action.status };
+    case 'SET_ARMED':
+      return { ...state, isArmed: action.status };
     default:
       return state;
   }
@@ -68,6 +73,7 @@ export interface SerialManagerApi {
   valves: Valve[];
   connectionStatus: ConnectionStatus;
   isEmergency: boolean;
+  isArmed: boolean;
   serialPorts: string[];
   selectedPort: string;
   setSelectedPort: (port: string) => void;
@@ -80,6 +86,7 @@ export interface SerialManagerApi {
   handleEmergency: (reason?: string) => Promise<void>;
   resetEmergency: () => void;
   clearMcuEmergency: () => Promise<void>;
+  handleSystemArm: () => Promise<void>;
   connectionRetryCount: number;
   lastConnectionError: string | null;
 }
@@ -283,6 +290,57 @@ export function useSerialManager(): SerialManagerApi {
     await window.electronAPI.safetyClear();
   }, []);
 
+  const handleSystemArm = useCallback(async () => {
+    try {
+      const success = await window.electronAPI.systemArm();
+      if (success) {
+        dispatch({ type: 'SET_ARMED', status: true });
+        toast({ 
+          title: 'System Armed', 
+          description: 'Control commands are now enabled.', 
+          variant: 'default' 
+        });
+        loggerRef.current('System re-armed - control commands enabled');
+      } else {
+        toast({ 
+          title: 'ARM Failed', 
+          description: 'Failed to arm system. Check connection.', 
+          variant: 'destructive' 
+        });
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      toast({ 
+        title: 'ARM Error', 
+        description: `ARM operation failed: ${errorMsg}`, 
+        variant: 'destructive' 
+      });
+      loggerRef.current(`ARM operation failed: ${errorMsg}`);
+    }
+  }, [toast]);
+
+  // Poll ARM status periodically when connected
+  useEffect(() => {
+    if (state.connectionStatus !== 'connected') return;
+    
+    const pollArmStatus = async () => {
+      try {
+        const isArmed = await window.electronAPI.getArmStatus();
+        dispatch({ type: 'SET_ARMED', status: isArmed });
+      } catch (error) {
+        // Silent fail for polling
+      }
+    };
+    
+    // Initial poll
+    pollArmStatus();
+    
+    // Poll every 2 seconds
+    const interval = setInterval(pollArmStatus, 2000);
+    
+    return () => clearInterval(interval);
+  }, [state.connectionStatus]);
+
   return {
     appConfig: state.appConfig,
     sensorData,
@@ -291,6 +349,7 @@ export function useSerialManager(): SerialManagerApi {
     valves,
     connectionStatus: state.connectionStatus,
     isEmergency: state.isEmergency,
+    isArmed: state.isArmed,
     serialPorts: state.serialPorts,
     selectedPort: state.selectedPort,
     setSelectedPort,
@@ -303,6 +362,7 @@ export function useSerialManager(): SerialManagerApi {
     handleEmergency,
     resetEmergency,
     clearMcuEmergency,
+    handleSystemArm,
     connectionRetryCount: state.connectionRetryCount,
     lastConnectionError: state.lastConnectionError,
   };

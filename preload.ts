@@ -50,6 +50,10 @@ const api = {
   },
   safetyTrigger: (snapshot?: { reason?: string }) => ipcRenderer.invoke('safety-trigger', snapshot),
   safetyClear: () => ipcRenderer.invoke('safety-clear'),
+  
+  // System ARM controls
+  systemArm: () => ipcRenderer.invoke('system-arm'),
+  getArmStatus: () => ipcRenderer.invoke('system-arm-status'),
 
   // Config and Utilities
   getConfig: (): Promise<AppConfig> => ipcRenderer.invoke('config-get'),
