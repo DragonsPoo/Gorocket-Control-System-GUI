@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant MCU
+    participant SM as SerialManager
+    participant SE as SequenceEngine
+    participant UI
+
+    MCU-->>SM: EMERG,<reason>
+    SM->>SE: emit('data', line)
+    SE->>SM: clearQueue(); abortInflight(); abortAllPendings()
+    SE->>SE: emergencyActive = true
+    SE->>SE: tryFailSafe('EMERG')
+    SE-->>UI: Disable inputs, show EMERG state
+

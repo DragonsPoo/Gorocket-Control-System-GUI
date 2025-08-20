@@ -1,0 +1,47 @@
+name: Render Mermaid Diagrams
+
+on:
+  push:
+    paths:
+      - 'docs/diagrams/*.mmd'
+      - 'README.md'
+      - '.github/workflows/diagrams.yml'
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install mermaid-cli
+        run: |
+          npm install -g @mermaid-js/mermaid-cli@10.9.0
+
+      - name: Render diagrams
+        run: |
+          mkdir -p docs/diagrams/png
+          for f in docs/diagrams/*.mmd; do \
+            n=$(basename "$f" .mmd); \
+            mmdc -i "$f" -o "docs/diagrams/png/$n.png" -b transparent || mmdc -i "$f" -o "docs/diagrams/png/$n.png"; \
+          done
+
+      - name: Commit diagrams
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          if ! git diff --quiet; then
+            git add docs/diagrams/png/*.png || true
+            git commit -m "chore(diagrams): update rendered PNG diagrams"
+            git push
+          fi
+

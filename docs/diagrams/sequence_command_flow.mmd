@@ -1,0 +1,14 @@
+sequenceDiagram
+    participant UI as UI
+    participant SM as SerialManager
+    participant MCU as MCU
+
+    UI->>SM: send("CMD,Ethanol Purge Line,Open")
+    Note right of SM: cmdTransform → "V,0,O"
+    SM->>SM: frame → "V,0,O,12345,A7"
+    SM->>MCU: write("V,0,O,12345,A7\n")
+    SM->>SM: Start ACK timer (1500ms)
+    MCU-->>SM: ACK,12345
+    SM->>SM: Clear timer, resolve
+    SM-->>UI: Promise resolved (true)
+

@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant PC as PC HB 250ms
+    participant Q as SerialManager Queue
+    participant MCU as MCU watchdog 3s
+
+    loop Every 250ms
+      PC->>Q: enqueue HB,<id>,<crc>
+      Q->>MCU: write HB line
+    end
+    Note over MCU: Update last HB time
+    rect rgb(255,245,240)
+      Note over MCU: No HB ~3s → EMERG,HB_TIMEOUT
+      MCU-->>PC: EMERG,HB_TIMEOUT
+    end
+

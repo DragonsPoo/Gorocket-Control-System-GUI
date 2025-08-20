@@ -1,0 +1,9 @@
+graph LR
+  A[Load sequences.json] --> B[AJV schema validate]
+  B -->|ok| C[Static forbidden pairs check]
+  C -->|ok| D[Dry-run all non-emergency]
+  D -->|ok| E[Ready]
+  B -->|fail| X[Invalid schema]
+  C -->|fail| Y[Forbidden pair found]
+  D -->|fail| Z[Dynamic conflict found]
+

@@ -1,0 +1,15 @@
+graph TD
+  A[Failsafe Trigger]
+  B[Close mains - dedup roles]
+  C[Open vents]
+  D[Open purges]
+  E{Emergency latched}
+  F[Keep in failsafe]
+  G[Exit failsafe]
+  A --> B
+  B --> C
+  C --> D
+  D --> E
+  E -- Yes --> F
+  E -- No --> G
+

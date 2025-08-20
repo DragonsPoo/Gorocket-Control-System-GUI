@@ -543,3 +543,41 @@ flowchart LR
 ## 라이선스
 
 이 저장소의 LICENSE 파일을 참고하십시오.
+
+---
+
+## 다이어그램 PNG(자동 생성)
+
+- 아래 이미지는 `docs/diagrams/*.mmd`로부터 GitHub Actions가 자동으로 생성합니다. Mermaid 미지원 뷰어에서도 PNG로 확인할 수 있습니다. 원본 Mermaid 다이어그램과 ASCII 대체본은 본문 섹션에 함께 있습니다.
+
+![Command Flow](docs/diagrams/png/sequence_command_flow.png)
+
+![Heartbeat Watchdog](docs/diagrams/png/heartbeat_watchdog.png)
+
+![Failsafe Flow](docs/diagrams/png/failsafe_flow.png)
+
+![EMERG Flow](docs/diagrams/png/emerg_flow.png)
+
+![Sequence Validation](docs/diagrams/png/sequence_validation_flow.png)
+
+![UI Overview](docs/diagrams/png/ui_overview.png)
+
+---
+
+## UI 스크린샷
+
+- 스크린샷 파일을 `docs/screenshots/` 폴더에 추가하면 이 섹션에서 자동으로 보입니다. 먼저 아래 권장 파일명으로 캡처해 주세요.
+- 캡처 방법: 앱 실행 후 대시보드/밸브/차트/터미널 화면에서 OS 스크린샷(Win+Shift+S/Mac Cmd+Shift+4) 저장 → 해당 폴더에 파일명대로 배치.
+
+권장 파일명(예시)
+- `docs/screenshots/dashboard.png` — 전체 대시보드
+- `docs/screenshots/valves.png` — 밸브 제어/피드백
+- `docs/screenshots/charts.png` — 센서 차트/알람 라인
+
+이미지(존재 시 표시)
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+![Valves](docs/screenshots/valves.png)
+
+![Charts](docs/screenshots/charts.png)
