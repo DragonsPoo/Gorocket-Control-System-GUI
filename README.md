@@ -144,6 +144,23 @@ sequenceDiagram
     SM-->>UI: Promise resolved (true)
 ```
 
+<details>
+<summary>ASCII Fallback</summary>
+
+```
+UI            SerialManager                 MCU
+ |  send("CMD,Ethanol Purge Line,Open")      |
+ |------------------------------------------>|
+ |            transform → "V,0,O"            |
+ |            frame → "V,0,O,12345,A7"       |
+ | send "V,0,O,12345,A7\n" ---------------->|
+ |                                           |  ACK,12345
+ |<------------------------------------------|
+ |  resolve(true)                            |
+```
+
+</details>
+
 - 평상시 왕복 지연(RTT): 수~수십 ms(환경에 따라 상이). ACK 타임아웃은 1500ms로 여유 있게 설정되어 재시도/복구가 가능합니다.
 - 타임아웃/재시도: 1500ms 경과 시 재큐잉(80ms 지연)하여 재전송, 기본 5회 시도 후 실패 처리.
 
@@ -169,6 +186,22 @@ sequenceDiagram
     end
 ```
 
+<details>
+<summary>ASCII Fallback</summary>
+
+```
+PC (HB every 200ms)                MCU (watchdog ~3s)
+     |  HB                         |
+     |---------------------------->|
+     |  HB                         |
+     |---------------------------->|
+     |  ...                        |
+                                   | if no HB for ~3s → EMERG,HB_TIMEOUT
+                                   |-------------------------------> PC
+```
+
+</details>
+
 ### SequenceEngine
 
 - 역할: 시퀀스 실행, WAIT 처리(time/cond), FAILSAFE 진입, EMERG 수신 처리.
@@ -190,6 +223,21 @@ flowchart TD
   E -- No --> G[Exit failsafe]
 ```
 
+<details>
+<summary>ASCII Fallback</summary>
+
+```
+Failsafe Trigger
+  ├─ Close mains (deduplicated)
+  ├─ Open vents
+  └─ Open purges
+      └─ Emergency latched?
+           ├─ Yes → Stay in failsafe
+           └─ No  → Exit failsafe
+```
+
+</details>
+
 EMERG 수신 경로
 
 ```mermaid
@@ -206,6 +254,19 @@ sequenceDiagram
     SE->>SE: tryFailSafe('EMERG')
     SE-->>UI: disable inputs, show EMERG state
 ```
+
+<details>
+<summary>ASCII Fallback</summary>
+
+```
+MCU → EMERG,<reason>
+SerialManager: emit('data') → SequenceEngine
+SequenceEngine: clearQueue(), abortInflight(), abortAllPendings()
+SequenceEngine: emergencyActive = true → tryFailSafe('EMERG')
+UI: disable controls, show EMERG status
+```
+
+</details>
 
 ### SequenceDataManager
 
@@ -225,6 +286,22 @@ flowchart LR
   C -->|fail| Y[Forbidden pair found]
   D -->|fail| Z[Dynamic conflict found]
 ```
+
+<details>
+<summary>ASCII Fallback</summary>
+
+```
+Load → AJV schema → Static forbidden-pairs → Dry-run → Ready
+  │         │fail → Invalid schema
+  │
+  └→ ok → Static check
+              │fail → Forbidden pair
+              └→ ok → Dry-run
+                          │fail → Dynamic conflict
+                          └→ ok → Ready
+```
+
+</details>
 
 ### ConfigManager
 
@@ -373,6 +450,19 @@ flowchart LR
   F[센서 차트] -->|PT/TC/Flow| F2[알람/트립 라인]
   G[터미널 패널] -->|원시 수신/발신|
 ```
+
+<details>
+<summary>ASCII Fallback</summary>
+
+```
+[헤더] 포트선택/연결상태/ARM/EMERG/로그
+[밸브 패널] 수동 Open/Close ←→ 리밋스위치 피드백
+[시퀀스 패널] 실행/중지, 진행상황
+[센서 차트] PT/TC/Flow + 알람/트립 라인
+[터미널] 원시 수신/발신
+```
+
+</details>
 
 스크린샷(추가 예정)
 
