@@ -130,6 +130,15 @@ V,INDEX,ACTION → Arduino로 전송
 - INDEX: 0-6 (서보 인덱스)
 - ACTION: O (Open) 또는 C (Close)
 - 예시: "V,0,O,12345,A7" (SV0 열기, MSG_ID=12345, CRC=A7)
+
+명령 처리 과정:
+1. GUI에서 "CMD,Ethanol Purge Line,Open" 시퀀스 명령
+2. cmdTransform.ts에서 valveMapping 조회하여 "V,0,O"로 변환
+3. SerialManager에서 MSG_ID 생성하여 "V,0,O,12345,XX" 완성
+4. CRC-8 계산하여 최종 "V,0,O,12345,A7" 패킷 생성
+5. Arduino에서 CRC 검증 후 서보 PWM 신호 출력
+6. 리미트 스위치 피드백으로 실제 위치 확인
+7. "ACK,12345" 또는 "NACK,12345,REASON" 응답
 ```
 
 **하트비트 명령**
@@ -138,6 +147,14 @@ HB → 3초마다 전송
 - MCU 타임아웃 방지
 - 통신 상태 확인
 - 비상시 자동 Emergency 트리거
+
+하트비트 시스템 동작:
+1. SerialManager에서 2.8초마다 "HB,MSG_ID,CRC" 자동 전송
+2. Arduino에서 수신 시 lastHeartbeatMs 타임스탬프 갱신
+3. 3초 이상 미수신 시 Arduino가 "EMERG,HB_TIMEOUT" 발생
+4. PC 소프트웨어 크래시나 USB 연결 끊김 감지 가능
+5. 무인 운영 중 통신 장애 시 자동 안전모드 진입
+6. Emergency 발생 시까지 모든 제어 명령 정상 처리
 ```
 
 **시스템 명령**
@@ -145,6 +162,20 @@ HB → 3초마다 전송
 HELLO → 연결 확인
 PING → 응답성 테스트 (PONG 응답)
 SAFE_CLEAR → 비상상태 해제
+
+시스템 명령 상세:
+1. HELLO: 초기 연결 시 Arduino 상태 확인
+   - Arduino 응답: "READY" + "ACK,MSG_ID"
+   - 연결 성공 시 GUI 헤더에 "Connected" 표시
+
+2. PING: 통신 지연시간 측정 및 응답성 테스트
+   - Arduino 응답: "PONG" + "ACK,MSG_ID"
+   - Round-trip time 측정으로 통신 품질 확인
+
+3. SAFE_CLEAR: Emergency 상태에서 정상 모드로 복귀
+   - emergencyActive = false, heartbeatArmed = false 리셋
+   - Arduino 응답: "EMERG_CLEARED" + "ACK,MSG_ID"
+   - GUI에서 3초 홀드 버튼으로만 실행 가능 (오조작 방지)
 ```
 
 ### 센서 데이터 패킷
@@ -156,12 +187,27 @@ fm1_m3h:125,fm1_Lh:1250,fm2_m3h:98,fm2_Lh:980,
 V0_LS_OPEN:0,V0_LS_CLOSED:1,V1_LS_OPEN:0,V1_LS_CLOSED:1,
 ...(V6까지 반복)...,3A
 
-해석:
-- pt1: 150.00 PSI (15000/100)
-- tc1: 293.15 K = 20.0°C ((29315/100) - 273.15)
-- fm1_Lh: 125.0 L/h (1250/10)
-- V0_LS_CLOSED:1 → SV0 완전히 닫힌 상태
-- 마지막 3A: CRC-8 체크섬
+데이터 해석 및 변환 과정:
+- pt1: 15000 → 150.00 PSI (ADC 값 ÷ 100)
+  * ADC 0-1023 → 0-1000 PSI 선형 변환
+  * 정밀도: 0.01 PSI (소수점 2자리)
+  
+- tc1: 29315 → 20.0°C ((29315/100) - 273.15)
+  * MAX6675에서 켈빈×100 형태로 전송
+  * GUI에서 섭씨 온도로 자동 변환 표시
+  
+- fm1_Lh: 1250 → 125.0 L/h (값 ÷ 10)
+  * 펄스 카운터 기반 유량 측정
+  * m³/h와 L/h 단위 동시 제공
+  
+- V0_LS_CLOSED:1 → SV0이 CLOSED 위치의 리미트 스위치 활성화
+  * 물리적 피드백으로 실제 밸브 위치 확인
+  * lsOpen=0, lsClosed=1이면 완전히 닫힌 상태
+  
+- 마지막 3A: CRC-8 체크섬 (16진수)
+  * 전체 데이터 문자열의 CRC-8 계산값
+  * 불일치 시 "Telemetry integrity error" 발생
+  * sensorParser.ts에서 룩업 테이블로 고속 검증
 ```
 
 ### ACK/NACK 응답 시스템
@@ -170,18 +216,43 @@ V0_LS_OPEN:0,V0_LS_CLOSED:1,V1_LS_OPEN:0,V1_LS_CLOSED:1,
 ```
 Arduino → PC: "ACK,12345"
 - MSG_ID 12345 명령 성공적으로 실행
+
+ACK 응답 처리:
+1. Arduino에서 명령 수신 및 CRC 검증 성공
+2. 명령 파싱 및 유효성 검사 통과
+3. 서보 또는 시스템 동작 실행 완료
+4. "ACK,MSG_ID" 응답 전송 (CRC 없는 시스템 메시지)
+5. GUI에서 ACK 수신로 명령 실행 성공 확인
+6. Promise resolve로 비동기 체인 계속 진행
 ```
 
 **실패 응답 (NACK)**
 ```
 Arduino → PC: "NACK,12345,BUSY"
 - MSG_ID 12345 실행 실패
-- REASON 코드:
+- REASON 코드 상세 설명:
+
   * BUSY: 서보 이미 동작 중
+    - 이전 명령의 서보 이동이 아직 진행 중
+    - 리미트 스위치 피드백 대기 중이거나 스톨 릴리프 중
+    - 몇 초 후 재시도 필요
+
   * EMERG_ACTIVE: 비상상태에서 제어 거부
+    - emergencyActive=true 상태에서 모든 밸브 명령 차단
+    - SAFE_CLEAR 명령으로 Emergency 해제 후 재시도
+
   * CRC_FAIL: 체크섬 오류
+    - 수신된 데이터의 CRC-8이 계산값과 불일치
+    - 노이즈나 데이터 손상으로 인한 무결성 오류
+    - SerialManager에서 자동 재전송 처리
+
   * CMD_INVALID: 잘못된 명령
+    - 지원하지 않는 명령어나 잘못된 파라미터
+    - 예: "V,7,O" (servoIndex 7은 존재하지 않음)
+
   * FRAME_ERR: 프레임 구조 오류
+    - 예상된 "PAYLOAD,MSG_ID,CRC" 형식이 아닌 데이터
+    - 콤마 누락이나 비정상적인 문자열 수신
 ```
 
 ### 비상 상태 알림
@@ -192,6 +263,26 @@ Arduino → PC: "EMERG,PRESSURE"
 - 압력 1000 PSI 초과 시
 Arduino → PC: "EMERG,HB_TIMEOUT"
 - 하트비트 3초 타임아웃 시
+
+비상 트리거 상세 시나리오:
+
+1. EMERG,PRESSURE (압력 초과):
+   - ADC 비배그라운드 샘플링에서 PT1-PT4 중 하나라도 1000 PSI 초과 감지
+   - 또는 50 PSI/s 상승률 초과 감지 시
+   - triggerEmergency(F("PRESSURE")) 호출
+   - 즉시 모든 공급 밸브 CLOSE, 벤트 밸브 OPEN 강제 실행
+
+2. EMERG,HB_TIMEOUT (하트빔트 타임아웃):
+   - lastHeartbeatMs에서 3000ms(3초) 초과 시 발생
+   - PC 소프트웨어 크래시, USB 연결 끊김, 또는 시스템 과부하로 판단
+   - triggerEmergency(F("HB_TIMEOUT")) 호출
+   - 동일한 Emergency Shutdown 시퀀스 실행
+
+3. 공통 Emergency 동작:
+   - emergencyActive = true 설정
+   - 모든 서보 기존 동작 중단 (detach)
+   - 서보 역할에 따른 안전 위치로 강제 이동
+   - 이후 SAFE_CLEAR 명령 외에 모든 제어 명령 거부
 ```
 
 **비상 해제**
@@ -199,6 +290,27 @@ Arduino → PC: "EMERG,HB_TIMEOUT"
 Arduino → PC: "EMERG_CLEARED"
 - SAFE_CLEAR 명령 수신 후
 - 시스템 재-ARM 가능 상태
+
+Emergency 해제 절차:
+1. 물리적 안전 확인:
+   - 모든 압력이 안전 수준 (< 50 PSI) 도달 확인
+   - 서보 밸브들이 안전 위치에 있는지 육안 확인
+   - 비상 원인 제거 완료 (예: 센서 교정, USB 재연결)
+
+2. GUI에서 Safety Clear 실행:
+   - Header의 "Safety Clear" 버튼을 3초간 홀드
+   - 오조작 방지를 위한 장시간 누르기 필요
+   - main.ts에서 safety-clear IPC 통해 SAFE_CLEAR 명령 전송
+
+3. Arduino에서 비상 상태 리셋:
+   - emergencyActive = false
+   - heartbeatArmed = false (새로운 하트빔트 필요)
+   - "EMERG_CLEARED" + "ACK,MSG_ID" 응답
+
+4. GUI에서 시스템 재-ARM:
+   - "System ARM" 버튼 클릭으로 수동 재무장
+   - requiresArm = false 설정으로 제어 명령 활성화
+   - 이후 정상 운영 진행 가능
 ```
 
 ---
@@ -219,44 +331,70 @@ Arduino → PC: "EMERG_CLEARED"
 git clone https://github.com/jungho1902/Gorocket-Control-System-GUI.git
 cd Gorocket-Control-System-GUI
 
-# 의존성 설치
+# 의존성 설치 - Next.js, Electron, TypeScript, SerialPort 등 설치
 npm install
 
-# 네이티브 모듈 빌드 (serialport)
+# 네이티브 모듈 빌드 (serialport) - USB 통신을 위한 없이류리 라이브러리
 npm run rebuild
 
-# 개발 서버 실행 (localhost:9002)
+# 개발 서버 실행 (localhost:9002) - Next.js 개발서버 + Electron 동시 시작
 npm run dev
+
+설치 과정 설명:
+1. git clone: GitHub에서 소스 코드 다운로드
+2. npm install: package.json의 모든 의존성 라이브러리 설치
+3. npm run rebuild: electron-rebuild로 네이티브 모듈 재컴파일
+   - serialport 모듈이 현재 Electron 버전과 일치하도록 빌드
+4. npm run dev: 개발 모드에서 GUI 애플리케이션 실행
+   - Next.js 개발서버가 localhost:9002에서 시작
+   - Electron 메인 프로세스가 자동으로 데스크톱 앱 실행
 ```
 
 ### 빌드 및 배포
 
 ```bash
-# TypeScript 타입 검사
+# TypeScript 타입 검사 - tsc --noEmit으로 컴파일 없이 타입 오류만 검사
 npm run typecheck
 
-# ESLint 코드 품질 검사
+# ESLint 코드 품질 검사 - 코딩 스타일, 잘못된 패턴, 보안 이슈 검사
 npm run lint
 
-# Jest 테스트 실행
+# Jest 테스트 실행 - 단위 테스트, ConfigManager/SerialManager/CRC 테스트
 npm run test
 
-# 프로덕션 빌드
+# 프로덕션 빌드 - Next.js 정적 빌드 후 Electron 앱 패키징
 npm run build
 
-# 실행 파일 생성
+# 실행 파일 생성 - Windows .exe, Linux .AppImage, macOS .dmg 생성
 npm run package
+
+빌드 과정 상세:
+1. typecheck: 모든 .ts/.tsx 파일의 타입 안전성 확인
+2. lint: Airbnb 규칙 기반 코드 품질 검사
+3. test: __tests__ 디렉터리의 모든 테스트 실행
+4. build: .next/static 및 dist/ 디렉터리에 최적화된 번들 생성
+5. package: electron-builder로 OS별 설치 가능한 실행파일 생성
 ```
 
 ### 시퀀스 검증
 
 ```bash
-# sequences.json 형식 검증
+# sequences.json 형식 검증 - AJV JSON Schema 검사로 시퀀스 구문 확인
 npm run validate:seq
 
-# 실행 결과:
-# AJV_OK true  (성공)
-# 또는 검증 오류 메시지 출력
+# 실행 결과 예시:
+# AJV_OK true  (성공 - 모든 시퀀스가 올바른 형식)
+# 또는 검증 오류 메시지 출력:
+# "Error: data/Pre-Test Nitrogen Purge/3 must have required property 'commands'"
+# "Error: data/Hot-Fire Sequence/2/delay must be number"
+
+검증 항목:
+1. 시퀀스명이 문자열인지 확인
+2. 각 step이 message, delay, commands 필드를 갖는지 확인
+3. delay가 숫자(ms)인지 확인
+4. commands가 문자열 배열인지 확인
+5. condition 객체의 sensor, op, timeoutMs 필드 확인
+6. 지원하지 않는 여분 필드 감지
 ```
 
 ---
