@@ -101,6 +101,12 @@ npm run package
   - MCU→PC: `ACK,12345` 또는 `NACK,12345,REASON` / `READY` / `EMERG,...`
 - 시스템 메시지(무CRC): `VACK`, `VERR`, `PONG`, `BOOT`, `READY`, `EMERG`, `EMERG_CLEARED`, `ACK`, `NACK`
 
+초심자를 위한 개념 설명
+
+- 프레이밍(Framing): 데이터를 구분하기 위해 시작/끝, 식별자(여기선 `MSG_ID`)와 체크섬(CRC)을 붙여 한 덩어리(프레임)로 만드는 절차입니다. 이렇게 하면 수신자가 “이 메시지가 어디서부터 어디까지인지, 중간에 깨지지 않았는지”를 알 수 있습니다.
+- CRC(Cyclic Redundancy Check): 데이터가 전송 중 손상됐는지 판별하는 짧은 숫자(체크섬)입니다. 동일한 규칙으로 송신/수신 측이 계산했을 때 값이 다르면 데이터가 변형되었다고 판단합니다.
+- ACK/NACK: 수신 측이 “잘 받았다(ACK)” 또는 “문제가 있었다(NACK)”라고 응답하는 확인 프로토콜입니다. NACK에는 사유 코드를 함께 담아 원인 분석을 돕습니다.
+
 ---
 
 ## 5) 코어 모듈과 로직
@@ -120,10 +126,48 @@ npm run package
 - 핸드셰이크: `HELLO` 송신 후 `READY` 또는 해당 `ACK` 수신 시 연결 성공으로 간주
 - 유틸: `clearQueue()`, `abortInflight()`, `abortAllPendings()`, `writeNow(line)`
 
+시퀀스/명령 전송 타임라인(예시)
+
+```mermaid
+sequenceDiagram
+    participant UI as UI
+    participant SM as SerialManager
+    participant MCU as Arduino MCU
+
+    UI->>SM: send("CMD,Ethanol Purge Line,Open")
+    Note right of SM: cmdTransform → "V,0,O"
+    SM->>SM: frame → "V,0,O,12345,A7"
+    SM->>MCU: write("V,0,O,12345,A7\n")
+    SM->>SM: Start ACK timer (1500ms)
+    MCU-->>SM: ACK,12345
+    SM->>SM: Clear timer, resolve
+    SM-->>UI: Promise resolved (true)
+```
+
+- 평상시 왕복 지연(RTT): 수~수십 ms(환경에 따라 상이). ACK 타임아웃은 1500ms로 여유 있게 설정되어 재시도/복구가 가능합니다.
+- 타임아웃/재시도: 1500ms 경과 시 재큐잉(80ms 지연)하여 재전송, 기본 5회 시도 후 실패 처리.
+
 ### HeartbeatDaemon
 
 - 기본 200ms 간격으로 `HB` 전송(`serial.send({ raw: 'HB' })`). ACK 없는 시스템 메시지.
 - `sendOnce()`로 즉시 전송 가능(ARM 시 빠른 동기화 용도).
+
+하트비트/워치독 타임라인(개념)
+
+```mermaid
+sequenceDiagram
+    participant PC as PC (HB 200ms)
+    participant MCU as MCU (watchdog ~3s)
+
+    loop Every 200ms
+      PC->>MCU: HB\n
+    end
+    Note over MCU: 최근 HB 수신 시각 갱신
+    rect rgb(255,245,240)
+      Note over MCU: 3초 동안 HB 미수신 시
+      MCU-->>PC: EMERG,HB_TIMEOUT
+    end
+```
 
 ### SequenceEngine
 
@@ -132,7 +176,36 @@ npm run package
   - `tryFailSafe(tag)`: 메인 CLOSE → 벤트/퍼지 OPEN(역할 중복 제거), 재진입 쿨다운/래치 관리
   - `onSerialData(line)`: `EMERG` 수신 시 SerialManager 큐/인플라이트/펜딩 즉시 정리, 래치 활성
   - `buildFramed(payload, msgId?)` + `writeLine(line)`: SerialManager를 통해 실제 전송
-  - WAIT: 시간 기반/조건 기반(`op: gte|lte`, `timeoutMs`) 모두 지원, EMERG로 인터럽트 가능
+- WAIT: 시간 기반/조건 기반(`op: gte|lte`, `timeoutMs`) 모두 지원, EMERG로 인터럽트 가능
+
+FAILSAFE 동작(역할 기반)
+
+```mermaid
+flowchart TD
+  A[Failsafe Trigger] --> B[Close mains (dedup roles)]
+  B --> C[Open vents]
+  C --> D[Open purges]
+  D --> E{Emergency latched?}
+  E -- Yes --> F[Keep in failsafe]
+  E -- No --> G[Exit failsafe]
+```
+
+EMERG 수신 경로
+
+```mermaid
+sequenceDiagram
+    participant MCU
+    participant SM as SerialManager
+    participant SE as SequenceEngine
+    participant UI
+
+    MCU-->>SM: EMERG,<reason>
+    SM->>SE: emit('data', line)
+    SE->>SM: clearQueue(), abortInflight(), abortAllPendings()
+    SE->>SE: emergencyActive = true
+    SE->>SE: tryFailSafe('EMERG')
+    SE-->>UI: disable inputs, show EMERG state
+```
 
 ### SequenceDataManager
 
@@ -140,10 +213,25 @@ npm run package
 - 동적 드라이런: 각 시퀀스를 가상 실행하며 금지 조합이 시점상 동시에 OPEN 되는지 추가 점검
 - 필수 시퀀스: `Emergency Shutdown` 존재 필수
 
+시퀀스 검증 흐름
+
+```mermaid
+flowchart LR
+  A[Load sequences.json] --> B[AJV schema validate]
+  B -->|ok| C[Static forbidden pairs check]
+  C -->|ok| D[Dry-run all non-emergency]
+  D -->|ok| E[Ready]
+  B -->|fail| X[Invalid schema]
+  C -->|fail| Y[Forbidden pair found]
+  D -->|fail| Z[Dynamic conflict found]
+```
+
 ### ConfigManager
 
 - `config.json`을 Zod로 파싱/검증하고, 압력 한계 값 검증(`validatePressureConfig`) 수행
 - 유효하지만 위험할 수 있는 설정은 경고 로그로 남김
+
+주의: `valveMappings`의 인덱스(0‑based)와 `initialValves`의 `id`(1‑based)가 혼용됩니다. 내부 파서(sensorParser)는 하드웨어 0‑index를 UI 1‑index로 보정합니다.
 
 ### LogManager
 
@@ -151,6 +239,14 @@ npm run package
 - 스냅샷: `config.json`, `sequences.json` 복제 + `session-meta.json`(환경/안전 한계/해시)
 - CSV: `data.csv` 생성, 텔레메트리 필드 + 밸브 상태 집계. ACK/NACK 라인은 필터링, 상태 이벤트는 `#` 접두어로 기록
 - 플러시: 주기적 `fsync`(기본 2000ms, `setFlushIntervalMs()`로 단축 가능)
+
+로그 예시
+
+```
+2025-08-17T10:33:44.120Z # READY
+2025-08-17T10:33:45.003Z,845,812,768,740,12.4,9.8,25.3,29.9,V1:CLOSED V2:OPEN
+2025-08-17T10:33:45.205Z # EMERG,HB_TIMEOUT
+```
 
 ---
 
@@ -169,6 +265,12 @@ npm run package
 - 오류 처리: 일부 세그먼트가 오류여도 나머지는 계속 파싱(안정성 우선)
 - 유틸: `exceedsPressureLimit(data, limit)` — 임계 초과 감지
 
+CRC‑8 자세히 보기(초심자용)
+
+- 왜 필요한가: 시리얼 데이터는 노이즈로 비트가 바뀔 수 있습니다. 단순 합계 체크섬보다 CRC는 충돌 확률이 낮아 오류를 더 잘 잡아냅니다.
+- 동작: 각 바이트를 테이블과 XOR/시프트 규칙으로 누적해 1바이트 결과를 얻습니다. 송신 시 데이터 끝에 이 값을 붙이고, 수신 시 동일 계산으로 비교합니다.
+- 이 프로젝트에선 0x07 다항식, 초기값 0x00, xorout 0x00(표준 CRC‑8)이며, MCU와 동일한 방식으로 계산합니다.
+
 ---
 
 ## 7) 명령 변환(cmdTransform)
@@ -179,6 +281,14 @@ npm run package
   - 변환 시 피드백 기대값 반환: `{ feedback: { index, expect: 'open'|'closed' } }`
   - `SLEEP,<ms>`/`S,<ms>`/기타 원시 명령은 원본 유지
 - 매핑: `config.json`의 `valveMappings`를 사용(이름→서보 인덱스)
+
+예시
+
+```
+입력:  CMD,Ethanol Main Supply,Close
+출력:  V,4,C
+피드백 기대: index=4, expect='closed' → 이후 LS 피드백과 대조 가능
+```
 
 ---
 
@@ -193,6 +303,11 @@ npm run package
   - 실패/에러 경로에서 FAILSAFE 진입(옵션)
   - 역할 기반 FAILSAFE: `mains/vents/purges` 중복 제거 후 일괄 Close/Open
 - 드라이런: `SequenceDataManager.dryRunAll()` — 동적 금지 조합(시간상 동시 OPEN) 검출
+
+대기(Wait) 메커니즘 설명
+
+- 시간 대기: `delay`가 0 이하이면 스킵, 그 외에는 해당 ms만큼 대기합니다. EMERG 입력 시 즉시 인터럽트됩니다.
+- 조건 대기: `sensor/op/min/max/timeoutMs`를 통해 “pt1 ≥ 600” 같은 조건을 일정 시간 내 만족할 때까지 폴링합니다. 타임아웃 시 에러로 간주될 수 있으며 필요 시 FAILSAFE로 진입합니다.
 
 ---
 
@@ -225,6 +340,14 @@ npm run package
 - 안전 한계 값은 `ConfigManager`와 `validatePressureConfig`로 검증됩니다.
 - 실제 배관과 매핑/방향(OPEN/CLOSE)/리밋스위치 의미를 반드시 현장 점검하세요.
 
+성능/타이밍 참고 값(기본)
+
+- 연결 대기: 포트 open 최대 5s, 핸드셰이크(HELLO↔READY/ACK) 최대 3s
+- 하트비트: 200ms 주기(PC→MCU), MCU 워치독 ~3s (펌웨어 설정)
+- ACK 타임아웃: 1500ms, 재시도 간격 80ms, 최대 재시도 5회
+- 재연결 백오프: 300ms에서 시작, 최대 5s까지 지수 증가
+- 로그 플러시: 2000ms(세션 중 100~500ms로 단축 가능)
+
 ---
 
 ## 10) UI/로깅/운용
@@ -238,6 +361,26 @@ npm run package
   - ACK/NACK 라인은 CSV에 기록하지 않음, 상태 이벤트는 `#`로 태깅하여 후처리 용이
 - 운용 체크리스트
   - `DAY-OF-TEST-CHECKLIST.md`, `HIL-Preflight-Checklist-Results.md` 참고
+
+UI 개요(화면)
+
+```mermaid
+flowchart LR
+  A[상단 헤더] --> B[포트 선택/연결 상태/ARM/EMERG]
+  A --> C[세션 로그 토글]
+  D[밸브 패널] -->|수동 Open/Close| D2[리밋스위치 실시간 반영]
+  E[시퀀스 패널] -->|실행/중지| E2[진행상황 표시]
+  F[센서 차트] -->|PT/TC/Flow| F2[알람/트립 라인]
+  G[터미널 패널] -->|원시 수신/발신|
+```
+
+스크린샷(추가 예정)
+
+- `docs/screenshots/dashboard.png` — 전체 대시보드
+- `docs/screenshots/valves.png` — 밸브 제어/피드백
+- `docs/screenshots/charts.png` — 센서 차트/알람 라인
+
+참고: 스크린샷을 추가하려면 `docs/screenshots/` 폴더를 만들고 이미지를 저장한 뒤 README 경로를 맞춰 주세요.
 
 ---
 
@@ -253,6 +396,12 @@ npm run package
   - `npm run build` — Electron(`dist/`), Next.js(`.next/`, `out/`)
   - `npm run package` — OS별 배포물 생성(AppImage/nsis/dmg)
 
+엔드투엔드(HIL) 드릴 스크립트 아이디어
+
+- 시리얼 시뮬레이터(노드/파이썬)로 READY/ACK/EMERG/텔레메트리 스트림을 발생시키고 UI 반응을 기록
+- 실패 주입: ACK 지연, NACK 주기적 삽입, HB 스톨로 EMERG 유도, CRC 에러 프레임 삽입
+- 목표: FAILSAFE 재진입 가드, 큐/ACK 타이밍, 로깅/상태 표시 일치성 검증
+
 ---
 
 ## 12) 문제 해결(FAQ)
@@ -267,9 +416,14 @@ npm run package
 - 테스트가 느리거나 플래키함
   - 장시간 타이머/이벤트 의존 테스트는 `--runInBand`로 직렬 실행 권장
 
+추가 개념 설명(초심자용)
+
+- 이벤트 루프: 자바스크립트 런타임이 비동기 작업(타이머, IO 콜백)을 순차적으로 처리하는 메커니즘입니다. SerialManager의 ACK 타이머/재시도도 이벤트 루프에서 스케줄링됩니다.
+- 백오프: 실패 시 재시도 간격을 점차 늘려 시스템 과부하를 피하는 전략입니다. 본 프로젝트는 300ms→600ms→...→최대 5s로 증가합니다.
+- 리밋 스위치(LS): 밸브가 끝 위치(OPEN/CLOSED)에 도달했음을 알려주는 물리 스위치입니다. 소프트웨어는 LS 피드백으로 밸브 상태를 확정합니다.
+
 ---
 
 ## 라이선스
 
 이 저장소의 LICENSE 파일을 참고하십시오.
-
