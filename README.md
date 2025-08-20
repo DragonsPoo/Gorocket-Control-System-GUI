@@ -166,23 +166,30 @@ UI            SerialManager                 MCU
 
 ### HeartbeatDaemon
 
-- 기본 200ms 간격으로 `HB` 전송(`serial.send({ raw: 'HB' })`). ACK 없는 시스템 메시지.
-- `sendOnce()`로 즉시 전송 가능(ARM 시 빠른 동기화 용도).
+- 실제 동작: `main.ts`에서 `HeartbeatDaemon`을 250ms 간격으로 시작하고, `sendOnce()`로 즉시 1회 송신합니다. `SequenceEngine`의 자체 하트비트는 비활성화(`hbIntervalMs: 0`)되어 중복 송신을 방지합니다.
+- 전송 형식: `serial.send({ raw: 'HB' })` 호출 시 `SerialManager`가 자동으로 프레이밍하여 `HB,<msgId>,<crc>` 형태로 전송합니다. 즉, HB도 CRC가 포함되지만 ACK를 기대하지 않는 “무응답(system-like)” 메시지입니다.
+- 우선순위: `SerialManager.isPriorityCommand('HB')`가 true여서 큐 초과 시 드롭되지 않습니다. 다만 인플라이트 메시지를 선점하진 않으므로, 드물게 1회 HB가 지연될 수 있습니다.
+- 오류 처리: 포트 미오픈/쓰기 오류는 내부 재연결/재시도 로직으로 흡수되며, `HeartbeatDaemon`은 에러를 억제하여(캐치) 연속 동작을 유지합니다. EMERG 수신 시 하트비트는 즉시 중지됩니다(`main.ts` 참조).
+- MCU 워치독: MCU는 최근 HB 수신 시각을 기준으로 약 3초간 HB 미수신 시 `EMERG,HB_TIMEOUT`을 발생합니다(하드웨어 펌웨어 설정).
 
-하트비트/워치독 타임라인(개념)
+하트비트/워치독 타임라인(상세)
 
 ```mermaid
 sequenceDiagram
-    participant PC as PC (HB 200ms)
+    participant PC as PC (HeartbeatDaemon 250ms)
+    participant Q as SerialManager Queue
     participant MCU as MCU (watchdog ~3s)
 
-    loop Every 200ms
-      PC->>MCU: HB\n
+    loop Every 250ms
+      PC->>Q: enqueue send("HB,<id>,<crc>\n")
+      Note right of Q: HB는 우선순위로 드롭되지 않음
+      Q->>MCU: write HB line
     end
     Note over MCU: 최근 HB 수신 시각 갱신
     rect rgb(255,245,240)
-      Note over MCU: 3초 동안 HB 미수신 시
+      Note over MCU: ~3s 동안 HB 미수신 시 EMERG 발생
       MCU-->>PC: EMERG,HB_TIMEOUT
+      PC->>PC: HeartbeatDaemon.stop(), 큐 정리/페일세이프(상태에 따라)
     end
 ```
 
@@ -190,14 +197,15 @@ sequenceDiagram
 <summary>ASCII Fallback</summary>
 
 ```
-PC (HB every 200ms)                MCU (watchdog ~3s)
-     |  HB                         |
-     |---------------------------->|
-     |  HB                         |
-     |---------------------------->|
-     |  ...                        |
-                                   | if no HB for ~3s → EMERG,HB_TIMEOUT
-                                   |-------------------------------> PC
+PC (every 250ms)        SerialManager(Queue)        MCU (~3s watchdog)
+      |  HB,<id>,<crc>  |                              |
+      |----------------->|  write --------------------->|
+      |  HB,<id>,<crc>  |                              |
+      |----------------->|  write --------------------->|
+      |  ...            |                              |
+                                                         if no HB ~3s → EMERG,HB_TIMEOUT
+                                                         -------------------------------> PC
+PC: stop heartbeat, flush logs, clear queue (per EMERG flow)
 ```
 
 </details>
