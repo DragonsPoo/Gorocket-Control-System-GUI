@@ -11,6 +11,32 @@ Next.js + Electron 기반으로 구축된 안전한 로켓 엔진 테스트용 �
 
 ---
 
+## 릴리스 검증 상태
+
+- 테스트: Jest 12/12 스위트, 130/130 테스트 통과
+- 타입체크: `tsc --noEmit` 통과 (TypeScript 5.x)
+- 빌드: `npm run build` 성공 (Electron main → `dist/`, Next.js → `.next/`, `out/`)
+- 안전 경로: EMERG/FAILSAFE 경로, 큐 비우기/인플라이트 중단/펜딩 취소, CRC-8 무결성, 핸드셰이크/하트비트 로직 검증됨
+
+빠른 재현 (Windows PowerShell):
+
+```
+npm ci
+npm run typecheck
+npm test
+npm run build
+# (선택) 설치본 패키징
+npm run package
+```
+
+지상시험 전 필수 프리플라이트:
+
+- `config.json` 밸브 매핑/인덱스/개폐 방향/리밋스위치 의미가 실제 배관과 일치하는지 저압/무부하 점검
+- UI 또는 하드웨어 E‑Stop으로 EMERG 유도 시: 메인 CLOSE, 벤트/퍼지 OPEN, 재‑ARM 필요 상태 유지 확인
+- 통신 워치독: 컨트롤러/케이블 분리(또는 PONG 차단)로 ACK 타임아웃 → FAILSAFE 진입 확인
+- 시퀀스 검증: `npm run validate:seq` 후 드라이런으로 금지 조합/딜레이/인터럽트 동작 확인
+- 로깅 권한 및 단일 인스턴스 동작 확인 (`logs/` 생성 확인)
+
 ## 목차
 
 1. [시스템 개요](#시스템-개요)

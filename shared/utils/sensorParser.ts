@@ -87,12 +87,8 @@ export function parseSensorData(raw: string): ParsedSensorData {
   }
   // --- CRC validation passed: proceed with parsing the dataPart ---
 
-  // Check for corrupted data packet, which should always start with pt1
-  // Skip check for system messages that don't contain sensor data
-  if (!dataPart.startsWith('pt1:')) {
-    // Don't log error for system messages - they're expected
-    return { sensor, valves, errors };
-  }
+  // Sensor packets may contain valve-only fields or appear in any order.
+  // As long as CRC is valid, proceed to parse without enforcing a fixed prefix.
 
   const parts = dataPart.split(',');
 

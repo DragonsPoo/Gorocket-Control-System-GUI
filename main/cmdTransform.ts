@@ -1,13 +1,16 @@
-export function transformPayload(payload: string, valveMappings?: Record<string, {servoIndex:number, openState?:string, closedState?:string}>): {payload: string, feedback?: {index:number, expect:'open'|'closed'}} {
+export function transformPayload(
+  payload: string,
+  valveMappings?: Record<string, { servoIndex: number; openState?: string; closedState?: string }>
+): { payload: string; feedback?: { index: number; expect: 'open' | 'closed' } } {
   const trimmedPayload = payload.trim();
 
-  // 1) payload가 "SLEEP,<ms>" 또는 "S,<ms>"면 그대로 반환
-  if (trimmedPayload.match(/^(SLEEP|S),(\d+)$/i)) {
+  // 1) SLEEP 명령 패스스루
+  if (/^(SLEEP|S),(\d+)$/i.test(trimmedPayload)) {
     return { payload: trimmedPayload };
   }
 
-  // 2) payload가 `CMD,<ValveName>,(Open|Close)` 형식이면 변환
-  const cmdMatch = trimmedPayload.match(/^CMD,([^,]+),(Open|Close)$/i);
+  // 2) CMD,<ValveName>,(Open|Close) -> V,<idx>,O|C 로 변환
+  const cmdMatch = /^CMD,([^,]+),(Open|Close)$/i.exec(trimmedPayload);
   if (cmdMatch) {
     const valveName = cmdMatch[1];
     const action = cmdMatch[2].toLowerCase();
@@ -18,17 +21,15 @@ export function transformPayload(payload: string, valveMappings?: Record<string,
 
     const servoIndex = valveMappings[valveName].servoIndex;
     const newPayload = `V,${servoIndex},${action === 'open' ? 'O' : 'C'}`;
-    const feedbackExpect = action === 'open' ? 'open' : 'closed';
+    const feedbackExpect: 'open' | 'closed' = action === 'open' ? 'open' : 'closed';
 
     return {
       payload: newPayload,
-      feedback: {
-        index: servoIndex,
-        expect: feedbackExpect
-      }
+      feedback: { index: servoIndex, expect: feedbackExpect },
     };
   }
 
-  // 3) 그 외는 원본 payload 그대로 반환
+  // 3) 그 외 원문 전달
   return { payload: trimmedPayload };
 }
+

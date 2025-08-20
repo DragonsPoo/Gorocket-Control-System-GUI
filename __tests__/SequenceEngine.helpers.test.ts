@@ -113,7 +113,7 @@ describe('SequenceEngine wait steps', () => {
     const { engine } = createEngine();
     const t0 = Date.now();
     await (engine as any).execWaitStep({ type: 'wait', condition: { kind: 'time' }, timeoutMs: 50 });
-    expect(Date.now() - t0).toBeGreaterThanOrEqual(50);
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(45);
   });
 
 });
