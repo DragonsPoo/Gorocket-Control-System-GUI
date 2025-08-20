@@ -214,15 +214,18 @@ PC (HB every 200ms)                MCU (watchdog ~3s)
 FAILSAFE 동작(역할 기반)
 
 ```mermaid
-flowchart TD
+graph TD
   A[Failsafe Trigger]
-  B[Close mains (deduplicated)]
+  B[Close mains - dedup roles]
   C[Open vents]
   D[Open purges]
   E{Emergency latched}
   F[Keep in failsafe]
   G[Exit failsafe]
-  A --> B --> C --> D --> E
+  A --> B
+  B --> C
+  C --> D
+  D --> E
   E -- Yes --> F
   E -- No --> G
 ```
