@@ -215,12 +215,16 @@ FAILSAFE 동작(역할 기반)
 
 ```mermaid
 flowchart TD
-  A[Failsafe Trigger] --> B[Close mains (dedup roles)]
-  B --> C[Open vents]
-  C --> D[Open purges]
-  D --> E{Emergency latched?}
-  E -- Yes --> F[Keep in failsafe]
-  E -- No --> G[Exit failsafe]
+  A[Failsafe Trigger]
+  B[Close mains (deduplicated)]
+  C[Open vents]
+  D[Open purges]
+  E{Emergency latched}
+  F[Keep in failsafe]
+  G[Exit failsafe]
+  A --> B --> C --> D --> E
+  E -- Yes --> F
+  E -- No --> G
 ```
 
 <details>
@@ -443,12 +447,23 @@ UI 개요(화면)
 
 ```mermaid
 flowchart LR
-  A[상단 헤더] --> B[포트 선택/연결 상태/ARM/EMERG]
-  A --> C[세션 로그 토글]
-  D[밸브 패널] -->|수동 Open/Close| D2[리밋스위치 실시간 반영]
-  E[시퀀스 패널] -->|실행/중지| E2[진행상황 표시]
-  F[센서 차트] -->|PT/TC/Flow| F2[알람/트립 라인]
-  G[터미널 패널] -->|원시 수신/발신|
+  A[상단 헤더]
+  B[포트/연결/ARM/EMERG]
+  C[세션 로그 토글]
+  D[밸브 패널]
+  D2[리밋스위치 실시간 반영]
+  E[시퀀스 패널]
+  E2[진행상황 표시]
+  F[센서 차트]
+  F2[알람/트립 라인]
+  G[터미널 패널]
+  H[원시 수신/발신]
+  A --> B
+  A --> C
+  D -->|수동 Open/Close| D2
+  E -->|실행/중지| E2
+  F -->|PT/TC/Flow| F2
+  G --> H
 ```
 
 <details>
