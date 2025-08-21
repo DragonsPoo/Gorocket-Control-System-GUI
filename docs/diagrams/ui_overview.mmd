@@ -1,19 +1,54 @@
-graph LR
-  A[상단 헤더]
-  B[포트/연결/ARM/EMERG]
-  C[세션 로그 토글]
-  D[밸브 패널]
-  D2[리밋스위치 실시간 반영]
-  E[시퀀스 패널]
-  E2[진행상황 표시]
-  F[센서 차트]
-  F2[알람/트립 라인]
-  G[터미널 패널]
-  H[원시 수신/발신]
-  A --> B
-  A --> C
-  D -->|수동 Open/Close| D2
-  E -->|실행/중지| E2
-  F -->|PT/TC/Flow| F2
-  G --> H
+graph TD
+  A[GoRocket 제어 시스템 UI]
+  
+  subgraph Header[상단 헤더]
+    B[시리얼 포트 연결 상태]
+    C[ARM/DISARM 토글]
+    D[로깅 시작/중지]
+    E[비상 정지 버튼]
+  end
+  
+  subgraph Sensors[센서 모니터링 패널]
+    F[압력 센서 4개 - 실시간 PSI]
+    G[온도 센서 2개 - 실시간 °C]
+    H[유량 센서 2개 - 실시간 L/min]
+    I[압력 알람 850PSI / 트립 1000PSI]
+  end
+  
+  subgraph Valves[밸브 제어 패널 - 7개]
+    J[V1: Ethanol Purge Line]
+    K[V2: Main Pressurization]
+    L[V3: Ethanol Fill Line]
+    M[V4: N2O Main Supply - 주요]
+    N[V5: Ethanol Main Supply - 주요]
+    O[V6: System Vent 1]
+    P[V7: System Vent 2]
+  end
+  
+  subgraph Sequence[자동 시퀀스 패널]
+    Q[Cold Flow Test]
+    R[Hot Fire Test]
+    S[Pressure Test]
+    T[Emergency Shutdown]
+    U[진행률 표시 및 중단]
+  end
+  
+  subgraph Charts[실시간 데이터 차트]
+    V[센서 데이터 그래프]
+    W[최근 60초 데이터]
+    X[선택 가능한 센서 표시]
+  end
+  
+  subgraph Terminal[시스템 로그 패널]
+    Y[실시간 시스템 메시지]
+    Z[오류/경고 색상 구분]
+    AA[자동 스크롤 기능]
+  end
+  
+  A --> Header
+  A --> Sensors
+  A --> Valves
+  A --> Sequence
+  A --> Charts
+  A --> Terminal
 
