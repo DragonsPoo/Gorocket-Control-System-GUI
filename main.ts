@@ -20,7 +20,7 @@ class MainApp {
   private sequenceManager: SequenceDataManager | null = null;
   private sequenceEngine: SequenceEngine | null = null; // SequenceEngine 필드 추가
   private ipcInitialized = false;
-  private requiresArm = false; // Re-ARM gate flag
+  private requiresArm = true; // Re-ARM gate flag
 
   getMainWindow() {
     return this.mainWindow;

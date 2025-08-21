@@ -156,7 +156,7 @@ export default function Home() {
                       key={valve.id}
                       valve={valve}
                       onValveChange={handleValveChange}
-                      disabled={isEmergency}
+                      disabled={!isArmed || isEmergency}
                     />
                   ))}
                 </div>
@@ -171,7 +171,7 @@ export default function Home() {
               onCancel={cancelSequence}
               activeSequence={activeSequence}
               sequences={sequences}
-              disabled={!sequencesValid || isEmergency}
+              disabled={!sequencesValid || isEmergency || !isArmed}
             />
             <TerminalPanel logs={sequenceLogs} activeSequence={activeSequence} />
           </div>

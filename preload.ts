@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import type { AppConfig, SerialStatus } from '@shared/types';
-import { PressureSnapshot } from './shared/types/global';
+import type { PressureSnapshot } from '@shared/types/global';
 
 // Applying user feedback to restore multi-channel events
 const api = {
