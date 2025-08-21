@@ -409,3 +409,119 @@ Runbooks and Checklists:
 
 This manual reflects the behavior of the current codebase. If your hardware topology or risk posture differs, update `config.json` and `sequences.json` accordingly, validate them (`npm run validate:seq`), rehearse with HIL/low‑energy tests, and only then proceed to hot‑fire operations. Safety first.
 
+
+## 15) IPC & Event Reference
+
+Renderer → Main (ipcRenderer.invoke unless noted):
+
+- `serial-list` → `Promise<string[]>`
+  - Returns available serial port paths (e.g., `COM3`, `/dev/ttyUSB0`).
+- `serial-connect` `{ path: string, baud: number }` → `Promise<boolean>`
+  - Connects to the port, performs HELLO/READY handshake, starts heartbeat.
+- `serial-disconnect` → `Promise<boolean>`
+  - Gracefully closes the port and stops logging.
+- `serial-send` `SerialCommand | { raw: string } | string` → `Promise<boolean>`
+  - Sends a control/RAW command. If DISARMED and control command, rejects. BUSY errors emit `serial-busy` instead of dialog.
+- `sequence-start` `(name: string)` → `Promise<boolean>`
+  - Starts a named sequence. Requires ARMED.
+- `sequence-cancel` → `Promise<boolean>`
+  - Cancels the current sequence if any.
+- `safety-trigger` `(snapshot?: { reason?: string })` → `Promise<boolean>`
+  - Triggers software fail-safe (closes mains, opens vents/purges) and emits sequence error.
+- `safety:pressureExceeded` (ipcRenderer.send) `(snapshot: PressureSnapshot)`
+  - Notifies main that UI pressure safety exceeded; main executes fail-safe path with fallbacks.
+- `config-get` → `Promise<AppConfig>`
+- `get-sequences` → `Promise<{ sequences: SequenceConfig; result: ValidationResult }>`
+- `safety-clear` → `Promise<boolean>`
+  - Sends `SAFE_CLEAR` to MCU to clear EMERG; expect `EMERG_CLEARED` system line.
+- `system-arm` → `Promise<boolean>`
+  - Sets ARMED (enables control commands). Requires operator confirmation in UI.
+- `system-arm-status` → `Promise<boolean>`
+  - Returns `true` when ARMED.
+- `zoom-in` / `zoom-out` / `zoom-reset` (ipcRenderer.send) → `void`
+- `start-logging` / `stop-logging` (ipcRenderer.send) → `void`
+
+Main → Renderer (ipcMain emitted events):
+
+- `serial-status` `(SerialStatus)`
+  - `state: 'connected' | 'disconnected' | 'reconnecting'`, `path?`.
+- `serial-data` `(string)`
+  - Raw telemetry/system lines. Renderer validates CRC for telemetry.
+- `serial-error` `(string)`
+- `serial-busy` `({ command: any; error: string })`
+  - Non-disruptive BUSY notification for toasts.
+- `sequence-progress` `({ name, stepIndex, step, note? })`
+- `sequence-error` `({ name, stepIndex, step?, error })`
+- `sequence-complete` `({ name })`
+- `log-creation-failed` `(string | undefined)`
+
+Preload API (window.electronAPI):
+
+- Methods mirror the invocations above and provide subscription helpers: `onSerialStatus`, `onSerialData`, `onSerialError`, `onSerialBusy`, `onSequenceProgress`, `onSequenceError`, `onSequenceComplete`, `onLogCreationFailed`.
+
+
+## 16) Code Path Walkthroughs
+
+Connect & Handshake:
+
+1. Renderer calls `listSerialPorts()` and `connectSerial(path, baud)`.
+2. Main `SerialManager.connect()`:
+   - Opens port and pipes `ReadlineParser` (newline-delimited).
+   - Subscribes to `close`, `error`, and `data`.
+   - Performs `sendHelloHandshake()` → frames `HELLO` → expects `READY` or ACK within ~3 s.
+   - Emits `serial-status: connected`, starts `HeartbeatDaemon` (250 ms) and sends an immediate `HB`.
+   - Starts logging on successful connect.
+
+Command Send (manual valve or sequence step):
+
+1. Renderer invokes `sendToSerial(cmd)`.
+2. Main validates ARM for control commands; rejects if DISARMED.
+3. `SerialManager.send()`:
+   - Builds payload from `SerialCommand` or `raw`/string.
+   - Frames `payload,msgId,crc` if needed.
+   - Queues as in-flight, writes line, starts ACK timeout (default 1500 ms, 5 retries).
+   - On `ACK,<id>`: resolves and processes next; on `NACK,<id>,BUSY`: requeues or emits `serial-busy` to UI.
+
+Telemetry Flow:
+
+1. MCU emits lines. System lines (`READY`, `EMERG`, `ACK`, `NACK`, …) are passed through.
+2. Sensor lines end with `,XX` CRC. The renderer parses via `parseSensorData()`:
+   - Verifies CRC‑8(0x07); on mismatch, discards and logs an integrity error.
+   - Extracts `pt1..pt4`, `fm*_Lh` → `flow*`, `tc*` (number or error strings), and valve limit switch states.
+3. UI updates sensor state, chart, and per‑valve LS indicators. Pressure safety monitor may emit `safety:pressureExceeded` to main.
+
+Emergency Paths:
+
+- Firmware‑driven: MCU sends `EMERG` → Main stops heartbeat, clears queues, aborts in‑flight/pending; UI locks controls; DISARM is enforced. On `EMERG_CLEARED`, heartbeat resumes; operator must re‑ARM.
+- UI‑driven: Renderer sends `safety-trigger` or `safety:pressureExceeded` → Main runs `SequenceEngine.tryFailSafe()` and also issues mapped raw valve OPEN/CLOSE fallbacks (vents/purges open; mains close). Emits `sequence-error` explaining reason.
+
+Sequence Execution:
+
+1. Renderer `sequenceStart(name)` → Main checks ARMED → `SequenceEngine.start(name)`.
+2. Engine `toSteps()` normalizes steps: interleaves `cmd` and `wait` from JSON (`CMD,<ValveName>,Open|Close` → `V,<idx>,O/C` via mapping).
+3. For `cmd`:
+   - Send framed payload with ACK timeout (default 1000 ms).
+   - Optional feedback: poll LS states until target state or timeout.
+4. For `wait` (pressure): evaluate debounced condition (N consecutive matches) until `timeoutMs`.
+5. Emits `sequence-progress` per step; `sequence-complete` at end. On error, emits `sequence-error` and optionally triggers fail-safe.
+
+
+## 17) State Machines
+
+SerialManager (queue/ACK):
+
+- States: `idle` → `writing` → `awaiting-ack` → `ack` (success) → `idle`.
+- Timeouts: On ACK timeout or `NACK`, requeue with delay (80 ms) up to retries. On write error/port close, emit error and schedule reconnect (exponential backoff to 5 s).
+- Priority: EMERG/FAILSAFE/HB/SAFE_CLEAR treated as priority in queue management.
+
+SequenceEngine:
+
+- Running flags: `running`, `cancelled`, `currentIndex` tracking.
+- Steps: `cmd` (send + optional LS feedback), `wait` (time or pressure with debounce).
+- Fail-safe: `inFailsafe` latch prevents reentry within 400 ms; remains latched while `emergencyActive`.
+- Heartbeat: Engine HB disabled by default (Daemon provides HB). Cleanup stops HB and clears pendings.
+
+ARM Gating:
+
+- `requiresArm` (true on startup, disconnect, EMERG). Control commands and sequences blocked when true.
+- Renderer shows DISARMED banner; operator must call `systemArm()` to enable control.
