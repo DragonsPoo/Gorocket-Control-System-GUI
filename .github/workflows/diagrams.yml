@@ -20,17 +20,16 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install mermaid-cli
-        run: |
-          npm install -g @mermaid-js/mermaid-cli@latest
-
       - name: Render diagrams
         run: |
           mkdir -p docs/diagrams/png
-          export PUPPETEER_ARGS="--no-sandbox --disable-setuid-sandbox"
+          docker run --rm -u `id -u`:`id -g` -v "$PWD":/data minlag/mermaid-cli:latest -i /data/docs/diagrams/*.mmd -o /data/docs/diagrams/png/ -b transparent || true
+          # Fallback: fix any missing files with individual processing
           for f in docs/diagrams/*.mmd; do \
             n=$(basename "$f" .mmd); \
-            mmdc -i "$f" -o "docs/diagrams/png/$n.png" -b transparent --puppeteer-config '{"args":["--no-sandbox","--disable-setuid-sandbox"]}' || mmdc -i "$f" -o "docs/diagrams/png/$n.png" --puppeteer-config '{"args":["--no-sandbox","--disable-setuid-sandbox"]}'; \
+            if [ ! -f "docs/diagrams/png/$n.png" ]; then \
+              docker run --rm -u `id -u`:`id -g` -v "$PWD":/data minlag/mermaid-cli:latest -i "/data/$f" -o "/data/docs/diagrams/png/$n.png" -b transparent || true; \
+            fi \
           done
 
       - name: Commit diagrams
