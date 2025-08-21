@@ -25,13 +25,11 @@ jobs:
           npm install -g @mermaid-js/mermaid-cli@10.9.0
 
       - name: Render diagrams
-        env:
-          PUPPETEER_ARGS: "--no-sandbox --disable-setuid-sandbox"
         run: |
           mkdir -p docs/diagrams/png
           for f in docs/diagrams/*.mmd; do \
             n=$(basename "$f" .mmd); \
-            mmdc -i "$f" -o "docs/diagrams/png/$n.png" -b transparent || mmdc -i "$f" -o "docs/diagrams/png/$n.png"; \
+            mmdc -i "$f" -o "docs/diagrams/png/$n.png" -b transparent --browserArgs "--no-sandbox,--disable-setuid-sandbox" || mmdc -i "$f" -o "docs/diagrams/png/$n.png" --browserArgs "--no-sandbox,--disable-setuid-sandbox"; \
           done
 
       - name: Commit diagrams
