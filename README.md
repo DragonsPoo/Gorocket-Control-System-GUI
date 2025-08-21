@@ -1,3 +1,6 @@
+<img width="2879" height="1700" alt="스크린샷 2025-08-18 151005" src="https://github.com/user-attachments/assets/8317575d-080e-4031-ace6-903a784e9e98" />
+<img width="1863" height="1197" alt="image" src="https://github.com/user-attachments/assets/e83a5563-57d6-49ee-b93e-51e1906644c7" />
+
 # GoRocket Control System GUI — 지상 시험 운영 매뉴얼
 
 버전: 2.6.0 (Electron 37 / Next.js 15 / TypeScript 5)
