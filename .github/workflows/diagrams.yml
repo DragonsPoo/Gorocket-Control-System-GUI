@@ -29,7 +29,7 @@ jobs:
           mkdir -p docs/diagrams/png
           for f in docs/diagrams/*.mmd; do \
             n=$(basename "$f" .mmd); \
-            mmdc -i "$f" -o "docs/diagrams/png/$n.png" -b transparent --puppeteerConfig puppeteer-config.json || mmdc -i "$f" -o "docs/diagrams/png/$n.png" --puppeteerConfig puppeteer-config.json; \
+            mmdc -i "$f" -o "docs/diagrams/png/$n.png" -b transparent --puppeteer-config-file puppeteer-config.json || mmdc -i "$f" -o "docs/diagrams/png/$n.png" --puppeteer-config-file puppeteer-config.json; \
           done
 
       - name: Commit diagrams
