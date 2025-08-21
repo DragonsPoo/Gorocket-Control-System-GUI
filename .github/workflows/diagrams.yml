@@ -18,12 +18,12 @@ jobs:
       - name: Render diagrams
         run: |
           mkdir -p docs/diagrams/png
-          docker run --rm -u `id -u`:`id -g` -v "$PWD":/data minlag/mermaid-cli:latest -i /data/docs/diagrams/*.mmd -o /data/docs/diagrams/png/ -b transparent || true
+          docker run --rm --security-opt seccomp=unconfined --cap-add=SYS_ADMIN -v "$PWD":/data minlag/mermaid-cli:latest -i /data/docs/diagrams/*.mmd -o /data/docs/diagrams/png/ -b transparent || true
           # Fallback: fix any missing files with individual processing
           for f in docs/diagrams/*.mmd; do \
             n=$(basename "$f" .mmd); \
             if [ ! -f "docs/diagrams/png/$n.png" ]; then \
-              docker run --rm -u `id -u`:`id -g` -v "$PWD":/data minlag/mermaid-cli:latest -i "/data/$f" -o "/data/docs/diagrams/png/$n.png" -b transparent || true; \
+              docker run --rm --security-opt seccomp=unconfined --cap-add=SYS_ADMIN -v "$PWD":/data minlag/mermaid-cli:latest -i "/data/$f" -o "/data/docs/diagrams/png/$n.png" -b transparent || true; \
             fi \
           done
 
