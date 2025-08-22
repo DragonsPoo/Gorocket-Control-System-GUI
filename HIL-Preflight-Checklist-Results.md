@@ -1,101 +1,103 @@
-# HIL-Preflight-Checklist-Results.md
+﻿# HIL-Preflight-Checklist-Results.md
 
-## 체크리스트 결과 요약
+## 泥댄겕由ъ뒪??寃곌낵 ?붿빟
 
-### 필수 패치 (블로커) ✅
+### ?꾩닔 ?⑥튂 (釉붾줈而? ??
 
-* [x] **A1) 펌웨어: 압력 텔레메트리 pt1..pt4 추가**
-  - 위치: arduino_mega_code.ino:572-575
-  - 형식: pt1:150.00,pt2:120.50,pt3:0.00,pt4:0.00
-  - 검증: 소수 2자리 PSI 값 정상 출력
+* [x] **A1) ?뚯썾?? ?뺣젰 ?붾젅硫뷀듃由?pt1..pt4 異붽?**
+  - ?꾩튂: arduino_mega_code.ino:572-575
+  - ?뺤떇: pt1:150.00,pt2:120.50,pt3:0.00,pt4:0.00
+  - 寃利? ?뚯닔 2?먮━ PSI 媛??뺤긽 異쒕젰
 
-* [x] **A2) 렌더러 파서: CRC 오류 분기 단일화**
-  - 위치: shared/utils/sensorParser.ts:67-74  
-  - 확인: "CRC mismatch" 분기 1개만 존재
-  - 메시지: "Telemetry integrity error: CRC mismatch..."
+* [x] **A2) ?뚮뜑???뚯꽌: CRC ?ㅻ쪟 遺꾧린 ?⑥씪??*
+  - ?꾩튂: shared/utils/sensorParser.ts:67-74  
+  - ?뺤씤: "CRC mismatch" 遺꾧린 1媛쒕쭔 議댁옱
+  - 硫붿떆吏: "Telemetry integrity error: CRC mismatch..."
 
-* [x] **A3) EMERG/끊김 시 묵은 명령 재전송 금지**
-  - 큐 페일세이프: clearQueue(), abortInflight(), abortAllPendings() 구현
-  - MAX_QUEUE_LEN: 200 (오래된 명령 드롭)
-  - 재-ARM 게이트: requiresArm 플래그로 제어 명령 차단
-  - 검증: EMERG 후 큐 비움, 재-ARM 전 송신 차단 확인
+* [x] **A3) EMERG/?딄? ??臾듭? 紐낅졊 ?ъ쟾??湲덉?**
+  - ???섏씪?몄씠?? clearQueue(), abortInflight(), abortAllPendings() 援ы쁽
+  - MAX_QUEUE_LEN: 200 (?ㅻ옒??紐낅졊 ?쒕∼)
+  - ??ARM 寃뚯씠?? requiresArm ?뚮옒洹몃줈 ?쒖뼱 紐낅졊 李⑤떒
+  - 寃利? EMERG ????鍮꾩?, ??ARM ???≪떊 李⑤떒 ?뺤씤
 
-* [x] **A4) 하트비트 단일화 + 비차단 송신**
-  - 메인: HeartbeatDaemon만 사용 (main.ts:19)
-  - 엔진: hbIntervalMs: 0으로 비활성화
-  - 비차단: writeNow('HB') 사용 (큐 대기 없음)
-  - 검증: 런타임 HB 중복 없음, 명령 지연에 HB 영향 없음
+* [x] **A4) ?섑듃鍮꾪듃 ?⑥씪??+ 鍮꾩감???≪떊**
+  - 硫붿씤: HeartbeatDaemon留??ъ슜 (main.ts:19)
+  - ?붿쭊: hbIntervalMs: 0?쇰줈 鍮꾪솢?깊솕
+  - 鍮꾩감?? writeNow('HB') ?ъ슜 (???湲??놁쓬)
+  - 寃利? ?고???HB 以묐났 ?놁쓬, 紐낅졊 吏?곗뿉 HB ?곹뼢 ?놁쓬
 
-### 중요 개선 ✅
+### 以묒슂 媛쒖꽑 ??
 
-* [x] **B1) 시퀀스 스키마 금지조합 대칭성**
-  - System Vent 2 + Ethanol Main Supply 금지
-  - System Vent 2 + N2O Main Supply 금지
-  - 검증: System Vent 2 동시 오픈 시 스키마 검증 에러
+* [x] **B1) ?쒗???ㅽ궎留?湲덉?議고빀 ?移?꽦**
+  - System Vent 2 + Ethanol Main Supply 湲덉?
+  - System Vent 2 + N2O Main Supply 湲덉?
+  - 寃利? System Vent 2 ?숈떆 ?ㅽ뵂 ???ㅽ궎留?寃利??먮윭
 
-* [x] **B2) 세션 메타 임계값 소스 정합**
-  - 하드코드 제거: safetyLevels를 config.json에서 읽기
-  - 매핑: pressureLimitAlarmPsi, pressureLimitTripPsi, pressureRateLimitPsiPerSec
-  - 검증: 메타 값이 config 변경에 동기화됨
+* [x] **B2) ?몄뀡 硫뷀? ?꾧퀎媛??뚯뒪 ?뺥빀**
+  - ?섎뱶肄붾뱶 ?쒓굅: safetyLevels瑜?config.json?먯꽌 ?쎄린
+  - 留ㅽ븨: pressureLimitAlarmPsi, pressureLimitTripPsi, pressureRateLimitPsiPerSec
+  - 寃利? 硫뷀? 媛믪씠 config 蹂寃쎌뿉 ?숆린?붾맖
 
-* [x] **B3) 로깅 시작/중단 타이밍 정리**
-  - 연결 성공 후에만 로깅 시작
-  - 실패/끊김 즉시 로깅 종료
-  - 검증: 연결 실패 시 고아 세션 폴더 없음
+* [x] **B3) 濡쒓퉭 ?쒖옉/以묐떒 ??대컢 ?뺣━**
+  - ?곌껐 ?깃났 ?꾩뿉留?濡쒓퉭 ?쒖옉
+  - ?ㅽ뙣/?딄? 利됱떆 濡쒓퉭 醫낅즺
+  - 寃利? ?곌껐 ?ㅽ뙣 ??怨좎븘 ?몄뀡 ?대뜑 ?놁쓬
 
-* [x] **B4) 온도 단위 정합(표시)**
-  - tc1/tc2: K×100 → UI에서 °C 변환 ((K/100) - 273.15)
-  - 예시: 29315 → 20.0°C 표시
-  - 검증: 파서는 원시값 저장, UI가 변환 담당
+* [x] **B4) ?⑤룄 ?⑥쐞 ?뺥빀(?쒖떆)**
+  - tc1/tc2: K횞100 ??UI?먯꽌 째C 蹂??((K/100) - 273.15)
+  - ?덉떆: 29315 ??20.0째C ?쒖떆
+  - 寃利? ?뚯꽌???먯떆媛???? UI媛 蹂???대떦
 
-* [x] **B5) 압력 기반 wait 디바운스**
-  - 연속 N샘플(기본 3) 만족 시 조건 충족
-  - 설정: pressureDebounceCount in SequenceEngine options
-  - 검증: 임계 근처 플래핑 시 안정 동작
+* [x] **B5) ?뺣젰 湲곕컲 wait ?붾컮?댁뒪**
+  - ?곗냽 N?섑뵆(湲곕낯 3) 留뚯” ??議곌굔 異⑹”
+  - ?ㅼ젙: pressureDebounceCount in SequenceEngine options
+  - 寃利? ?꾧퀎 洹쇱쿂 ?뚮옒?????덉젙 ?숈옉
 
-* [x] **B6) 우선순위/큐 상한**
-  - 우선순위: EMERG/FAILSAFE/HB/SAFE_CLEAR
-  - 큐 상한: MAX_QUEUE_LEN = 200
-  - 검증: 부하 시 HB/EMERG 즉시 송신 보장
+* [x] **B6) ?곗꽑?쒖쐞/???곹븳**
+  - ?곗꽑?쒖쐞: EMERG/FAILSAFE/HB/SAFE_CLEAR
+  - ???곹븳: MAX_QUEUE_LEN = 200
+  - 寃利? 遺????HB/EMERG 利됱떆 ?≪떊 蹂댁옣
 
-### 빌드·검증·시뮬 ✅
+### 鍮뚮뱶쨌寃利씲룹떆裕???
 
-* [x] **빌드/정적검사**
-  - npm run build: ✓ 성공
-  - npm run lint: ✓ No ESLint warnings or errors  
-  - npx tsc --noEmit: ✓ 타입 에러 0
+* [x] **鍮뚮뱶/?뺤쟻寃??*
+  - npm run build: ???깃났
+  - npm run lint: ??No ESLint warnings or errors  
+  - npx tsc --noEmit: ??????먮윭 0
 
-* [x] **그렙 증빙**
-  - pt1: ✓ arduino_mega_code.ino:572
-  - CRC mismatch: ✓ 1회만 (sensorParser.ts:69)
-  - requiresArm: ✓ main.ts에서 다수 위치 확인
-  - writeNow('HB'): ✓ HeartbeatDaemon.ts:18,29
-  - System Vent 2: ✓ sequences.schema.json:87,105
-  - config sourcing: ✓ LogManager.ts:176-178
-  - pressure debounce: ✓ SequenceEngine.ts 다수 위치
-  - MAX_QUEUE_LEN: ✓ SerialManager.ts:55,156
+* [x] **洹몃젟 利앸튃**
+  - pt1: ??arduino_mega_code.ino:572
+  - CRC mismatch: ??1?뚮쭔 (sensorParser.ts:69)
+  - requiresArm: ??main.ts?먯꽌 ?ㅼ닔 ?꾩튂 ?뺤씤
+  - writeNow('HB'): ??HeartbeatDaemon.ts:18,29
+  - System Vent 2: ??sequences.schema.json:87,105
+  - config sourcing: ??LogManager.ts:176-178
+  - pressure debounce: ??SequenceEngine.ts ?ㅼ닔 ?꾩튂
+  - MAX_QUEUE_LEN: ??SerialManager.ts:55,156
 
-* [x] **시뮬/로그**
-  - 텔레메트리 모의: tools/sim/telemetry_smoke.txt 생성
-  - 압력 wait 디바운스: 연속 3샘플 평가 로직 구현
-  - EMERG 후 큐 비움: clearQueue/abortAll 호출 확인
-  - HB 충돌: SequenceEngine HB 비활성화, HeartbeatDaemon만 사용
+* [x] **?쒕?/濡쒓렇**
+  - ?붾젅硫뷀듃由?紐⑥쓽: tools/sim/telemetry_smoke.txt ?앹꽦
+  - ?뺣젰 wait ?붾컮?댁뒪: ?곗냽 3?섑뵆 ?됯? 濡쒖쭅 援ы쁽
+  - EMERG ????鍮꾩?: clearQueue/abortAll ?몄텧 ?뺤씤
+  - HB 異⑸룎: SequenceEngine HB 鍮꾪솢?깊솕, HeartbeatDaemon留??ъ슜
 
-### 커밋 정보
+### 而ㅻ컠 ?뺣낫
 
 ```
 Commit: 04f6ce2
 Date: 2025-01-18
 Message: feat(safety): implement comprehensive safety patches for v2.6.0
 Files: 7 files changed, 183 insertions(+), 22 deletions(-)
-Branch: main (브랜치 없이 즉시 적용 완료)
+Branch: main (釉뚮옖移??놁씠 利됱떆 ?곸슜 ?꾨즺)
 ```
 
-## 최종 상태
+## 理쒖쥌 ?곹깭
 
-✅ **전체 완료**: 모든 필수 패치(A1-A4)와 중요 개선(B1-B6) 성공적으로 적용  
-✅ **빌드 통과**: TypeScript/ESLint/Next.js 빌드 모두 성공  
-✅ **안전성 강화**: 큐 페일세이프, 디바운싱, 우선순위 처리 구현  
-✅ **정합성 확보**: 설정 소스 통일, 스키마 대칭성, 로깅 타이밍 개선  
+??**?꾩껜 ?꾨즺**: 紐⑤뱺 ?꾩닔 ?⑥튂(A1-A4)? 以묒슂 媛쒖꽑(B1-B6) ?깃났?곸쑝濡??곸슜  
+??**鍮뚮뱶 ?듦낵**: TypeScript/ESLint/Next.js 鍮뚮뱶 紐⑤몢 ?깃났  
+??**?덉쟾??媛뺥솕**: ???섏씪?몄씠?? ?붾컮?댁떛, ?곗꽑?쒖쐞 泥섎━ 援ы쁽  
+??**?뺥빀???뺣낫**: ?ㅼ젙 ?뚯뒪 ?듭씪, ?ㅽ궎留??移?꽦, 濡쒓퉭 ??대컢 媛쒖꽑  
 
-시스템은 이제 HIL 테스트 및 실제 운용을 위한 안전 요구사항을 충족합니다.
+?쒖뒪?쒖? ?댁젣 HIL ?뚯뒪??諛??ㅼ젣 ?댁슜???꾪븳 ?덉쟾 ?붽뎄?ы빆??異⑹”?⑸땲??
+
+Note: Use only Alarm/Trip thresholds for pressure. Legacy pressureLimitPsi has been removed.

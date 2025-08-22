@@ -8,7 +8,6 @@ export interface AppConfig {
   };
   valveMappings: Record<string, ValveMappingEntry>;
   maxChartDataPoints: number;
-  pressureLimitPsi: number;
   pressureLimitAlarmPsi?: number;
   pressureLimitTripPsi?: number;
   pressureRateLimitPsiPerSec?: number;

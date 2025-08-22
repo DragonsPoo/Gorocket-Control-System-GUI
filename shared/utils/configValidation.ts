@@ -14,11 +14,7 @@ export function validatePressureConfig(config: AppConfig): ConfigValidationResul
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // 기본값 확인
-  if (config.pressureLimitPsi <= 0) {
-    errors.push('pressureLimitPsi must be greater than 0');
-  }
-
+  // 기본 확인
   if (config.pressureLimitAlarmPsi !== undefined && config.pressureLimitAlarmPsi <= 0) {
     errors.push('pressureLimitAlarmPsi must be greater than 0');
   }
@@ -34,33 +30,35 @@ export function validatePressureConfig(config: AppConfig): ConfigValidationResul
   // 알람 < 트립 조건 확인
   if (config.pressureLimitAlarmPsi !== undefined && config.pressureLimitTripPsi !== undefined) {
     if (config.pressureLimitAlarmPsi >= config.pressureLimitTripPsi) {
-      errors.push(`pressureLimitAlarmPsi (${config.pressureLimitAlarmPsi}) must be less than pressureLimitTripPsi (${config.pressureLimitTripPsi})`);
+      errors.push(
+        `pressureLimitAlarmPsi (${config.pressureLimitAlarmPsi}) must be less than pressureLimitTripPsi (${config.pressureLimitTripPsi})`
+      );
     }
   }
 
-  // 경고 조건들
+  // 경고 조건
   if (config.pressureLimitAlarmPsi === undefined) {
     warnings.push('pressureLimitAlarmPsi is not defined - no alarm threshold will be active');
   }
-
   if (config.pressureLimitTripPsi === undefined) {
     warnings.push('pressureLimitTripPsi is not defined - no trip threshold will be active');
   }
-
   if (config.pressureRateLimitPsiPerSec === undefined) {
     warnings.push('pressureRateLimitPsiPerSec is not defined - no rate-of-change monitoring');
   }
 
-  // 단위 검증 (펌웨어와의 호환성)
+  // 상위 검증(펌웨어/단위 환산 주의)
   const maxReasonablePsi = 5000; // 대부분의 로켓 시스템에서 5000 PSI는 매우 높은 값
   if (config.pressureLimitTripPsi !== undefined && config.pressureLimitTripPsi > maxReasonablePsi) {
-    warnings.push(`pressureLimitTripPsi (${config.pressureLimitTripPsi}) seems unusually high - verify units are in PSI, not PSI*100`);
+    warnings.push(
+      `pressureLimitTripPsi (${config.pressureLimitTripPsi}) seems unusually high - verify units are in PSI, not PSI*100`
+    );
   }
 
   return {
     valid: errors.length === 0,
     errors,
-    warnings
+    warnings,
   };
 }
 
@@ -77,3 +75,4 @@ export function psiToFirmwareFormat(psi: number): number {
 export function firmwareFormatToPsi(firmwareValue: number): number {
   return firmwareValue / 100;
 }
+

@@ -16,8 +16,8 @@ const configSchema = z.object({
   serial: z.object({ baudRate: z.number() }),
   valveMappings: z.record(z.object({ servoIndex: z.number() })),
   maxChartDataPoints: z.number(),
-  pressureLimitPsi: z.number(),
-  pressureLimitAlarmPsi: z.number().optional(),
+  // Canonical fields
+  pressureLimitAlarmPsi: z.number(),
   pressureLimitTripPsi: z.number().optional(),
   pressureRateLimitPsiPerSec: z.number().optional(),
   valveFeedbackTimeout: z.number().optional().default(2000),
@@ -30,7 +30,8 @@ export class ConfigManager {
   async load(configPath: string): Promise<AppConfig> {
     const absolute = path.resolve(configPath);
     const data = await fs.readFile(absolute, 'utf-8');
-    const parsed = configSchema.parse(JSON.parse(data));
+    const raw = JSON.parse(data);
+    const parsed = configSchema.parse(raw);
     
     // 압력 관련 설정 검증
     const validation = validatePressureConfig(parsed as AppConfig);

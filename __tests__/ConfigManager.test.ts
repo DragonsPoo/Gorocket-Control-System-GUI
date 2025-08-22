@@ -31,7 +31,6 @@ describe('ConfigManager', () => {
           'N2O Purge': { servoIndex: 3 }
         },
         maxChartDataPoints: 100,
-        pressureLimitPsi: 850,
         pressureLimitAlarmPsi: 800,
         pressureLimitTripPsi: 1000,
         pressureRateLimitPsiPerSec: 50,
@@ -55,7 +54,6 @@ describe('ConfigManager', () => {
         serial: { baudRate: 115200 },
         valveMappings: {},
         maxChartDataPoints: 100,
-        pressureLimitPsi: 850,
         pressureLimitAlarmPsi: 1000, // >= trip
         pressureLimitTripPsi: 1000,
         initialValves: []
@@ -72,7 +70,8 @@ describe('ConfigManager', () => {
         serial: { baudRate: 115200 },
         valveMappings: {},
         maxChartDataPoints: 100,
-        pressureLimitPsi: -100, // negative
+        pressureLimitAlarmPsi: -100, // negative
+        pressureLimitTripPsi: -1,
         initialValves: []
       };
 
@@ -108,7 +107,7 @@ describe('ConfigManager', () => {
         serial: { baudRate: 115200 },
         valveMappings: {},
         maxChartDataPoints: 100,
-        pressureLimitPsi: 850,
+        pressureLimitAlarmPsi: 850,
         valveFeedbackTimeout: 2000,
         initialValves: []
       };
@@ -132,7 +131,6 @@ describe('validatePressureConfig', () => {
       serial: { baudRate: 115200 },
       valveMappings: {},
       maxChartDataPoints: 100,
-      pressureLimitPsi: 850,
       pressureLimitAlarmPsi: 800,
       pressureLimitTripPsi: 1000,
       pressureRateLimitPsiPerSec: 50,
@@ -151,7 +149,6 @@ describe('validatePressureConfig', () => {
       serial: { baudRate: 115200 },
       valveMappings: {},
       maxChartDataPoints: 100,
-      pressureLimitPsi: 850,
       pressureLimitAlarmPsi: 1000,
       pressureLimitTripPsi: 1000,
       valveFeedbackTimeout: 2000,
@@ -173,7 +170,8 @@ describe('validatePressureConfig', () => {
       serial: { baudRate: 115200 },
       valveMappings: {},
       maxChartDataPoints: 100,
-      pressureLimitPsi: -100,
+      pressureLimitAlarmPsi: -100,
+      pressureLimitTripPsi: -5,
       valveFeedbackTimeout: 2000,
       initialValves: []
     };
@@ -181,7 +179,8 @@ describe('validatePressureConfig', () => {
     const result = validatePressureConfig(config);
     
     expect(result.valid).toBe(false);
-    expect(result.errors).toContain('pressureLimitPsi must be greater than 0');
+    expect(result.errors).toContain('pressureLimitAlarmPsi must be greater than 0');
+    expect(result.errors).toContain('pressureLimitTripPsi must be greater than 0');
   });
 
   it('should fail with zero pressure values', () => {
@@ -189,7 +188,7 @@ describe('validatePressureConfig', () => {
       serial: { baudRate: 115200 },
       valveMappings: {},
       maxChartDataPoints: 100,
-      pressureLimitPsi: 0,
+      pressureLimitAlarmPsi: 0,
       pressureLimitTripPsi: 0,
       valveFeedbackTimeout: 2000,
       initialValves: []
@@ -198,7 +197,7 @@ describe('validatePressureConfig', () => {
     const result = validatePressureConfig(config);
     
     expect(result.valid).toBe(false);
-    expect(result.errors).toContain('pressureLimitPsi must be greater than 0');
+    expect(result.errors).toContain('pressureLimitAlarmPsi must be greater than 0');
     expect(result.errors).toContain('pressureLimitTripPsi must be greater than 0');
   });
 
@@ -207,7 +206,7 @@ describe('validatePressureConfig', () => {
       serial: { baudRate: 115200 },
       valveMappings: {},
       maxChartDataPoints: 100,
-      pressureLimitPsi: 850,
+      pressureLimitAlarmPsi: 850,
       valveFeedbackTimeout: 2000,
       initialValves: []
     };
@@ -215,7 +214,6 @@ describe('validatePressureConfig', () => {
     const result = validatePressureConfig(config);
     
     expect(result.valid).toBe(true);
-    expect(result.warnings).toContain('pressureLimitAlarmPsi is not defined - no alarm threshold will be active');
     expect(result.warnings).toContain('pressureLimitTripPsi is not defined - no trip threshold will be active');
     expect(result.warnings).toContain('pressureRateLimitPsiPerSec is not defined - no rate-of-change monitoring');
   });
@@ -225,7 +223,7 @@ describe('validatePressureConfig', () => {
       serial: { baudRate: 115200 },
       valveMappings: {},
       maxChartDataPoints: 100,
-      pressureLimitPsi: 850,
+      pressureLimitAlarmPsi: 850,
       pressureLimitTripPsi: 10000, // Very high
       valveFeedbackTimeout: 2000,
       initialValves: []
@@ -241,3 +239,4 @@ describe('validatePressureConfig', () => {
     );
   });
 });
+

@@ -1,113 +1,115 @@
-# 🚀 Gorocket HIL/Cold-flow 운용 Runbook
+﻿# ?? Gorocket HIL/Cold-flow ?댁슜 Runbook
 
-## 운용 재현성 정보
+## ?댁슜 ?ы쁽???뺣낫
 ```
-운용 커밋: 2f89eb6ec95c13e93bb31dc7657c5081c78f6bd5
-태그: v2.6.0-safety-ready  
-Config 해시: 08e9fdfeed1b95ffb0d1d41c2a0859f5538f915d765d9c9b4005815117eeca93
-빌드 상태: ✅ Build OK, Lint OK, TypeScript OK
-```
-
-## 최종 안전 상태 확인
-
-### 필수 패치 적용 상태 ✅
-- [x] A1) 압력 텔레메트리 pt1..pt4 (arduino:572)
-- [x] A2) CRC 분기 단일화 (parser:69) 
-- [x] A3) EMERG 큐 페일세이프 + 재-ARM 게이트
-- [x] A4) HB 단일화 + 비차단 송신
-
-### 중요 개선 적용 상태 ✅
-- [x] B1) 스키마 금지조합 대칭성 (System Vent 2)
-- [x] B2) 세션 메타 config 소스 정합
-- [x] B3) 로깅 타이밍 (연결 후 시작/실패 즉시 중단)
-- [x] B4) 온도 단위 정합 (UI에서 K→°C 변환)
-- [x] B5) 압력 wait 디바운스 (3샘플)
-- [x] B6) 우선순위/큐 상한 (MAX_QUEUE_LEN=200)
-
-## 의도적 Fault 주입 3종 (15분 soak)
-
-### F1) HB 중단→펌웨어 비상 확인
-```
-1. 연결 수립 후 HeartbeatDaemon 강제 중지
-2. 펌웨어 HEARTBEAT_TIMEOUT_MS(3000ms) 후 EMERG 확인
-3. SAFE_CLEAR + 시스템 재-ARM 수행
-4. 로그: [EMERG,HB_TIMEOUT] → [BLOCK,disarmed] → [ARM,ready]
+?댁슜 而ㅻ컠: 2f89eb6ec95c13e93bb31dc7657c5081c78f6bd5
+?쒓렇: v2.6.0-safety-ready  
+Config ?댁떆: 08e9fdfeed1b95ffb0d1d41c2a0859f5538f915d765d9c9b4005815117eeca93
+鍮뚮뱶 ?곹깭: ??Build OK, Lint OK, TypeScript OK
 ```
 
-### F2) 시리얼 재연결→묵은 명령 0
+## 理쒖쥌 ?덉쟾 ?곹깭 ?뺤씤
+
+### ?꾩닔 ?⑥튂 ?곸슜 ?곹깭 ??
+- [x] A1) ?뺣젰 ?붾젅硫뷀듃由?pt1..pt4 (arduino:572)
+- [x] A2) CRC 遺꾧린 ?⑥씪??(parser:69) 
+- [x] A3) EMERG ???섏씪?몄씠??+ ??ARM 寃뚯씠??
+- [x] A4) HB ?⑥씪??+ 鍮꾩감???≪떊
+
+### 以묒슂 媛쒖꽑 ?곸슜 ?곹깭 ??
+- [x] B1) ?ㅽ궎留?湲덉?議고빀 ?移?꽦 (System Vent 2)
+- [x] B2) ?몄뀡 硫뷀? config ?뚯뒪 ?뺥빀
+- [x] B3) 濡쒓퉭 ??대컢 (?곌껐 ???쒖옉/?ㅽ뙣 利됱떆 以묐떒)
+- [x] B4) ?⑤룄 ?⑥쐞 ?뺥빀 (UI?먯꽌 K?뮻캜 蹂??
+- [x] B5) ?뺣젰 wait ?붾컮?댁뒪 (3?섑뵆)
+- [x] B6) ?곗꽑?쒖쐞/???곹븳 (MAX_QUEUE_LEN=200)
+
+## ?섎룄??Fault 二쇱엯 3醫?(15遺?soak)
+
+### F1) HB 以묐떒?믫럩?⑥뼱 鍮꾩긽 ?뺤씤
+```
+1. ?곌껐 ?섎┰ ??HeartbeatDaemon 媛뺤젣 以묒?
+2. ?뚯썾??HEARTBEAT_TIMEOUT_MS(3000ms) ??EMERG ?뺤씤
+3. SAFE_CLEAR + ?쒖뒪????ARM ?섑뻾
+4. 濡쒓렇: [EMERG,HB_TIMEOUT] ??[BLOCK,disarmed] ??[ARM,ready]
+```
+
+### F2) ?쒕━???ъ뿰寃겸넂臾듭? 紐낅졊 0
 ```  
-1. 명령 큐에 일반 명령들 적재
-2. 시리얼 포트 강제 끊기
-3. 재연결 시 큐 비움 + requiresArm=true 확인
-4. 로그: queue cleared(N→0), requires re-ARM
+1. 紐낅졊 ?먯뿉 ?쇰컲 紐낅졊???곸옱
+2. ?쒕━???ы듃 媛뺤젣 ?딄린
+3. ?ъ뿰寃?????鍮꾩? + requiresArm=true ?뺤씤
+4. 濡쒓렇: queue cleared(N??), requires re-ARM
 ```
 
-### F3) NACK 폭주→재시도→페일세이프
+### F3) NACK ??＜?믪옱?쒕룄?믫럹?쇱꽭?댄봽
 ```
-1. 펌웨어 모킹: 모든 명령에 NACK 응답
-2. 재시도 5회 → 페일세이프 트리거 확인
-3. UI 에러 표면화 + 벤트/퍼지 자동 개방
-4. 로그: NACK retry(5) → failsafe triggered
+1. ?뚯썾??紐⑦궧: 紐⑤뱺 紐낅졊??NACK ?묐떟
+2. ?ъ떆??5?????섏씪?몄씠???몃━嫄??뺤씤
+3. UI ?먮윭 ?쒕㈃??+ 踰ㅽ듃/?쇱? ?먮룞 媛쒕갑
+4. 濡쒓렇: NACK retry(5) ??failsafe triggered
 ```
 
-## Hot-fire 추가 게이트 6종
+## Hot-fire 異붽? 寃뚯씠??6醫?
 
-### G1) 지연 측정 실기
-- EMERG 신호 → 메인 닫힘·벤트/퍼지 개방 end-to-end 지연
-- 목표: <500ms, 여유 20% 이상 확보
-- 로그: 타임스탬프 정밀 측정
+### G1) 吏??痢≪젙 ?ㅺ린
+- EMERG ?좏샇 ??硫붿씤 ?ロ옒쨌踰ㅽ듃/?쇱? 媛쒕갑 end-to-end 吏??
+- 紐⑺몴: <500ms, ?ъ쑀 20% ?댁긽 ?뺣낫
+- 濡쒓렇: ??꾩뒪?ы봽 ?뺣? 痢≪젙
 
-### G2) 전원/USB 플랩 내성
-- 전원 순간 강하, USB 연결 플래핑  
-- requiresArm=true 상태 유지 확인
-- 복구 후 재-ARM 없인 명령 차단 지속
+### G2) ?꾩썝/USB ?뚮옪 ?댁꽦
+- ?꾩썝 ?쒓컙 媛뺥븯, USB ?곌껐 ?뚮옒?? 
+- requiresArm=true ?곹깭 ?좎? ?뺤씤
+- 蹂듦뎄 ????ARM ?놁씤 紐낅졊 李⑤떒 吏??
 
-### G3) 금지조합 실기 검증
-- System Vent 2 + Ethanol/N2O Main Supply 동시 오픈 시도
-- UI 버튼/시퀀스 양쪽에서 차단 확인
-- 스키마 검증 에러 메시지 표시
+### G3) 湲덉?議고빀 ?ㅺ린 寃利?
+- System Vent 2 + Ethanol/N2O Main Supply ?숈떆 ?ㅽ뵂 ?쒕룄
+- UI 踰꾪듉/?쒗???묒そ?먯꽌 李⑤떒 ?뺤씤
+- ?ㅽ궎留?寃利??먮윭 硫붿떆吏 ?쒖떆
 
-### G4) 데이터 보존 확인
-- 세션 디렉터리 생성: config/sequences/meta 파일
-- 커밋·config·sequences 해시 저장 검증
-- 로그 회수 절차 1회 리허설
+### G4) ?곗씠??蹂댁〈 ?뺤씤
+- ?몄뀡 ?붾젆?곕━ ?앹꽦: config/sequences/meta ?뚯씪
+- 而ㅻ컠쨌config쨌sequences ?댁떆 ???寃利?
+- 濡쒓렇 ?뚯닔 ?덉감 1??由ы뿀??
 
-### G5) 독립 검토 서명
-- 안전 담당자(제3자) 코드 리뷰
-- 절차·체크리스트 검증 서명
-- 운용 승인 문서 준비
+### G5) ?낅┰ 寃???쒕챸
+- ?덉쟾 ?대떦?????? 肄붾뱶 由щ럭
+- ?덉감쨌泥댄겕由ъ뒪??寃利??쒕챸
+- ?댁슜 ?뱀씤 臾몄꽌 以鍮?
 
-### G6) 런북 드라이런  
-- 역할 배정: 오퍼레이터/안전 담당/어보트 권한
-- 콜사인/절차 1회 이상 리허설
-- 비상 상황 시나리오 포함
+### G6) ?곕턿 ?쒕씪?대윴  
+- ??븷 諛곗젙: ?ㅽ띁?덉씠???덉쟾 ?대떦/?대낫??沅뚰븳
+- 肄쒖궗???덉감 1???댁긽 由ы뿀??
+- 鍮꾩긽 ?곹솴 ?쒕굹由ъ삤 ?ы븿
 
-## 운용 중 주의사항
+## ?댁슜 以?二쇱쓽?ы빆
 
-### DISARM 상태 모니터링
-- requiresArm=true 시 UI 상단 DISARMED 배지 표시
-- EMERG/재연결 후 수동 재-ARM 필수
-- 제어 명령 차단 시 명확한 에러 메시지
+### DISARM ?곹깭 紐⑤땲?곕쭅
+- requiresArm=true ??UI ?곷떒 DISARMED 諛곗? ?쒖떆
+- EMERG/?ъ뿰寃????섎룞 ??ARM ?꾩닔
+- ?쒖뼱 紐낅졊 李⑤떒 ??紐낇솗???먮윭 硫붿떆吏
 
-### 단위·표기 확인
-- tc1/tc2: K×100 → °C 변환 ((29315→20.0°C))
-- 압력: PSI×100 → PSI (pt1:15000→150.00 psi)
-- 모든 그래프·토스트에 단위 라벨 표시
+### ?⑥쐞쨌?쒓린 ?뺤씤
+- tc1/tc2: K횞100 ??째C 蹂??((29315??0.0째C))
+- ?뺣젰: PSI횞100 ??PSI (pt1:15000??50.00 psi)
+- 紐⑤뱺 洹몃옒?꽷룻넗?ㅽ듃???⑥쐞 ?쇰꺼 ?쒖떆
 
-### 우선순위 경로 헬스체크
-- HB/EMERG writeNow() 즉시 송신 확인
-- 부하 상태에서도 우선순위 명령 지연 없음
-- 타임스탬프 로그로 성능 검증
+### ?곗꽑?쒖쐞 寃쎈줈 ?ъ뒪泥댄겕
+- HB/EMERG writeNow() 利됱떆 ?≪떊 ?뺤씤
+- 遺???곹깭?먯꽌???곗꽑?쒖쐞 紐낅졊 吏???놁쓬
+- ??꾩뒪?ы봽 濡쒓렇濡??깅뒫 寃利?
 
-## 비상 연락처 & 어보트 절차
+## 鍮꾩긽 ?곕씫泥?& ?대낫???덉감
 ```
-주 오퍼레이터: [콜사인]
-안전 담당: [콜사인] 
-어보트 권한: [콜사인]
-즉시 어보트: UI safety-trigger 버튼 OR 물리적 파워 차단
+二??ㅽ띁?덉씠?? [肄쒖궗??
+?덉쟾 ?대떦: [肄쒖궗?? 
+?대낫??沅뚰븳: [肄쒖궗??
+利됱떆 ?대낫?? UI safety-trigger 踰꾪듉 OR 臾쇰━???뚯썙 李⑤떒
 ```
 
 ---
-**문서 생성**: 2025-01-18 Claude Code  
-**적용 버전**: v2.6.0-safety-ready (2f89eb6)  
-**다음 검토**: Hot-fire 전 G1-G6 게이트 통과 후
+**臾몄꽌 ?앹꽦**: 2025-01-18 Claude Code  
+**?곸슜 踰꾩쟾**: v2.6.0-safety-ready (2f89eb6)  
+**?ㅼ쓬 寃??*: Hot-fire ??G1-G6 寃뚯씠???듦낵 ?
+
+Note: Pressure limits — Alarm/Trip canonical. Legacy pressureLimitPsi has been removed; use Alarm/Trip only.
