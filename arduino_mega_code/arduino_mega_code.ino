@@ -36,7 +36,7 @@
 // TRIP (차단): MCU 펌웨어 레벨의 최후 방어선. 하드웨어 비상 시퀀스를 직접 트리거. ALARM보다 높아야 함.
 #define PRESSURE_TRIP_PSIx100            100000UL // 1000.00 psi. config.json의 pressureLimitTrip과 일치
 // 압력 상승률 임계(0이면 비활성). 단위: (psi*100)/s
-#define PRESSURE_ROC_MAX_PSIx100_PER_S   5000UL    // 50.00 psi/s (config.json과 일치)
+#define PRESSURE_ROC_MAX_PSIx100_PER_S   0UL       // 0 => disabled (GUI rate-limit also disabled)
 
 // =========================== CRC-8 (0x07, LUT) ===========================
 static const uint8_t CRC8_TABLE[256] PROGMEM = {
@@ -236,15 +236,15 @@ volatile uint16_t adcAcc = 0;
 
 static inline void adcSetMux(uint8_t ch){ ADMUX = _BV(REFS0) | (ch & 0x0F); }
 
+// Use ADC free-running mode (no timer trigger) to avoid Timer1 conflicts with Servo library.
+// We still oversample via ADC_OSR and round-robin channels in the ISR.
 static void adcInitFreeRun(){
   DIDR0 = _BV(ADC0D) | _BV(ADC1D) | _BV(ADC2D) | _BV(ADC3D);
-  TCCR1A = 0; TCCR1B = 0; TCNT1  = 0;
-  OCR1A  = T1_TOP; OCR1B  = T1_TOP;
-  TCCR1B = _BV(WGM12) | _BV(CS11);
+  // Free-run: no timer configuration required. Ensure ADTS[2:0] = 0 (Free Running mode)
   adcSetMux(0);
-  ADCSRA = _BV(ADEN) | _BV(ADIE) | _BV(ADATE) | _BV(ADPS2) | _BV(ADPS1);
-  ADCSRB = (ADCSRB & ~0x07) | _BV(ADTS2) | _BV(ADTS0);
-  ADCSRA |= _BV(ADSC);
+  ADCSRA = _BV(ADEN) | _BV(ADIE) | _BV(ADATE) | _BV(ADPS2) | _BV(ADPS1); // enable, interrupt, auto-trigger, prescaler 64
+  ADCSRB &= ~0x07; // ADTS[2:0] = 000 => Free Running
+  ADCSRA |= _BV(ADSC); // start conversions
 }
 
 ISR(ADC_vect){
@@ -615,8 +615,6 @@ static void readAndSendAllSensorData(const unsigned long now) {
   }
 
   for (uint8_t i=0; i<NUM_FLOW_SENSORS; i++) {
-    bufPutStr(p, ",fm"); bufPutUInt(p, i+1); bufPutStr(p, "_m3h:");
-    bufPutFixed(p, flowRates_m3h_1e4[i], 4);
     bufPutStr(p, ",fm"); bufPutUInt(p, i+1); bufPutStr(p, "_Lh:");
     bufPutFixed(p, flowRates_m3h_1e4[i], 1);
   }

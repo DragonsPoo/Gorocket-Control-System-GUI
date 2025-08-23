@@ -23,8 +23,9 @@ export function validatePressureConfig(config: AppConfig): ConfigValidationResul
     errors.push('pressureLimitTripPsi must be greater than 0');
   }
 
+  // 상승률 한계: 0 또는 미설정이면 비활성화로 간주 (경고만 남김)
   if (config.pressureRateLimitPsiPerSec !== undefined && config.pressureRateLimitPsiPerSec <= 0) {
-    errors.push('pressureRateLimitPsiPerSec must be greater than 0');
+    warnings.push('pressureRateLimitPsiPerSec <= 0: rate-of-change monitoring disabled');
   }
 
   // 알람 < 트립 조건 확인

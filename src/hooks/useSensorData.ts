@@ -85,9 +85,11 @@ export function useSensorData(
           }
 
           // 상승률(속도) 계산: 이전 샘플 기준, 상승만 감지
+          // 상승률 감시는 limit > 0일 때만 활성화
+          const effectiveRateLimit = (pressureRateLimit !== null && pressureRateLimit > 0) ? pressureRateLimit : null;
           let ratePsiPerSec: number | null = null;
           let overRate = false;
-          if (pressureRateLimit !== null && prev && typeof prev.timestamp === 'number') {
+          if (effectiveRateLimit !== null && prev && typeof prev.timestamp === 'number') {
             const dtMs = now - prev.timestamp;
             if (dtMs > 0) {
               const dtSec = dtMs / 1000;
@@ -103,10 +105,10 @@ export function useSensorData(
               if (rates.length > 0) {
                 const maxRate = Math.max(...rates);
                 ratePsiPerSec = maxRate;
-                if (maxRate > pressureRateLimit) {
+                if (maxRate > effectiveRateLimit) {
                   overRate = true;
                   if (now - lastWarnRateMs.current > 1000) {
-                    console.warn(`Pressure rate exceeded (max PT): +${maxRate.toFixed(2)} psi/s > ${pressureRateLimit} psi/s`);
+                    console.warn(`Pressure rate exceeded (max PT): +${maxRate.toFixed(2)} psi/s > ${effectiveRateLimit} psi/s`);
                     lastWarnRateMs.current = now;
                   }
                 }
@@ -126,7 +128,7 @@ export function useSensorData(
               pressure: pNow,
               pressureLimit: pressureLimit,
               rate: ratePsiPerSec,
-              rateLimit: pressureRateLimit,   // psi/s (null 가능)
+              rateLimit: effectiveRateLimit,   // psi/s (null 가능)
               history: [...pressureHistory.current], // 최근 값
             };
             emitSafetyPressureExceeded(snapshot);

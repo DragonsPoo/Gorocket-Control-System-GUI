@@ -69,7 +69,16 @@ export function parseSensorData(raw: string): ParsedSensorData {
     const msg = `Telemetry integrity error: No CRC found in "${line}"`;
     errors.push(msg);
     console.error(msg);
-    // Discard data if CRC is missing.
+    // Fallback: try to parse valve LS states even if CRC is missing
+    const m2 = /(?:^|,)V(\d+)_LS_(OPEN|CLOSED):([01])/g;
+    let mm: RegExpExecArray | null;
+    while ((mm = m2.exec(line)) !== null) {
+      const valveId = parseInt(mm[1], 10) + 1; // 1-indexed for UI
+      const which = mm[2] as 'OPEN' | 'CLOSED';
+      const bit = mm[3] === '1';
+      if (!valves[valveId]) valves[valveId] = {};
+      if (which === 'OPEN') (valves[valveId]!).lsOpen = bit; else (valves[valveId]!).lsClosed = bit;
+    }
     return { sensor, valves, errors };
   }
 
@@ -82,7 +91,16 @@ export function parseSensorData(raw: string): ParsedSensorData {
     const msg = `Telemetry integrity error: CRC mismatch. Data="${dataPart}", received=${receivedCrc}, calculated=${calculatedCrc}`;
     errors.push(msg);
     console.error(msg);
-    // Discard data on CRC failure.
+    // Fallback: still parse valve LS states from the untrusted payload to keep UI status usable.
+    const m2 = /(?:^|,)V(\d+)_LS_(OPEN|CLOSED):([01])/g;
+    let mm: RegExpExecArray | null;
+    while ((mm = m2.exec(dataPart)) !== null) {
+      const valveId = parseInt(mm[1], 10) + 1;
+      const which = mm[2] as 'OPEN' | 'CLOSED';
+      const bit = mm[3] === '1';
+      if (!valves[valveId]) valves[valveId] = {};
+      if (which === 'OPEN') (valves[valveId]!).lsOpen = bit; else (valves[valveId]!).lsClosed = bit;
+    }
     return { sensor, valves, errors };
   }
   // --- CRC validation passed: proceed with parsing the dataPart ---
