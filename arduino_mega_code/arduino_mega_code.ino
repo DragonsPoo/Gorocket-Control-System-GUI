@@ -3,7 +3,9 @@
 // - 안전 기능: HEARTBEAT 타임아웃, 압력 한계/상승률 트립
 // - 통신 안정성: CRC-8(0x07) 프레이밍 및 NACK 응답 (재시도는 상위 시스템 담당)
 // - 기존 최적화 유지: ADC 프리런, 패키지 전송 등
-// - 변경점: 비상 시퀀스에서 진행 중 서보도 강제로 목표 각도로 이동하도록 오버라이드 구현
+// - 변경점(본 수정본): 유량 센서 입력은 저항분할 + NPN Low-active 가정.
+//   내부 풀업 미사용(INPUT), 외부 인터럽트는 "FALLING" 에지로 동작하도록 변경.
+//   (EICRA의 INT0/1 설정을 RISING→FALLING으로 변경, 비-FAST 경로 attachInterrupt도 FALLING)
 // =================================================================
 
 #include <SPI.h>
@@ -24,8 +26,8 @@
 
 #define FAST_LIMIT_IO       1
 #define PACKED_SERIAL       1
-#define FAST_FLOW_ISR       1
-#define FLOW_TIMER3_TICK    1
+#define FAST_FLOW_ISR       0 // Use attachInterrupt to match test sketch
+#define FLOW_TIMER3_TICK    0 // Use micros() to match test sketch
 #define ADC_BG_FREERUN      1
 
 // =========================== 안전 파라미터 ===========================
@@ -77,7 +79,7 @@ static inline uint8_t crc8_stream(uint8_t crc, const uint8_t* data, size_t len){
 // =========================== 서보/상수 ===========================
 #define NUM_SERVOS 7
 const uint8_t initialOpenAngles[NUM_SERVOS]   = {7,25,12,13,27,34,16};
-const uint8_t initialClosedAngles[NUM_SERVOS] = {103,121,105,117,129,135,120};
+const uint8_t initialClosedAngles[NUM_SERVOS] = {105,121,105,117,129,135,120};
 const uint8_t servoPins[NUM_SERVOS]           = {13,12,11,10,9,8,7};
 Servo servos[NUM_SERVOS];
 
@@ -198,8 +200,7 @@ static inline uint16_t alphaQ15_from_dt(uint16_t dtMs){
   return (uint16_t)a;
 }
 
-// =========================== FLOW ISR ===========================
-#if FAST_FLOW_ISR
+// FLOW ISR의 실제 동작을 담당하는 공통 함수
 static inline void handleFlowPulse(uint8_t idx){
 #if FLOW_TIMER3_TICK
   uint16_t nowT=TCNT3;
@@ -211,6 +212,9 @@ static inline void handleFlowPulse(uint8_t idx){
   if((unsigned long)(now - lastUs[idx]) >= MIN_PULSE_US){ pulseCounts[idx]++; lastUs[idx]=now; }
 #endif
 }
+
+// =========================== FLOW ISR ===========================
+#if FAST_FLOW_ISR
 ISR(INT0_vect){ handleFlowPulse(0); }
 ISR(INT1_vect){ handleFlowPulse(1); }
 #else
@@ -316,17 +320,23 @@ void setup() {
     servoDir[i] = 0;
   }
 
-  pinMode(flowSensorPins[0], INPUT); pinMode(flowSensorPins[1], INPUT);
+  // 유량 센서: 저항분할 전제 -> 내부 풀업 금지, 부동 입력 유지
+  pinMode(flowSensorPins[0], INPUT); 
+  pinMode(flowSensorPins[1], INPUT);
+
 #if FLOW_TIMER3_TICK
   TCCR3A = 0; TCCR3B = 0; TCNT3  = 0; TCCR3B = _BV(CS31);
 #endif
 #if FAST_FLOW_ISR
-  EICRA = (1 << ISC01) | (1 << ISC00) | (1 << ISC11) | (1 << ISC10);
+  // ★ 변경점: INT0/1 인터럽트를 RISING→FALLING으로 변경 (NPN Low-active 대응)
+  //  ISC01=1, ISC00=0 => INT0 Falling / ISC11=1, ISC10=0 => INT1 Falling
+  EICRA = (1 << ISC01) | (1 << ISC11);
   EIFR  = (1 << INTF0) | (1 << INTF1);
   EIMSK = (1 << INT0) | (1 << INT1);
 #else
-  attachInterrupt(digitalPinToInterrupt(flowSensorPins[0]), countPulse1, RISING);
-  attachInterrupt(digitalPinToInterrupt(flowSensorPins[1]), countPulse2, RISING);
+  // ★ 변경점: 비-FAST 경로 attachInterrupt도 FALLING으로 변경
+  attachInterrupt(digitalPinToInterrupt(flowSensorPins[0]), countPulse1, FALLING);
+  attachInterrupt(digitalPinToInterrupt(flowSensorPins[1]), countPulse2, FALLING);
 #endif
 #if ADC_BG_FREERUN
   adcInitFreeRun();

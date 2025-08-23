@@ -158,6 +158,10 @@ export function parseSensorData(raw: string): ParsedSensorData {
       if (!Number.isNaN(num)) (sensor as Record<string, number>)['flow2'] = num;
       return;
     }
+    if (key === 'fm1_m3h' || key === 'fm2_m3h') {
+      // Ignore these keys
+      return;
+    }
 
     // Default: parse as a number
     const num = parseFloat(value);

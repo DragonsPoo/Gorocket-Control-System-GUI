@@ -200,7 +200,7 @@ export class SequenceEngine extends EventEmitter {
     }
   }
 
-  // =========== 시퀀스 스텝 실행 ===========
+  
   private async execCmdStep(step: StepCmd) {
     const payload = step.payload;
     
