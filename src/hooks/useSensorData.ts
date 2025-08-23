@@ -68,8 +68,9 @@ export function useSensorData(
         });
 
         // 압력/상승률 모니터링 (pt1을 대표 압력으로 사용)
-        if (typeof updated.pt1 === 'number') {
-          const pNow = updated.pt1 as number;
+        const readings = [updated.pt1, updated.pt2, updated.pt3, updated.pt4].filter((v): v is number => typeof v === 'number');
+        if (readings.length > 0) {
+          const pNow = Math.max(...readings);
           pressureHistory.current.push(pNow);
           if (pressureHistory.current.length > 10) pressureHistory.current.shift();
 
@@ -78,27 +79,36 @@ export function useSensorData(
             ? (pNow > pressureLimit)
             : false;
 
-          if (overLimit) {
-            if (now - lastWarnLimitMs.current > 1000) {
-              console.warn(`Pressure limit exceeded: ${pNow} > ${pressureLimit}`);
-              lastWarnLimitMs.current = now;
-            }
+          if (overLimit && (now - lastWarnLimitMs.current > 1000)) {
+            console.warn(`Pressure limit exceeded (max PT): ${pNow} > ${pressureLimit}`);
+            lastWarnLimitMs.current = now;
           }
 
           // 상승률(속도) 계산: 이전 샘플 기준, 상승만 감지
           let ratePsiPerSec: number | null = null;
           let overRate = false;
-          if (pressureRateLimit !== null && prev && typeof prev.pt1 === 'number' && typeof prev.timestamp === 'number') {
+          if (pressureRateLimit !== null && prev && typeof prev.timestamp === 'number') {
             const dtMs = now - prev.timestamp;
             if (dtMs > 0) {
-              const dp = pNow - (prev.pt1 as number);
               const dtSec = dtMs / 1000;
-              ratePsiPerSec = dp / dtSec;
-              if (ratePsiPerSec > pressureRateLimit) {
-                overRate = true;
-                if (now - lastWarnRateMs.current > 1000) {
-                  console.warn(`Pressure rate exceeded: +${ratePsiPerSec.toFixed(2)} psi/s > ${pressureRateLimit} psi/s`);
-                  lastWarnRateMs.current = now;
+              const channels: (keyof SensorData)[] = ['pt1', 'pt2', 'pt3', 'pt4'];
+              const rates: number[] = [];
+              for (const k of channels) {
+                const cur = updated[k];
+                const pv = prev[k as keyof SensorData];
+                if (typeof cur === 'number' && typeof pv === 'number') {
+                  rates.push((cur - pv) / dtSec);
+                }
+              }
+              if (rates.length > 0) {
+                const maxRate = Math.max(...rates);
+                ratePsiPerSec = maxRate;
+                if (maxRate > pressureRateLimit) {
+                  overRate = true;
+                  if (now - lastWarnRateMs.current > 1000) {
+                    console.warn(`Pressure rate exceeded (max PT): +${maxRate.toFixed(2)} psi/s > ${pressureRateLimit} psi/s`);
+                    lastWarnRateMs.current = now;
+                  }
                 }
               }
             }
