@@ -36,7 +36,8 @@
 // P0-4: 압력 임계값 역할 정의 및 정렬
 // ALARM (경보): GUI(렌더러)에서 감지하고 메인 프로세스에 보고. Failsafe 시퀀스를 트리거. (예: 850 psi)
 // TRIP (차단): MCU 펌웨어 레벨의 최후 방어선. 하드웨어 비상 시퀀스를 직접 트리거. ALARM보다 높아야 함.
-#define PRESSURE_TRIP_PSIx100            100000UL // 1000.00 psi. config.json의 pressureLimitTrip과 일치
+// 1200.00 psi TRIP (GUI와 동일)
+#define PRESSURE_TRIP_PSIx100            120000UL // 1200.00 psi. config.json의 pressureLimitTrip과 일치
 // 압력 상승률 임계(0이면 비활성). 단위: (psi*100)/s
 #define PRESSURE_ROC_MAX_PSIx100_PER_S   0UL       // 0 => disabled (GUI rate-limit also disabled)
 
@@ -78,8 +79,8 @@ static inline uint8_t crc8_stream(uint8_t crc, const uint8_t* data, size_t len){
 
 // =========================== 서보/상수 ===========================
 #define NUM_SERVOS 7
-const uint8_t initialOpenAngles[NUM_SERVOS]   = {7,25,12,13,27,34,16};
-const uint8_t initialClosedAngles[NUM_SERVOS] = {105,121,105,117,129,135,120};
+const uint8_t initialOpenAngles[NUM_SERVOS]   = {7,25,12,13,27,34,13};
+const uint8_t initialClosedAngles[NUM_SERVOS] = {105,121,105,117,129,135,123};
 const uint8_t servoPins[NUM_SERVOS]           = {13,12,11,10,9,8,7};
 Servo servos[NUM_SERVOS];
 
@@ -99,6 +100,18 @@ const uint8_t servoRoles[NUM_SERVOS] = {
 #define SERVO_SETTLE_TIME   500UL
 #define INCHING_INTERVAL      50UL
 #define STALL_RELIEF_ANGLE      3
+// 특정 서보(보드 핀 7)만 백오프 각도를 1도로 줄이기 위한 헬퍼
+static inline uint8_t stallReliefDeltaFor(uint8_t idx){
+  // servoPins[idx] 가 실제 보드 핀 번호.
+  // 핀 7은 과도 이동 방지를 위해 1도로 완만하게 백오프
+  return (idx < NUM_SERVOS && servoPins[idx] == 7) ? 1 : (uint8_t)STALL_RELIEF_ANGLE;
+}
+
+static inline unsigned long stallReliefTimeFor(uint8_t idx){
+  // 핀 7은 리미트 이탈 방지를 위해 유지시간 단축
+  const unsigned long baseMs = 200UL; // 기본 STALL_RELIEF_TIME과 동일(200ms)
+  return (idx < NUM_SERVOS && servoPins[idx] == 7) ? 100UL : baseMs;
+}
 #define STALL_RELIEF_TIME   200UL
 
 // =========================== 압력(ADC) ===========================
@@ -307,7 +320,7 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   while (Serial.available()) { Serial.read(); }
   delay(50);
-  Serial.println(F("BOOT"));
+  // BOOT 메시지 출력 제거 (초기 텔레메트리 간섭 방지)
   delay(500);
 
   for (uint8_t i=0; i<NUM_SERVOS; i++) {
@@ -491,7 +504,8 @@ static void manageAllServoMovements(const unsigned long now) {
           const bool isClose = (currentLimitSwitchStates[i][1] == 1);
           const bool goingOpen = (servoDir[i] < 0);
           if ((goingOpen && isOpen) || (!goingOpen && isClose)) {
-            int relief = targetAngles[i] + (goingOpen ? STALL_RELIEF_ANGLE : -STALL_RELIEF_ANGLE);
+            const uint8_t delta = stallReliefDeltaFor(i);
+            int relief = targetAngles[i] + (goingOpen ? delta : -((int)delta));
             enterStallRelief(i, relief, now);
           } else {
             servoStates[i] = goingOpen ?
@@ -501,7 +515,8 @@ static void manageAllServoMovements(const unsigned long now) {
         break;
       case INCHING_OPEN:
         if (currentLimitSwitchStates[i][0] == 1) {
-          int relief = targetAngles[i] + STALL_RELIEF_ANGLE;
+          const uint8_t delta = stallReliefDeltaFor(i);
+          int relief = targetAngles[i] + delta;
           enterStallRelief(i, relief, now);
         } else if ((unsigned long)(now - lastMoveTime[i]) > INCHING_INTERVAL) {
           targetAngles[i] = (uint8_t)max(0, (int)targetAngles[i] - 1);
@@ -511,7 +526,8 @@ static void manageAllServoMovements(const unsigned long now) {
         break;
       case INCHING_CLOSED:
         if (currentLimitSwitchStates[i][1] == 1) {
-          int relief = targetAngles[i] - STALL_RELIEF_ANGLE;
+          const uint8_t delta = stallReliefDeltaFor(i);
+          int relief = targetAngles[i] - delta;
           enterStallRelief(i, relief, now);
         } else if ((unsigned long)(now - lastMoveTime[i]) > INCHING_INTERVAL) {
           targetAngles[i] = (uint8_t)min(180, (int)targetAngles[i] + 1);
@@ -520,7 +536,7 @@ static void manageAllServoMovements(const unsigned long now) {
         }
         break;
       case STALL_RELIEF:
-        if ((unsigned long)(now - lastMoveTime[i]) > STALL_RELIEF_TIME) {
+        if ((unsigned long)(now - lastMoveTime[i]) > stallReliefTimeFor(i)) {
           servoStates[i] = IDLE;
           servoDir[i] = 0;
           servos[i].detach();

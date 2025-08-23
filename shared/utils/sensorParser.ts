@@ -62,48 +62,68 @@ export function parseSensorData(raw: string): ParsedSensorData {
     return { sensor, valves, errors };
   }
 
-  // --- CRC Validation (expects ",XX" at the end of the line) ---
-  const crcMatch = line.match(/^(.*),([0-9a-fA-F]{1,2})$/);
-
-  if (!crcMatch) {
-    const msg = `Telemetry integrity error: No CRC found in "${line}"`;
-    errors.push(msg);
-    console.error(msg);
-    // Fallback: try to parse valve LS states even if CRC is missing
-    const m2 = /(?:^|,)V(\d+)_LS_(OPEN|CLOSED):([01])/g;
-    let mm: RegExpExecArray | null;
-    while ((mm = m2.exec(line)) !== null) {
-      const valveId = parseInt(mm[1], 10) + 1; // 1-indexed for UI
-      const which = mm[2] as 'OPEN' | 'CLOSED';
-      const bit = mm[3] === '1';
-      if (!valves[valveId]) valves[valveId] = {};
-      if (which === 'OPEN') (valves[valveId]!).lsOpen = bit; else (valves[valveId]!).lsClosed = bit;
+  // --- CRC Validation (optional) ---
+  // 지원하는 CRC 표기:
+  //  1) 쉼표-HEX 접미어: "...,AB" (legacy)
+  //  2) 명시적 10진 CRC: "...,CRC:240"
+  //  3) 별표-HEX 접미어: "...*F0"
+  // 없으면 CRC 검사 생략하고 전체 라인 파싱
+  let dataPart = line;
+  let hasCrc = false;
+  let receivedCrc: number | null = null;
+  // 3) 별표-HEX
+  let m: RegExpExecArray | null = /^(.*)\*([0-9a-fA-F]{1,2})$/.exec(line);
+  if (m) {
+    dataPart = m[1];
+    receivedCrc = parseInt(m[2], 16);
+    hasCrc = true;
+  } else {
+    // 2) 명시적 10진 CRC
+    m = /^(.*?)(?:,)?CRC:(\d+)\s*$/i.exec(line);
+    if (m) {
+      dataPart = m[1];
+      receivedCrc = parseInt(m[2], 10);
+      hasCrc = true;
+    } else {
+      // 1) 쉼표-HEX 접미어 (legacy)
+      m = /^(.*),([0-9a-fA-F]{1,2})$/.exec(line);
+      if (m) {
+        dataPart = m[1];
+        receivedCrc = parseInt(m[2], 16);
+        hasCrc = true;
+      }
     }
-    return { sensor, valves, errors };
   }
 
-  const dataPart = crcMatch[1];
-  const receivedCrc = parseInt(crcMatch[2], 16);
-  const calculatedCrc = crc8OfString(dataPart);
+  if (hasCrc && receivedCrc !== null) {
+    const calculatedCrc = crc8OfString(dataPart);
+    if ((receivedCrc & 0xFF) !== calculatedCrc) {
+      // CRC mismatch → 센서값은 신뢰하지 않되, 밸브 LS 상태는 파싱 계속
+      const isValveOnly = /V\d+_LS_(OPEN|CLOSED):[01]/.test(dataPart)
+        && !/(?:^|,)pt\d:|(?:^|,)tc\d:|fm\d_/.test(dataPart);
 
-  if ((receivedCrc & 0xFF) !== calculatedCrc) {
-    // SAFETY: Fixed CRC mismatch log message formatting
-    const msg = `Telemetry integrity error: CRC mismatch. Data="${dataPart}", received=${receivedCrc}, calculated=${calculatedCrc}`;
-    errors.push(msg);
-    console.error(msg);
-    // Fallback: still parse valve LS states from the untrusted payload to keep UI status usable.
-    const m2 = /(?:^|,)V(\d+)_LS_(OPEN|CLOSED):([01])/g;
-    let mm: RegExpExecArray | null;
-    while ((mm = m2.exec(dataPart)) !== null) {
-      const valveId = parseInt(mm[1], 10) + 1;
-      const which = mm[2] as 'OPEN' | 'CLOSED';
-      const bit = mm[3] === '1';
-      if (!valves[valveId]) valves[valveId] = {};
-      if (which === 'OPEN') (valves[valveId]!).lsOpen = bit; else (valves[valveId]!).lsClosed = bit;
+      const msg = `Telemetry integrity error: CRC mismatch. Data="${dataPart}", received=${receivedCrc}, calculated=${calculatedCrc}`;
+      if (isValveOnly) {
+        // 밸브 상태만 포함된 라인은 오류로 올리지 않고 경고로 다운그레이드
+        console.warn(msg);
+      } else {
+        errors.push(msg);
+        console.error(msg);
+      }
+      const m2 = /(?:^|,)V(\d+)_LS_(OPEN|CLOSED):([01])/g;
+      let mm: RegExpExecArray | null;
+      while ((mm = m2.exec(dataPart)) !== null) {
+        const valveId = parseInt(mm[1], 10) + 1;
+        const which = mm[2] as 'OPEN' | 'CLOSED';
+        const bit = mm[3] === '1';
+        if (!valves[valveId]) valves[valveId] = {};
+        if (which === 'OPEN') (valves[valveId]!).lsOpen = bit; else (valves[valveId]!).lsClosed = bit;
+      }
+      return { sensor, valves, errors };
     }
-    return { sensor, valves, errors };
+    // CRC 통과 시 dataPart 파싱 계속
   }
-  // --- CRC validation passed: proceed with parsing the dataPart ---
+  // CRC가 없으면 경고 없이 전체 라인(dataPart=원본)을 파싱
 
   // Sensor packets may contain valve-only fields or appear in any order.
   // As long as CRC is valid, proceed to parse without enforcing a fixed prefix.

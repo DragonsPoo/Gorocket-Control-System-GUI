@@ -89,9 +89,24 @@ class MainApp {
     });
 
     // SequenceEngine 이벤트를 렌더러로 전달
-    this.sequenceEngine.on('progress', (e) => this.mainWindow?.webContents.send('sequence-progress', e));
-    this.sequenceEngine.on('error', (e) => this.mainWindow?.webContents.send('sequence-error', e));
-    this.sequenceEngine.on('complete', (e) => this.mainWindow?.webContents.send('sequence-complete', e));
+    this.sequenceEngine.on('progress', (e) => {
+      this.mainWindow?.webContents.send('sequence-progress', e);
+      try {
+        this.logManager.write(`${new Date().toISOString()} # [SEQ] progress ${e.name} step=${e.stepIndex} ${e.note ?? ''}\n`);
+      } catch {}
+    });
+    this.sequenceEngine.on('error', (e) => {
+      this.mainWindow?.webContents.send('sequence-error', e);
+      try {
+        this.logManager.write(`${new Date().toISOString()} # [SEQ] error ${e.name} step=${e.stepIndex} msg=${(e as any)?.error ?? ''}\n`);
+      } catch {}
+    });
+    this.sequenceEngine.on('complete', (e) => {
+      this.mainWindow?.webContents.send('sequence-complete', e);
+      try {
+        this.logManager.write(`${new Date().toISOString()} # [SEQ] complete ${e.name}\n`);
+      } catch {}
+    });
 
     this.createWindow();
     this.setupIpc();
@@ -293,6 +308,7 @@ class MainApp {
         if (this.requiresArm) {
           throw new Error('System is disarmed - re-ARM required before starting sequences');
         }
+        try { this.logManager.write(`${new Date().toISOString()} # [SEQ] start ${name}\n`); } catch {}
         await this.sequenceEngine?.start(name);
         return true;
       } catch (err) {
@@ -302,6 +318,7 @@ class MainApp {
     });
     ipcMain.handle('sequence-cancel', async () => {
       try {
+        try { this.logManager.write(`${new Date().toISOString()} # [SEQ] cancel\n`); } catch {}
         await this.sequenceEngine?.cancel();
         return true;
       } catch (err) {

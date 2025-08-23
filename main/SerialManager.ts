@@ -54,6 +54,11 @@ export class SerialManager extends EventEmitter {
   private BACKOFF_MAX = 5000;         // ms
   private MAX_QUEUE_LEN = 200;        // 최대 큐 길이 (older commands dropped)
 
+  // BUSY 회피를 위한 송신 페이싱 및 READY 게이트
+  private paceMs = 80;                // 최소 명령 간 간격(ms)
+  private lastSendAt = 0;             // 마지막 송신 시각
+  private mcuReady = true;            // READY/IDLE 신호 수신 시 true
+
   // ====================== 포트 열기/닫기 ======================
   async listPorts(): Promise<string[]> {
     const ports = await SerialPort.list();
@@ -145,8 +150,13 @@ export class SerialManager extends EventEmitter {
 
     const ackTimeoutMs: number = (command as any)?.ackTimeoutMs ?? this.DEFAULT_ACK_TIMEOUT;
     const maxRetries: number = (command as any)?.retries ?? this.DEFAULT_RETRIES;
+    const isHb = payload.toUpperCase() === 'HB';
 
     return new Promise<boolean>((resolve, reject) => {
+      // 혼잡 시 HB는 건너뛰어 BUSY 발생을 줄임
+      if (isHb && (this.inflight || this.queue.some(q => q.payload.toUpperCase() !== 'HB'))) {
+        return resolve(true);
+      }
       const msg: OutMsg = {
         payload, framed, msgId, attempts: 0, maxRetries, ackTimeoutMs,
         resolve, reject, isFramed
@@ -206,6 +216,14 @@ export class SerialManager extends EventEmitter {
   private processQueue() {
     if (!this.port || !this.port.isOpen) return;
     if (this.inflight) return;
+    // 페이싱/레디 게이트
+    const now = Date.now();
+    const wait = this.paceMs - (now - this.lastSendAt);
+    if (wait > 0 || !this.mcuReady) {
+      const delay = Math.max(10, wait > 0 ? wait : 30);
+      setTimeout(() => this.processQueue(), delay);
+      return;
+    }
     const msg = this.queue.shift();
     if (!msg) return;
 
@@ -214,6 +232,8 @@ export class SerialManager extends EventEmitter {
     msg.attempts++;
     this.pendingById.set(msg.msgId, msg);
 
+    this.mcuReady = false;
+    this.lastSendAt = Date.now();
     this.port.write(this.ensureLF(msg.framed), (err) => {
       if (err) {
         // write 실패 → 재시도
@@ -258,6 +278,73 @@ export class SerialManager extends EventEmitter {
   private onLine(raw: string) {
     const line = raw.trim();
     if (!line) return;
+
+    // READY/IDLE 신호로 레디 게이트 해제
+    if (/^(READY|IDLE)\b/i.test(line)) {
+      this.mcuReady = true;
+      this.emit('data', line);
+      this.processQueue();
+      return;
+    }
+
+    // Fallback: handle BUSY without msgId (e.g., "NACK BUSY" or "BUSY")
+    if (/^(NACK\s*BUSY|BUSY)\b/i.test(line)) {
+      const inflight = this.inflight;
+      if (inflight) {
+        this.pendingById.delete(inflight.msgId);
+        this.clearInflightTimer(inflight);
+        this.inflight = null;
+        // BUSY 수신 시 페이싱 증가(적응형)
+        this.paceMs = Math.min(this.paceMs + 40, 1000);
+        if (inflight.attempts >= inflight.maxRetries) {
+          inflight.reject(new Error(`NACK(BUSY) for msgId=${inflight.msgId}`));
+        } else {
+          setTimeout(() => { this.queue.unshift(inflight); this.processQueue(); }, this.NACK_RETRY_DELAY);
+        }
+      }
+      // Forward to renderer as data for visibility
+      this.emit('data', line);
+      return;
+    }
+
+    // Fast-path ACK/NACK 처리로 페이싱/레디 제어 강화
+    if (/^ACK,\d+/.test(line)) {
+      const parts = line.split(',');
+      const id = Number(parts[1]);
+      const msg = this.pendingById.get(id);
+      if (msg) {
+        this.pendingById.delete(id);
+        this.clearInflightTimer(msg);
+        this.inflight = null;
+        msg.resolve(true);
+        this.paceMs = Math.max(40, Math.floor(this.paceMs * 0.9));
+        this.mcuReady = true;
+        this.emit('data', line);
+        this.processQueue();
+        return;
+      }
+    }
+    if (/^NACK,\d+/.test(line)) {
+      const parts = line.split(',');
+      const id = Number(parts[1]);
+      const reason = parts[2] ?? '';
+      const msg = this.pendingById.get(id);
+      if (msg) {
+        this.pendingById.delete(id);
+        this.clearInflightTimer(msg);
+        this.inflight = null;
+        if (/busy/i.test(reason)) {
+          this.paceMs = Math.min(this.paceMs + 40, 1000);
+          setTimeout(() => { this.queue.unshift(msg); this.processQueue(); }, this.NACK_RETRY_DELAY);
+        } else if (msg.attempts >= msg.maxRetries) {
+          msg.reject(new Error(`NACK(${reason}) for msgId=${id}`));
+        } else {
+          setTimeout(() => { this.queue.unshift(msg); this.processQueue(); }, this.NACK_RETRY_DELAY);
+        }
+        this.emit('data', line);
+        return;
+      }
+    }
 
     const parsed = this.parseAckNack(line);
     if (parsed) {

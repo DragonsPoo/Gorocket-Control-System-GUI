@@ -191,8 +191,9 @@ export function useSerialManager(): SerialManagerApi {
     getLatestSensorData,
   } = useSensorData(
     state.appConfig?.maxChartDataPoints ?? 100,
-    state.appConfig?.pressureLimitAlarmPsi ?? null, // psi
+    state.appConfig?.pressureLimitAlarmPsi ?? null, // psi (ALARM)
     state.appConfig?.pressureRateLimitPsiPerSec ?? null, // psi/s (옵션)
+    state.appConfig?.pressureLimitTripPsi ?? null, // psi (TRIP for failsafe)
     updateValves
   );
 

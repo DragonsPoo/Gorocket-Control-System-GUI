@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { useToast } from '@/hooks/use-toast';
 import type { SensorData, Valve } from '@shared/types';
 import {
   parseSensorData,
@@ -20,8 +21,10 @@ export function useSensorData(
   maxPoints: number,
   pressureLimit: number | null,
   pressureRateLimit: number | null,
+  pressureTripLimit: number | null,
   updateValves: (updates: Partial<Record<number, Partial<Valve>>>) => void
 ): SensorDataApi {
+  const { toast } = useToast();
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const sensorRef = useRef<SensorData | null>(null);
   const [chartData, setChartData] = useState<SensorData[]>([]);
@@ -74,14 +77,17 @@ export function useSensorData(
           pressureHistory.current.push(pNow);
           if (pressureHistory.current.length > 10) pressureHistory.current.shift();
 
-          // 한계 초과
-          const overLimit = pressureLimit !== null
-            ? (pNow > pressureLimit)
-            : false;
+          // 알람(Alarm) 임계 초과
+          const overAlarm = pressureLimit !== null ? (pNow > pressureLimit) : false;
+          // 트립(Trip) 임계 초과 (GUI 테스트 중이라도 이 값에서만 failsafe 이벤트 송신)
+          const overTrip = pressureTripLimit !== null ? (pNow >= pressureTripLimit) : false;
 
-          if (overLimit && (now - lastWarnLimitMs.current > 1000)) {
+          if (overAlarm && (now - lastWarnLimitMs.current > 1000)) {
             console.warn(`Pressure limit exceeded (max PT): ${pNow} > ${pressureLimit}`);
             lastWarnLimitMs.current = now;
+            try {
+              toast({ title: 'Pressure Alarm', description: `Max PT ${pNow.toFixed(1)} psi > ${pressureLimit} psi`, variant: 'destructive' });
+            } catch {}
           }
 
           // 상승률(속도) 계산: 이전 샘플 기준, 상승만 감지
@@ -110,6 +116,9 @@ export function useSensorData(
                   if (now - lastWarnRateMs.current > 1000) {
                     console.warn(`Pressure rate exceeded (max PT): +${maxRate.toFixed(2)} psi/s > ${effectiveRateLimit} psi/s`);
                     lastWarnRateMs.current = now;
+                    try {
+                      toast({ title: 'Pressure Rate Alarm', description: `+${maxRate.toFixed(2)} psi/s > ${effectiveRateLimit} psi/s`, variant: 'destructive' });
+                    } catch {}
                   }
                 }
               }
@@ -117,10 +126,11 @@ export function useSensorData(
           }
 
           // 라우팅: 한계/상승률 중 하나라도 초과 시 메인으로 스냅샷 송신(쿨다운 적용)
-          const shouldEmit = (overLimit || overRate) && (now - lastSafetyEmitMs.current >= SAFETY_EMIT_COOLDOWN_MS);
+          // 안전 이벤트는 Trip 초과일 때만 송신 (Alarm/Rate는 알림만)
+          const shouldEmit = (overTrip) && (now - lastSafetyEmitMs.current >= SAFETY_EMIT_COOLDOWN_MS);
           if (shouldEmit) {
             lastSafetyEmitMs.current = now;
-            const reason = overLimit && overRate ? 'limit+rate' : (overLimit ? 'limit' : 'rate');
+            const reason = overAlarm && overRate ? 'limit+rate' : (overAlarm ? 'limit' : 'rate');
 
             const snapshot = {
               timestamp: now,
@@ -142,7 +152,7 @@ export function useSensorData(
 
       return null;
     },
-    [emitSafetyPressureExceeded, maxPoints, pressureLimit, pressureRateLimit, updateValves]
+    [emitSafetyPressureExceeded, maxPoints, pressureLimit, pressureRateLimit, pressureTripLimit, updateValves]
   );
 
   const reset = useCallback(() => {

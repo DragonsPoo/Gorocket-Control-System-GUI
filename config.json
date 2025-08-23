@@ -3,8 +3,8 @@
     "baudRate": 115200
   },
   "maxChartDataPoints": 100,
-  "pressureLimitAlarmPsi": 850,
-  "pressureLimitTripPsi": 1000,
+  "pressureLimitAlarmPsi": 50,
+  "pressureLimitTripPsi": 1200,
   "pressureRateLimitPsiPerSec": 0,
   "valveFeedbackTimeout": 3000,
   "initialValves": [

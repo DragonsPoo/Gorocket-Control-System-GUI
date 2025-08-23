@@ -319,7 +319,10 @@ export class SequenceEngine extends EventEmitter {
         this.pending.delete(msgId);
         reject(new Error(`ACK timeout (${ackTimeoutMs} ms) for msgId=${msgId}, payload="${payload}"`));
       }, ackTimeoutMs);
-      this.pending.set(msgId, { resolve: () => { clearTimeout(timer); resolve(); }, reject: (e) => { clearTimeout(timer); reject(e); }, timer, payload });
+      this.pending.set(msgId, { resolve: () => { clearTimeout(timer); resolve(); }, reject: (e: any) => { clearTimeout(timer); reject(e); }, timer, payload } as any);
+      // Store timeout value for BUSY handling
+      const p = this.pending.get(msgId) as any;
+      if (p) p.ackTimeoutMs = ackTimeoutMs;
       this.writeLine(line).catch((e) => {
         clearTimeout(timer);
         this.pending.delete(msgId);
@@ -384,6 +387,35 @@ export class SequenceEngine extends EventEmitter {
           p.resolve();
           this.pending.delete(id);
         }
+      }
+      return;
+    }
+    // Handle plain BUSY (no id) by extending the oldest pending timer
+    if (/^BUSY\b/i.test(s.trim())) {
+      const first = this.pending.entries().next();
+      if (!first.done) {
+        const [id, p] = first.value as [number, { resolve: () => void; reject: (e?: any) => void; timer: NodeJS.Timeout; payload: string; ackTimeoutMs?: number }];
+        const tm = (p as any).ackTimeoutMs ?? this.defaultAckTimeoutMs;
+        clearTimeout(p.timer);
+        (p as any).timer = setTimeout(() => {
+          this.pending.delete(id);
+          p.reject(new Error(`ACK timeout after BUSY (${tm} ms) for msgId=${id}, payload="${p.payload}"`));
+        }, tm);
+      }
+      return;
+    }
+    // Gracefully handle NACK BUSY by resetting the pending ACK timer
+    if (/^NACK,\d+,BUSY/i.test(s.trim())) {
+      const parts = s.trim().split(',');
+      const id = Number(parts[1]);
+      const p = this.pending.get(id) as any;
+      if (p) {
+        const tm = (p.ackTimeoutMs ?? 1000);
+        clearTimeout(p.timer);
+        p.timer = setTimeout(() => {
+          this.pending.delete(id);
+          p.reject(new Error(`ACK timeout after BUSY (${tm} ms) for msgId=${id}, payload="${p.payload}"`));
+        }, tm);
       }
       return;
     }
