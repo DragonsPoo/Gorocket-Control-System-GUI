@@ -79,7 +79,7 @@ class MainApp {
       options: {
         hbIntervalMs: 0,               // 내부 HB 비활성화 (아이들 HB 데몬이 담당)
         defaultAckTimeoutMs: 1000,
-        defaultFeedbackTimeoutMs: 5000,
+        defaultFeedbackTimeoutMs: this.configManager.get().valveFeedbackTimeout,
         defaultPollMs: 50,
         autoCancelOnRendererGone: true,
         failSafeOnError: true,

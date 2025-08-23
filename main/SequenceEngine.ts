@@ -100,7 +100,7 @@ export class SequenceEngine extends EventEmitter {
     const opt = params.options ?? {};
     this.hbIntervalMs = opt.hbIntervalMs ?? 1000;
     this.defaultAckTimeoutMs = opt.defaultAckTimeoutMs ?? 1000;
-    this.defaultFeedbackTimeoutMs = opt.defaultFeedbackTimeoutMs ?? 5000;
+    this.defaultFeedbackTimeoutMs = opt.defaultFeedbackTimeoutMs ?? 3000;
     this.defaultPollMs = opt.defaultPollMs ?? 50;
     this.autoCancelOnRendererGone = opt.autoCancelOnRendererGone ?? true;
     this.failSafeOnError = opt.failSafeOnError ?? true;

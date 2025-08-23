@@ -6,7 +6,7 @@
   "pressureLimitAlarmPsi": 850,
   "pressureLimitTripPsi": 1000,
   "pressureRateLimitPsiPerSec": 50,
-  "valveFeedbackTimeout": 2000,
+  "valveFeedbackTimeout": 3000,
   "initialValves": [
     { "id": 1, "name": "Ethanol Purge Line", "state": "CLOSED", "lsOpen": false, "lsClosed": false },
     { "id": 2, "name": "Main Pressurization", "state": "CLOSED", "lsOpen": false, "lsClosed": false },

@@ -20,7 +20,7 @@ const configSchema = z.object({
   pressureLimitAlarmPsi: z.number(),
   pressureLimitTripPsi: z.number().optional(),
   pressureRateLimitPsiPerSec: z.number().optional(),
-  valveFeedbackTimeout: z.number().optional().default(2000),
+  valveFeedbackTimeout: z.number().optional().default(3000),
   initialValves: z.array(valveSchema),
 });
 

@@ -72,7 +72,8 @@ export function useValveControl(
       );
 
       // Set timeout for stuck detection
-      const timeoutMs = config?.valveFeedbackTimeout ?? 5000;
+      // Use configured valve feedback timeout, align fallback with ConfigManager default (3000ms)
+      const timeoutMs = config?.valveFeedbackTimeout ?? 3000;
       if (timeoutRefs.current[valveId]) {
         clearTimeout(timeoutRefs.current[valveId]);
       }
