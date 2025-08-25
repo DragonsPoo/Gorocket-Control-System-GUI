@@ -94,6 +94,14 @@ export function parseSensorData(raw: string): ParsedSensorData {
       }
     }
   }
+  
+  // Enforce CRC presence for telemetry (non-system) messages
+  if (!hasCrc) {
+    const msg = 'No CRC found on telemetry message';
+    errors.push(msg);
+    console.error(msg);
+    return { sensor, valves, errors };
+  }
 
   if (hasCrc && receivedCrc !== null) {
     const calculatedCrc = crc8OfString(dataPart);
